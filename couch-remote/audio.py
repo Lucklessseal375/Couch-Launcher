@@ -104,10 +104,10 @@ def _name(dev):
         _release(store.value)
 
 
-def _default(enum):
+def _default(enum, role=1):
     dev = c_void_p()
     try:
-        _method(enum, 4, c_int, c_int, POINTER(c_void_p))(enum, RENDER, 1, byref(dev))  # GetDefaultAudioEndpoint
+        _method(enum, 4, c_int, c_int, POINTER(c_void_p))(enum, RENDER, role, byref(dev))  # GetDefaultAudioEndpoint
     except OSError:  # no playback device at all
         return None
     try:
@@ -116,12 +116,12 @@ def _default(enum):
         _release(dev.value)
 
 
-def default_id():
-    """Id of Windows' default playback device, or None."""
+def default_ids():
+    """Ids of the default playback device for each role (games/system, media, calls); None where there's none."""
     with _Com():
         enum = _create(CLSID_ENUMERATOR, IID_ENUMERATOR)
         try:
-            return _default(enum)
+            return tuple(_default(enum, role) for role in ROLES)
         finally:
             _release(enum)
 

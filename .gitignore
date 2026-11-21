@@ -7,3 +7,7 @@ couch-remote/profiles/
 __pycache__/
 # third-party skill state, if ever used
 .taste-skill/
+# made by the server on this PC: app icons, and what you set on the launcher (hidden games, audio output)
+couch-remote/cache/
+couch-remote/choices.json
+couch-remote/choices.tmp

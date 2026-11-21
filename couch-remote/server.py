@@ -23,6 +23,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # audio.py sits next to this file
+import audio  # noqa: E402
+
 ROOT = Path(__file__).resolve().parent
 WEB = ROOT / "web"
 CONFIG_FILE = ROOT / "config.json"
@@ -164,16 +167,41 @@ def load_choices():
         d = json.loads(CHOICES_FILE.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         d = {}  # none yet, or unreadable: show everything
-    return {"hidden": list(d.get("hidden", [])), "pinned": list(d.get("pinned", []))}
+    return {"hidden": list(d.get("hidden", [])), "pinned": list(d.get("pinned", [])), "audio": d.get("audio")}
+
+
+def save_choices(c):
+    tmp = CHOICES_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps({"_help": "Set from the launcher: games hidden or pinned with the Square button, and "
+                                        "the audio output Windows keeps as default. Delete this file to reset.",
+                               **c}, indent=2), encoding="utf-8")
+    tmp.replace(CHOICES_FILE)  # all or nothing, even if the PC goes off mid-write
+
+
+def steam_playtime():
+    """{appid: minutes played} for the Steam account used last on this PC ({} if Steam hasn't saved any)."""
+    files = sorted((steam_path() / "userdata").glob("*/config/localconfig.vdf"),
+                   key=lambda p: p.stat().st_mtime, reverse=True)
+    try:
+        node = parse_vdf(files[0].read_text(encoding="utf-8", errors="replace")) if files else {}
+    except OSError:
+        return {}
+    for key in ("UserLocalConfigStore", "Software", "Valve", "Steam", "apps"):  # Steam's key case varies
+        node = next((v for k, v in node.items() if k.lower() == key.lower() and isinstance(v, dict)), {})
+    return {int(k): int(v["Playtime"]) for k, v in node.items()
+            if k.isdigit() and isinstance(v, dict) and str(v.get("Playtime", "")).isdigit()}
 
 
 def library():
     """(games to show, names of hidden games), with the □ choices applied: pinned first, newest pin first."""
     c = load_choices()
     games = load_games() + steam_games()
+    played = steam_playtime()
     for g in games:
         g["key"] = game_key(g)
         g["pinned"] = g["key"] in c["pinned"]
+        if "appid" in g:
+            g["playtime"] = played.get(g["appid"], 0)
     shown = [g for g in games if g["key"] not in c["hidden"]]
     shown.sort(key=lambda g: c["pinned"].index(g["key"]) if g["pinned"] else len(c["pinned"]))  # stable: rest keep order
     return shown, [g["name"] for g in games if g["key"] in c["hidden"]]
@@ -188,17 +216,82 @@ def set_choice(action, key=""):
         elif action in ("hide", "pin", "unpin"):
             if key not in {game_key(g) for g in load_games() + steam_games()}:
                 raise KeyError(key)
-            c = {k: [x for x in v if x != key] for k, v in c.items()}
+            for k in ("hidden", "pinned"):
+                c[k] = [x for x in c[k] if x != key]
             if action == "hide":
                 c["hidden"].append(key)
             elif action == "pin":
                 c["pinned"].insert(0, key)
         else:
             raise ValueError(f"unknown action {action!r}")
-        tmp = CHOICES_FILE.with_suffix(".tmp")
-        tmp.write_text(json.dumps({"_help": "Games hidden or pinned with the launcher's Square button. Delete this file to reset.",
-                                   **c}, indent=2), encoding="utf-8")
-        tmp.replace(CHOICES_FILE)  # all or nothing, even if the PC goes off mid-write
+        save_choices(c)
+
+
+# ---------------------------------------------------------------- audio output
+
+# Mixers, virtual cables and Steam's streaming device: real outputs only in the picker.
+VIRTUAL_AUDIO = re.compile(r"voicemeeter|vb-audio|sonar|steam streaming|virtual", re.I)
+
+
+def audio_state():
+    """{"devices": [{id, name, default}], "current": {id, name} or None}; devices are real outputs only."""
+    found = audio.outputs()
+    cur = next((d for d in found if d["default"]), None)
+    return {"devices": [d for d in found if not VIRTUAL_AUDIO.search(d["name"])],
+            "current": cur and {"id": cur["id"], "name": cur["name"]}}
+
+
+def set_audio(device_id):
+    """Make it Windows' default output for everything, and remember it so keep_audio holds it there."""
+    dev = next((d for d in audio.outputs() if d["id"] == device_id), None)
+    if not dev:
+        raise KeyError(device_id)
+    audio.set_default(device_id)
+    with CHOICES_LOCK:
+        c = load_choices()
+        c["audio"] = {"id": dev["id"], "name": dev["name"]}
+        save_choices(c)
+    log.info("audio output: %s", dev["name"])
+    return dev["name"]
+
+
+def audio_replaced(want, ids, names):
+    """The outputs to switch away from so `want` is the default again (names), or None to leave it as is:
+    the chosen output is off (TV asleep), or Steam Remote Play is using its own device."""
+    was = {names.get(i, "nothing") for i in ids if i != want["id"]}
+    if not was or want["id"] not in names or any("steam streaming" in n.lower() for n in was):
+        return None
+    return was
+
+
+def keep_audio():
+    """Windows moves the default output when devices come and go (the TV waking up, a headset turning on).
+    Put the chosen one back as soon as it's there again. Leaves Steam Remote Play's device alone, and backs off
+    for 10 minutes if something keeps taking the default (a mixer app like Sonar), so the two don't fight."""
+    restored = []
+    while True:
+        time.sleep(3)
+        try:
+            want = load_choices()["audio"]
+            ids = audio.default_ids() if want else ()
+            if all(i == want["id"] for i in ids):
+                continue
+            was = audio_replaced(want, ids, {d["id"]: d["name"] for d in audio.outputs()})
+            if not was:
+                continue
+            now = time.time()
+            restored = [t for t in restored if now - t < 60]
+            if len(restored) >= 3:
+                log.warning("something keeps changing the audio output; leaving it for 10 minutes")
+                time.sleep(600)
+                restored = []
+                continue
+            audio.set_default(want["id"])
+            restored.append(now)
+            log.info("audio output back to %s (was %s)", want["name"], ", ".join(sorted(was)))
+        except Exception:  # noqa: BLE001
+            log.exception("audio keeper")
+            time.sleep(30)
 
 
 def art_file(appid, kind="poster"):
@@ -557,6 +650,87 @@ class ReturnWatcher(threading.Thread):
 WATCHER = ReturnWatcher()
 
 
+# ---------------------------------------------------------------- app icons (store tiles show the real app icon)
+
+class ICONINFO(ctypes.Structure):
+    _fields_ = [("fIcon", wintypes.BOOL), ("xHotspot", wintypes.DWORD), ("yHotspot", wintypes.DWORD),
+                ("hbmMask", wintypes.HBITMAP), ("hbmColor", wintypes.HBITMAP)]
+
+
+class BITMAPINFOHEADER(ctypes.Structure):
+    _fields_ = [("biSize", wintypes.DWORD), ("biWidth", wintypes.LONG), ("biHeight", wintypes.LONG),
+                ("biPlanes", wintypes.WORD), ("biBitCount", wintypes.WORD), ("biCompression", wintypes.DWORD),
+                ("biSizeImage", wintypes.DWORD), ("biXPelsPerMeter", wintypes.LONG), ("biYPelsPerMeter", wintypes.LONG),
+                ("biClrUsed", wintypes.DWORD), ("biClrImportant", wintypes.DWORD), ("masks", wintypes.DWORD * 3)]
+
+
+shell32 = ctypes.WinDLL("shell32")
+gdi32 = ctypes.WinDLL("gdi32")
+shell32.SHDefExtractIconW.argtypes = (wintypes.LPCWSTR, ctypes.c_int, wintypes.UINT, ctypes.POINTER(wintypes.HICON),
+                                      ctypes.POINTER(wintypes.HICON), wintypes.UINT)
+shell32.SHDefExtractIconW.restype = ctypes.c_long
+user32.GetIconInfo.argtypes = (wintypes.HICON, ctypes.POINTER(ICONINFO))
+user32.DestroyIcon.argtypes = (wintypes.HICON,)
+user32.GetDC.restype = wintypes.HDC
+user32.GetDC.argtypes = (wintypes.HWND,)
+user32.ReleaseDC.argtypes = (wintypes.HWND, wintypes.HDC)
+gdi32.GetDIBits.argtypes = (wintypes.HDC, wintypes.HBITMAP, wintypes.UINT, wintypes.UINT, ctypes.c_void_p,
+                            ctypes.POINTER(BITMAPINFOHEADER), wintypes.UINT)
+gdi32.DeleteObject.argtypes = (wintypes.HGDIOBJ,)
+ICON_CACHE = ROOT / "cache" / "icons"
+ICON_LOCK = threading.Lock()
+
+
+def exe_icon_png(exe, out, size=256):
+    """Save the program's own icon, size x size with transparency, as a PNG. False if it has none."""
+    hicon = wintypes.HICON()
+    if shell32.SHDefExtractIconW(str(exe), 0, 0, ctypes.byref(hicon), None, size) != 0 or not hicon:
+        return False
+    ii = ICONINFO()
+    try:
+        if not user32.GetIconInfo(hicon, ctypes.byref(ii)) or not ii.hbmColor:
+            return False
+        bmi = BITMAPINFOHEADER(biSize=40, biWidth=size, biHeight=-size, biPlanes=1, biBitCount=32)  # top-down BGRA
+        buf = ctypes.create_string_buffer(size * size * 4)
+        dc = user32.GetDC(None)
+        try:
+            lines = gdi32.GetDIBits(dc, ii.hbmColor, 0, size, buf, ctypes.byref(bmi), 0)
+        finally:
+            user32.ReleaseDC(None, dc)
+        if lines != size:
+            return False
+        px = bytearray(buf.raw)
+        if not any(px[3::4]):  # an old icon without transparency: make it opaque
+            px[3::4] = b"\xff" * (size * size)
+        import pygame  # already a dependency (controller); here it just writes the PNG
+        pygame.image.save(pygame.image.frombuffer(bytes(px), (size, size), "BGRA"), str(out))
+        return True
+    finally:
+        for bm in (ii.hbmColor, ii.hbmMask):
+            if bm:
+                gdi32.DeleteObject(bm)
+        user32.DestroyIcon(hicon)
+
+
+def app_icon(app_id):
+    """PNG of an app tile's icon (cached; redone when the app updates), or None."""
+    apps, _ = load_apps()
+    app = next((a for a in apps if a.get("id") == app_id), None)
+    if not app:
+        return None
+    target = os.path.expandvars(app.get("target", ""))
+    exe = Path(target) if app.get("kind") == "exe" else steam_path() / "steam.exe" if target.startswith("steam:") else None
+    if not exe or not exe.exists():
+        return None
+    out = ICON_CACHE / f"{app_id}.png"
+    with ICON_LOCK:
+        if not out.exists() or out.stat().st_mtime < exe.stat().st_mtime:
+            ICON_CACHE.mkdir(parents=True, exist_ok=True)
+            if not exe_icon_png(exe, out):
+                return None
+    return out
+
+
 # ---------------------------------------------------------------- controller
 # The server reads the controller itself (through SDL, via pygame), so it works whether or not
 # Steam is running. Presses only go to the launcher page while the launcher is in front.
@@ -906,10 +1080,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"ok": True, "name": socket.gethostname()})
             if path == "/api/events" and kind == "local":
                 return self.stream_events()
+            if path == "/api/audio":
+                return self.send_json(audio_state())
             if path == "/api/info":
                 apps, _ = load_apps()
                 games, hidden = library()
                 info = {"name": socket.gethostname(), "apps": apps, "games": games, "hidden": hidden}
+                try:
+                    info["audio"] = audio_state()["current"]
+                except Exception:  # noqa: BLE001  (optional extra: never lose the library over it)
+                    log.exception("couldn't read the audio output")
                 if kind == "local":
                     info["urls"] = [f"http://{ip}:{CONFIG['port']}/remote" for ip in lan_ips()]
                     if running_window():
@@ -931,6 +1111,15 @@ class Handler(BaseHTTPRequestHandler):
             f = art_file(int(m.group(1)), "hero" if m.group(2) else "poster")
             if f:
                 return self.send_file(f, "image/jpeg")
+        m = re.fullmatch(r"/appicon/([\w-]+)", path)
+        if m:
+            f = app_icon(m.group(1))
+            if f:
+                return self.send_file(f, "image/png")
+        m = re.fullmatch(r"/img/([\w-]+)\.(jpg|png|webp)", path)  # pictures kept in web/img (e.g. GTA's art)
+        if m and (WEB / "img" / f"{m.group(1)}.{m.group(2)}").is_file():
+            return self.send_file(WEB / "img" / f"{m.group(1)}.{m.group(2)}",
+                                  {"jpg": "image/jpeg", "png": "image/png", "webp": "image/webp"}[m.group(2)])
         self.send_json({"error": "not found"}, 404)
 
     # -- POST
@@ -963,6 +1152,8 @@ class Handler(BaseHTTPRequestHandler):
                 power(str(b.get("action")))
             elif path == "/api/games":
                 set_choice(str(b.get("action")), str(b.get("key", "")))
+            elif path == "/api/audio":
+                return self.send_json({"ok": True, "name": set_audio(str(b.get("id", "")))})
             elif path == "/api/window":
                 act = b.get("action")
                 if act == "launcher":
@@ -1016,6 +1207,7 @@ def main():
     srv = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     WATCHER.start()
     threading.Thread(target=controller_loop, daemon=True).start()
+    threading.Thread(target=keep_audio, daemon=True).start()
     log.info("listening on port %s; LAN: %s", port, lan_ips())
     print(f"Couch Remote on http://127.0.0.1:{port}  (phone: {', '.join(lan_ips()) or 'no LAN IP'})")
     if want_open:

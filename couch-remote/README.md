@@ -20,20 +20,24 @@ python -m pip install pygame
 - The server reads the controller itself, so it works with or without Steam running. Steam only starts when you pick Big Picture or a Steam game.
 - **PS button:** brings the launcher back when Steam isn't running (Steam keeps it for itself when it is).
 - Arrow keys / Enter / Esc and the mouse work too.
-- Rows: **Now playing** (Resume / Close, while something you started is open), **Apps** (game stores), **Games** (GTA V Enhanced + installed Steam games, pinned first, then most recently played), **PC** (phone remote, sound, hidden games, sleep, restart, shut down, desktop).
-- When you start something, the launcher stays on screen until the new window appears (no black flash), then that window gets focus so the controller works there right away. Quit it and you're back on the launcher.
-- Sounds: hoofbeats, spur jingles and a steel-ball whir. Turn them off in **PC → Sound**.
+- Rows: **Now playing** (Resume / Close, while something you started is open), **Apps** (game stores), **Games** (GTA V Enhanced + installed Steam games, pinned first, then most recently played), **PC** (phone remote, audio output, menu sounds, hidden games, sleep, restart, shut down, desktop). Store tiles show each app's real icon, taken from its program on this PC; Steam games show hours played.
+- When you start something, a Starting screen (the game's art and the spinning steel ball) stays up until its window appears (no black flash); ○ hides it. Then that window gets focus so the controller works there right away. Quit it and you're back on the launcher.
+- **Audio output** (PC row, or the phone's Remote tab): pick where all sound plays. The server makes it Windows' default for games, videos and calls, and switches back within 3 s if Windows moves it (the TV turning on late, a headset connecting). It leaves Steam Remote Play's device alone, and backs off for 10 minutes if another app keeps taking over. `python audio.py` lists the outputs; `python audio.py samsung` sets one from a terminal.
+- After 10 minutes without input the screen goes dark with a small wandering clock (kind to the TV); the next press only wakes it.
+- Sounds: hoofbeats, spur jingles and a steel-ball whir. Turn them off in **PC → Menu sounds**.
 
 ## Phone remote
 On the launcher, press △ (or open **Phone remote**) and scan the QR code. The phone has to be on the same Wi-Fi.
-- **Remote:** D-pad, OK/Back, volume, play/pause
+- **Remote:** D-pad, OK/Back, volume, audio output, play/pause
 - **Touchpad:** drag to move the mouse, tap to click, two-finger tap to right-click, two-finger drag to scroll, and a text box for typing on the PC
 - **Apps:** start apps and games
 - **Power:** show the launcher, close the app in front, sleep, restart, shut down
 
 ## Settings
 - `apps.json`: the app tiles (`apps`) and non-Steam games (`games`, with cover/hero image links). Edits show the next time the launcher comes to the front.
-- `choices.json`: games you hid or pinned with □ on the launcher (made the first time you do). Delete it to undo all of it.
+- `choices.json`: what you set on the launcher: hidden and pinned games, and the audio output to keep (made the first time). Delete it to undo all of it; the audio output then stays as it is but isn't held.
+- `cache\`: app icons taken from the store programs (made again if deleted).
+- `web/img/`: pictures that would otherwise need the internet (GTA V's cover and backdrop).
 - `config.json`: the port (8765) and the Edge path.
 - `web/poster.webp`: the launcher's background picture. `make_icon.py` redraws `icon.ico` / `web/icon.png`.
 - `server.log`: errors and launches (capped at about 1 MB).

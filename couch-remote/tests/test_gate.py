@@ -95,5 +95,38 @@ class ChoicesTest(unittest.TestCase):
                 server.set_choice("hide", "steam:999")  # only games that exist
 
 
+class AudioKeeperTest(unittest.TestCase):
+    def test_when_to_switch_back(self):
+        tv = {"id": "tv", "name": "SAMSUNG"}
+        names = {"tv": "SAMSUNG", "spdif": "Digital Audio (S/PDIF)", "rp": "Speakers (Steam Streaming Speakers)"}
+        self.assertIsNone(server.audio_replaced(tv, ("tv", "tv", "tv"), names))              # already right
+        self.assertEqual(server.audio_replaced(tv, ("tv", "tv", "spdif"), names), {"Digital Audio (S/PDIF)"})
+        self.assertIsNone(server.audio_replaced(tv, ("spdif",) * 3, {"spdif": "S/PDIF"}))    # TV is off: wait
+        self.assertIsNone(server.audio_replaced(tv, ("rp", "rp", "rp"), names))              # Remote Play: leave it
+
+
+class PlaytimeTest(unittest.TestCase):
+    def test_reads_steams_minutes_played(self):
+        vdf = ('"UserLocalConfigStore" { "Software" { "valve" { "Steam" { "apps" {'
+               ' "220" { "Playtime" "95" } "440" { "LastPlayed" "1" } } } } } }')
+        with tempfile.TemporaryDirectory() as d:
+            cfg = Path(d) / "userdata" / "123" / "config"
+            cfg.mkdir(parents=True)
+            (cfg / "localconfig.vdf").write_text(vdf, encoding="utf-8")
+            with mock.patch.object(server, "steam_path", lambda: Path(d)):
+                self.assertEqual(server.steam_playtime(), {220: 95})
+
+
+class AppIconTest(unittest.TestCase):
+    def test_extracts_a_256px_png(self):
+        import sys
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "python.png"
+            self.assertTrue(server.exe_icon_png(sys.executable, out))
+            png = out.read_bytes()
+            self.assertEqual(png[1:4], b"PNG")  # PNG signature
+            self.assertEqual(int.from_bytes(png[16:20], "big"), 256)  # width in the PNG header
+
+
 if __name__ == "__main__":
     unittest.main()

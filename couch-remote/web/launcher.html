@@ -51,8 +51,8 @@
   #date, #pad { color: var(--dim); font-size: 1.9vh; margin-top: .5vh; }
   #pad.low { color: var(--ps-circle); }
   /* idle: dark screen with a wandering clock so the TV doesn't hold a still image for hours */
-  #idle { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity 1.2s; z-index: 30; }
-  body.idle #idle { opacity: .94; }
+  #idle { position: fixed; inset: 0; background: #05020c; opacity: 0; pointer-events: none; transition: opacity 1.2s; z-index: 30; }
+  body.idle #idle { opacity: 1; }  /* nothing still and bright on the TV, just the clock */
   #idle-clock { position: absolute; font: 600 6vh/1 var(--ui); color: #8a80a0; font-variant-numeric: tabular-nums; }
 
   /* ---------- details of the focused tile (PS5 game hub) */
@@ -80,7 +80,7 @@
   @keyframes shake { 0%,100% { transform: translate(0,0); } 25% { transform: translate(.25vh,-.2vh); } 75% { transform: translate(-.25vh,.2vh); } }
   /* Windows "Animation effects" off: keep ゴゴゴ as a fade, stop spinning, shaking and sliding */
   @media (prefers-reduced-motion: reduce) {
-    .app-shell, .details.swap #d-title, .details.swap #sfx span, .item.focus .badge img, .card, .overlay.show { animation: none !important; }
+    .app-shell, .details.swap #d-title, .details.swap #sfx span, .item.focus .badge img, .card, .overlay.show, .launch .ball { animation: none !important; }
     .details.swap #sfx { animation: fade-sfx 1.6s ease-out; }
     #rows, .item, .item .badge { transition: opacity .2s, box-shadow .2s, filter .2s; }
     .item.focus, .card .choice.focus { transform: none; }
@@ -88,7 +88,8 @@
   @keyframes fade-sfx { 12% { opacity: .95; } 70% { opacity: .75; } 100% { opacity: 0; } }
 
   /* ---------- rows (PS5 tiles) */
-  main { height: calc(100% - 11vh - 20vh - 7vh); overflow: hidden; }
+  main { height: calc(100% - 11vh - 20vh - 7vh); overflow: hidden;
+         -webkit-mask-image: linear-gradient(#000 calc(100% - 4vh), transparent); mask-image: linear-gradient(#000 calc(100% - 4vh), transparent); }
   #rows { transition: transform .32s cubic-bezier(.2,.8,.2,1); }
   section { padding: .4vh 0 .2vh; opacity: .55; transition: opacity .3s; }
   section.active, body:not(.chosen) section { opacity: 1; }
@@ -110,13 +111,19 @@
   .app { width: var(--tile); height: var(--tile); display: flex; flex-direction: column; justify-content: flex-end; padding: 1.6vh;
          background: var(--c); }
   .app .name { font: 800 3.2vh/.95 var(--ui); font-stretch: 75%; }
+  /* with the app's real icon: a dark card tinted by the brand colour, the icon centred, the name as a caption */
+  .app.logo { justify-content: center; align-items: center; background: color-mix(in srgb, var(--c) 28%, #13082b); }
+  .app.logo .appicon { width: 9.2vh; height: 9.2vh; object-fit: contain; margin-bottom: 2.2vh; filter: drop-shadow(0 .6vh 1.2vh rgba(0,0,0,.35)); }
+  .app.logo .name { position: absolute; left: 1vh; right: 1vh; bottom: 1.5vh; text-align: center; font: 700 1.7vh/1.1 var(--ui); color: var(--dim); }
+  .app.logo.focus .name { color: #fff; }
 
   .poster { width: calc(var(--poster-h) * 2 / 3); height: var(--poster-h); background: linear-gradient(160deg, var(--purple), var(--deep)); }
-  .poster img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: inherit; }
+  .poster .art { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: inherit; opacity: 0; transition: opacity .4s ease; }
+  .poster.loaded .art { opacity: 1; }
   .poster .name { position: absolute; inset: auto 0 0 0; padding: 4vh 1.2vh 1.2vh; font: 700 1.8vh/1.15 var(--ui);
                   background: linear-gradient(transparent, rgba(24,10,52,.92)); border-radius: 0 0 1.6vh 1.6vh; }
-  .poster:not(.noart) .name { display: none; }
-  .poster.noart img { display: none; }
+  .poster.loaded .name { display: none; }  /* the name shows until the art arrives, or if there is none */
+  .poster.noart .art { display: none; }
 
   .sys { width: 13vh; height: 13vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.2vh;
          font: 700 1.9vh/1.1 var(--ui); text-align: center; background: #301866; }
@@ -153,6 +160,27 @@
   .card .choice { padding: 1.5vh 4vh; border-radius: 99vh; font: 700 2.1vh/1 var(--ui); background: rgba(255,255,255,.12); color: #fff; filter: none; }
   .card .choice.focus { background: #fff; color: #1a0d33; transform: scale(1.06); }
   .card .choice.danger.focus { color: #c0203a; }
+  /* list dialogs (audio outputs): full-width rows, a second line, a check on the current one */
+  .card .choices.vertical { flex-direction: column; align-items: stretch; gap: 1vh; min-width: 38vw; }
+  .card .choices.vertical .choice { display: flex; align-items: center; gap: 2vh; padding: 1.8vh 2.6vh; border-radius: 1.6vh; text-align: left; }
+  .card .choice small { display: block; margin-top: .6vh; font: 500 1.7vh/1.2 var(--ui); color: var(--dim); }
+  .card .choice.focus small { color: #5b4a80; }
+  .card .choice .check { width: 2.8vh; height: 2.8vh; margin-left: auto; flex: none; color: var(--johnny); }
+  .card .choice.focus .check { color: #1a0d33; }
+  .card .choice .dev { width: 3.6vh; height: 3.6vh; flex: none; color: var(--dim); }
+  .card .choice.focus .dev { color: #1a0d33; }
+  /* starting a game: the steel ball spins over the game's art until its window takes the screen */
+  #starting { background: radial-gradient(60vw 60vh at 50% 50%, rgba(14,6,32,.6), rgba(14,6,32,.15)); backdrop-filter: none; }
+  .app-shell { transition: opacity .35s ease; }
+  body.starting .app-shell { opacity: 0; }                       /* just the game's art behind the ball */
+  body.starting .shade { opacity: .55; }
+  .shade { transition: opacity .6s ease; }
+  body.starting footer > span:not(.back) { visibility: hidden; }  /* only ○ does something here */
+  body.starting .bg { filter: saturate(1.1) brightness(.8); transition: opacity .7s ease, filter .6s ease; }
+  .launch { text-align: center; max-width: 80vw; }
+  .launch .ball { width: 13vh; height: 13vh; animation: spin .9s linear infinite; filter: drop-shadow(0 1vh 2vh rgba(0,0,0,.6)); }
+  .launch h3 { margin: 3.4vh 0 1.2vh; font: 800 7vh/1.02 var(--ui); font-stretch: 75%; text-shadow: 0 .4vh 2vh rgba(0,0,0,.7); }
+  .launch p { margin: 0; color: var(--dim); font-size: 2.2vh; }
   #qr { background: #fff; padding: 1.4vh; border-radius: 1.4vh; display: inline-block; margin: 2vh 0; }
   #qr svg { display: block; width: 30vh; height: 30vh; }
   .url { font-family: Consolas, monospace; color: #fff !important; }
@@ -172,6 +200,10 @@
     <symbol id="g-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></symbol>
     <symbol id="g-tri" viewBox="0 0 24 24"><path d="M12 4l9 15H3z"/></symbol>
     <symbol id="g-square" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14"/></symbol>
+    <symbol id="i-speaker" viewBox="0 0 24 24"><rect x="5" y="2.5" width="14" height="19" rx="2.5"/><circle cx="12" cy="14.5" r="3.5"/><path d="M12 7h.01"/></symbol>
+    <symbol id="i-tv" viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
+    <symbol id="i-headphones" viewBox="0 0 24 24"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1v-6h3zM3 19a2 2 0 0 0 2 2h1v-6H3z"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
     <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
     <symbol id="i-resume" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z"/></symbol>
     <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
@@ -215,6 +247,11 @@
 <div class="overlay" id="dialog"><div class="card">
   <h3 id="dlg-title"></h3><p id="dlg-text"></p>
   <div class="choices" id="dlg-choices"></div>
+</div></div>
+<div class="overlay" id="starting"><div class="launch">
+  <img class="ball" src="/steelball.png" alt="">
+  <h3 id="starting-title"></h3>
+  <p id="starting-note"></p>
 </div></div>
 <div class="overlay" id="phone"><div class="card">
   <h3>Phone remote</h3>
@@ -309,7 +346,7 @@ const Sound = (() => {
     }),
   };
 })();
-function soundHint() { $("#sound-hint").innerHTML = `${icon(Sound.on ? "sound" : "mute", "icon")}`.replace('class="icon"', 'class="icon" style="width:2.6vh;height:2.6vh;vertical-align:middle;margin-right:.6vw"') + (Sound.on ? "Sound on" : "Sound off"); }
+function soundHint() { $("#sound-hint").innerHTML = `${icon(Sound.on ? "sound" : "mute", "icon")}`.replace('class="icon"', 'class="icon" style="width:2.6vh;height:2.6vh;vertical-align:middle;margin-right:.6vw"') + (Sound.on ? "Menu sounds on" : "Menu sounds off"); }
 soundHint();
 
 // ---------- clock
@@ -380,6 +417,12 @@ function ago(sec) {
   const days = Math.floor((Date.now() / 1000 - sec) / 86400);
   return days <= 0 ? "Last played today" : days === 1 ? "Last played yesterday" : `Last played ${days} days ago`;
 }
+function playtime(min) {
+  if (!min) return "";
+  if (min < 60) return `${min} minute${min === 1 ? "" : "s"} in total`;
+  const h = Math.round(min / 60);
+  return `${h} hour${h === 1 ? "" : "s"} in total`;
+}
 function showDetails(e) {
   const d = $("#details");
   $("#d-title").textContent = e.dataset.title || "";
@@ -417,9 +460,12 @@ function build() {
   const apps = $("#apps"); apps.innerHTML = "";
   for (const a of info.apps) {
     const t = el("div", "item app", `<span class="name">${esc(a.name)}</span>${badge()}`);
+    const logo = new Image(); logo.alt = ""; logo.className = "appicon";  // the app's own icon, taken from its program by the server
+    logo.onload = () => { t.classList.add("logo"); t.prepend(logo); };
+    logo.src = `/appicon/${encodeURIComponent(a.id)}`;
     t.style.setProperty("--c", a.color || "#555");
     t.dataset.title = a.name;
-    t.dataset.meta = a.kind === "web" ? "Opens full screen" : "";
+    t.dataset.meta = a.meta || (a.kind === "web" ? "Opens full screen" : "");
     t.onactivate = () => launch({ id: a.id }, a.name);
     apps.append(t);
   }
@@ -427,15 +473,16 @@ function build() {
   const games = $("#games"); games.innerHTML = "";
   if (!info.games.length) games.append(el("div", "empty", info.hidden?.length ? "All your games are hidden. Show them again from the PC row." : "No Steam games installed."));
   for (const g of info.games) {
-    const t = el("div", "item poster", `<img alt="" loading="lazy"><div class="name">${esc(g.name)}</div>${badge()}`);
-    const img = t.querySelector("img");
+    const t = el("div", "item poster", `<img class="art" alt="" loading="lazy"><div class="name">${esc(g.name)}</div>${badge()}`);
+    const img = t.querySelector(".art");
+    img.onload = () => t.classList.add("loaded");
     img.onerror = () => {
-      if (!img.dataset.cdn) { img.dataset.cdn = 1; img.src = `https://cdn.cloudflare.steamstatic.com/steam/apps/${g.appid}/library_600x900.jpg`; }
+      if (!img.dataset.cdn && g.appid) { img.dataset.cdn = 1; img.src = `https://cdn.cloudflare.steamstatic.com/steam/apps/${g.appid}/library_600x900.jpg`; }
       else t.classList.add("noart");
     };
     img.src = g.art || `/art/${g.appid}`;
     t.dataset.title = g.name;
-    t.dataset.meta = g.meta || ago(g.lastPlayed);
+    t.dataset.meta = g.meta || [ago(g.lastPlayed), playtime(g.playtime)].filter(Boolean).join(", ");
     t.dataset.hero = g.hero || `/art/${g.appid}/hero`;
     t.dataset.cta = "Play";
     t.game = g;  // for the □ menu
@@ -446,7 +493,8 @@ function build() {
   const sys = $("#system"); sys.innerHTML = "";
   const sysItems = [
     ["phone", "Phone remote", "Scan a code to control the PC from your phone", "Show code", "", showPhone],
-    [Sound.on ? "sound" : "mute", Sound.on ? "Sound on" : "Sound off", "Menu sounds when you move and select", Sound.on ? "Turn off" : "Turn on", "", () => { Sound.toggle(); soundHint(); const r = pos.r, c = pos.c; build(); focus(r, c); }],
+    [deviceIcon(info.audio?.name || ""), "Audio output", info.audio ? `Playing on ${deviceName(info.audio.name)[0]}` : "Choose where games and videos play", "Change", "", pickAudio],
+    [Sound.on ? "sound" : "mute", "Menu sounds", Sound.on ? "On" : "Off", Sound.on ? "Turn off" : "Turn on", "", () => { Sound.toggle(); soundHint(); const r = pos.r, c = pos.c; build(); focus(r, c); }],
     ...(info.hidden?.length ? [["eye", "Hidden games", info.hidden.join(", "), "Show all", "", () => setChoice("unhide-all")]] : []),
     ["moon", "Sleep", "Wake it with the PC's power button", "Sleep", "", () => { toast("Sleeping…"); api("/api/power", { action: "sleep" }).catch(() => {}); }],  // waking undoes it, so no dialog
     ["restart", "Restart", "Closes all apps and restarts the PC", "Restart", "danger", () => confirmPower("restart", "Restart", "Restart the PC now? Unsaved work in other apps will be lost.")],
@@ -496,8 +544,9 @@ function focus(r, c) {
 
 function move(dir) {
   if (modal) {
-    if (dir === "left" || dir === "right") {
-      const i = Math.max(0, Math.min(modal.els.length - 1, modal.i + (dir === "left" ? -1 : 1)));
+    const step = { left: -1, up: -1, right: 1, down: 1 }[dir];  // rows of buttons and lists alike
+    if (step) {
+      const i = Math.max(0, Math.min(modal.els.length - 1, modal.i + step));
       if (i === modal.i) return Sound.bump();
       modal.i = i; Sound.move();
       modal.els.forEach((e, k) => e.classList.toggle("focus", k === modal.i));
@@ -532,34 +581,83 @@ async function launch(body, name) {
   if (launching) return;
   launching = true; setTimeout(() => launching = false, 3000);
   Sound.launch();
-  toast(`Starting ${name}…`);
+  showStarting(name);
   try {
     const r = await api("/api/launch", body);
-    if (!r.ok) toast(r.error || "Couldn't start it");
-  } catch { toast("Couch server isn't responding"); }
+    if (!r.ok) { hideStarting(); toast(r.error || "Couldn't start it"); }
+  } catch { hideStarting(); toast("Couch server isn't responding"); }
 }
 
-function openModal(overlay, els, onBack) {
+// The starting screen stays until the game's window takes the screen (the launcher loses focus),
+// ○ hides it, or a minute passes. Hiding it never stops the game from starting.
+let startTimer, slowTimer;
+function showStarting(name) {
+  $("#starting-title").textContent = name;
+  $("#starting-note").textContent = "Starting…";
+  clearTimeout(slowTimer); slowTimer = setTimeout(() => $("#starting-note").textContent = "Still starting. Big games can take a minute.", 10000);
+  $("#starting").classList.add("show"); document.body.classList.add("modal", "starting");
+  modal = { els: [], i: 0, onBack: hideStarting };
+  clearTimeout(startTimer); startTimer = setTimeout(hideStarting, 60000);
+}
+function hideStarting() {
+  clearTimeout(startTimer); clearTimeout(slowTimer);
+  document.body.classList.remove("starting");
+  if (modal?.onBack === hideStarting) closeModal($("#starting"));
+}
+addEventListener("blur", hideStarting);
+
+function openModal(overlay, els, onBack, start = 0) {
   overlay.classList.add("show"); document.body.classList.add("modal"); Sound.open();
-  modal = { els, i: 0, onBack: onBack || (() => closeModal(overlay)) };
-  els.forEach((e, i) => { e.classList.toggle("focus", i === 0); e.onclick = () => { Sound.select(); e.onactivate(); }; });
+  modal = { els, i: start, onBack: onBack || (() => closeModal(overlay)) };
+  els.forEach((e, i) => { e.classList.toggle("focus", i === start); e.onclick = () => { Sound.select(); e.onactivate(); }; });
 }
 function closeModal(overlay) { overlay.classList.remove("show"); document.body.classList.remove("modal"); modal = null; }
 
-// A dialog of [label, action, class] choices; the first one is focused, ○ closes it
-function choose(title, text, choices) {
+// A dialog of choices ({label, sub, fn, cls, check, icon}); ○ closes it.
+// vertical: a list (audio outputs), start: which one is focused first.
+function choose(title, text, choices, { vertical = false, start = 0 } = {}) {
   const d = $("#dialog");
   $("#dlg-title").textContent = title; $("#dlg-text").textContent = text;
-  const els = choices.map(([label, fn, cls = ""]) => {
-    const b = el("div", "item choice " + cls, esc(label));
+  const els = choices.map(({ label, sub, fn, cls = "", check, icon: ic }) => {
+    const b = el("div", "item choice " + cls,
+      `${ic ? icon(ic, "dev") : ""}<span>${esc(label)}${sub ? `<small>${esc(sub)}</small>` : ""}</span>${check ? icon("check", "check") : ""}`);
     b.onactivate = () => { closeModal(d); if (fn) fn(); };
     return b;
   });
-  const c = $("#dlg-choices"); c.innerHTML = ""; c.append(...els);
-  openModal(d, els);
+  const c = $("#dlg-choices"); c.innerHTML = ""; c.append(...els); c.classList.toggle("vertical", vertical);
+  openModal(d, els, null, start);
 }
 // Cancel is focused first: these actions can't be undone
-function confirmAction(title, text, yesLabel, onYes) { choose(title, text, [["Cancel"], [yesLabel, onYes, "danger"]]); }
+function confirmAction(title, text, yesLabel, onYes) {
+  choose(title, text, [{ label: "Cancel" }, { label: yesLabel, fn: onYes, cls: "danger" }]);
+}
+
+// Audio output: Windows' default for everything; the server keeps it there when devices come and go
+// "SAMSUNG (NVIDIA High Definition Audio)" -> ["Samsung", "NVIDIA High Definition Audio"]
+function deviceName(full) {
+  const m = /^(.*) \(([^()]*)\)$/.exec(full) || [, full, ""];
+  const name = m[1] === m[1].toUpperCase() && m[1].length > 3 ? m[1][0] + m[1].slice(1).toLowerCase() : m[1];
+  return [name, m[2]];
+}
+const deviceIcon = full => /headphone|headset|earbud|arctis|airpods|buds/i.test(full) ? "headphones"
+  : /nvidia|amd|intel.*display|hdmi|displayport|samsung|lg|sony|tv/i.test(full) ? "tv" : "speaker";
+async function pickAudio() {
+  const a = await api("/api/audio").catch(() => null);
+  if (!a) return toast("Couch server isn't responding");
+  const list = a.devices.length ? a.devices : a.current ? [a.current] : [];
+  if (!list.length) return toast("No audio outputs are on");
+  choose("Audio output", "Games, videos and the PC play here, and it stays that way until you change it.",
+    list.map(d => {
+      const [label, sub] = deviceName(d.name);
+      return { label, sub, icon: deviceIcon(d.name), check: d.id === a.current?.id, fn: () => setAudio(d) };
+    }), { vertical: true, start: Math.max(0, list.findIndex(d => d.id === a.current?.id)) });
+}
+async function setAudio(d) {
+  const r = await api("/api/audio", { id: d.id }).catch(() => null);
+  if (!r?.ok) return toast(r?.error || "Couch server isn't responding");
+  toast(`Sound now plays on ${deviceName(r.name)[0]}`);
+  refresh();
+}
 function confirmPower(action, title, text) {
   confirmAction(title + "?", text, title, () => { toast(title + "…"); api("/api/power", { action }).catch(() => {}); });
 }
@@ -573,9 +671,9 @@ function gameOptions() {
   const t = !modal && chosen && rows[pos.r][pos.c], g = t && t.game;
   if (!g) return Sound.bump();
   choose(g.name, "Hidden games can be shown again from the PC row.", [
-    [g.pinned ? "Unpin" : "Pin to front", () => setChoice(g.pinned ? "unpin" : "pin", g)],
-    ["Hide", () => setChoice("hide", g)],
-    ["Cancel"],
+    { label: g.pinned ? "Unpin" : "Pin to front", fn: () => setChoice(g.pinned ? "unpin" : "pin", g) },
+    { label: "Hide", fn: () => setChoice("hide", g) },
+    { label: "Cancel" },
   ]);
 }
 async function setChoice(action, g) {

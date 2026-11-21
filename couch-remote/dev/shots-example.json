@@ -1,0 +1,8 @@
+{"url": "http://127.0.0.1:8765/launcher?preview", "load_wait": 4, "steps": [
+  {"js": "await document.fonts.ready; return document.fonts.check('800 20px Archivo');", "wait": 1500, "shot": "03-home.png"},
+  {"js": "focus(0, 0);", "wait": 900, "shot": "04-apps-row.png"},
+  {"js": "focus(1, 0);", "wait": 1500, "shot": "05-game-gta.png"},
+  {"js": "focus(2, 1); await pickAudio();", "wait": 900, "shot": "06-audio-picker.png"},
+  {"js": "back(); focus(1, 2); gameOptions();", "wait": 900, "shot": "07-game-options.png"},
+  {"js": "back(); return !!modal;", "wait": 200}
+]}
