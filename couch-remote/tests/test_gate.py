@@ -1,11 +1,13 @@
 """Checks the network gate that protects the remote (home network only, no PIN).  Run:  python -m unittest discover tests"""
 import importlib.util
 import json
+import tempfile
 import threading
 import unittest
 import urllib.error
 import urllib.request
 from pathlib import Path
+from unittest import mock
 
 spec = importlib.util.spec_from_file_location("server", Path(__file__).resolve().parents[1] / "server.py")
 server = importlib.util.module_from_spec(spec)
@@ -71,6 +73,26 @@ class PickRunningTest(unittest.TestCase):
         self.assertIsNone(server.pick_running([]))
         self.assertEqual(server.pick_running([(1, "steam.exe"), (2, "game.exe"), (3, "steamwebhelper.exe")]), 2)
         self.assertEqual(server.pick_running([(1, "steam.exe"), (3, "steamwebhelper.exe")]), 3)  # Big Picture
+
+
+class ChoicesTest(unittest.TestCase):
+    def test_hide_pin_and_show_again(self):
+        epic = [{"id": "gta5", "name": "GTA"}]
+        steam = [{"appid": 1, "name": "A"}, {"appid": 2, "name": "B"}]
+        with (tempfile.TemporaryDirectory() as d,
+              mock.patch.object(server, "CHOICES_FILE", Path(d) / "choices.json"),
+              mock.patch.object(server, "load_games", lambda: [dict(g) for g in epic]),
+              mock.patch.object(server, "steam_games", lambda: [dict(g) for g in steam])):
+            server.set_choice("pin", "steam:2")
+            server.set_choice("hide", "gta5")
+            shown, hidden = server.library()
+            self.assertEqual([g["name"] for g in shown], ["B", "A"])
+            self.assertEqual(hidden, ["GTA"])
+            server.set_choice("unpin", "steam:2")
+            server.set_choice("unhide-all")
+            self.assertEqual([g["name"] for g in server.library()[0]], ["GTA", "A", "B"])
+            with self.assertRaises(KeyError):
+                server.set_choice("hide", "steam:999")  # only games that exist
 
 
 if __name__ == "__main__":

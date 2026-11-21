@@ -30,7 +30,7 @@ Scope: this is a web page in Edge, so Apple's principles and foundations apply (
 
 ## Feature ideas (filed, not built)
 - 06 Resume / Close the running game: **done** (see the issue).
-- 07 TV volume on L2/R2.
-- 08 □ options on a tile: hide a game, pin it to the front.
+- 07 TV volume on L2/R2: won't do, not needed.
+- 08 □ options on a tile: hide a game, pin it to the front: **done** (see the issue).
 - 09 Show when a Steam game is updating instead of launching into Steam's download page.
 - Real app logos instead of name-only tiles (in PICKUP.md, needs a one-time icon extraction and a download OK).

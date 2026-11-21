@@ -15,7 +15,7 @@
   :root {
     --deep: #24104a; --purple: #5b2fa6; --pink: #e0306e; --johnny: #5ec8ef; --gyro: #6fae3e;
     --gold: #f2b844; --ink: #ffffff; --dim: #cdbfe8;
-    --ps-cross: #7ea6ff; --ps-circle: #ff6f7d; --ps-tri: #43d6b0;
+    --ps-cross: #7ea6ff; --ps-circle: #ff6f7d; --ps-tri: #43d6b0; --ps-square: #f08bd8;
     --logo: "Lobster", "Segoe Script", cursive;
     --ui: "Archivo","Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
     --tile: 17vh; --poster-h: 28vh;
@@ -59,7 +59,8 @@
   .details { position: relative; height: 20vh; padding: .6vh 5vw 0; }
   #d-title { margin: 0; font: 800 7.2vh/1.02 var(--ui); font-stretch: 75%; max-width: 70vw;
              white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 .4vh 1.6vh rgba(0,0,0,.6); }
-  #d-meta { color: var(--dim); font-size: 2vh; margin-top: .5vh; min-height: 1.3em; }
+  #d-meta { color: var(--dim); font-size: 2vh; margin-top: .5vh; min-height: 1.3em; max-width: 70vw;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .cta { display: inline-flex; align-items: center; gap: 1vh; margin-top: 1.4vh; padding: 1vh 3vh 1vh 1.2vh; border-radius: 99vh;
          background: #fff; color: #1a0d33; font: 800 2.1vh/1 var(--ui); box-shadow: 0 .8vh 2.4vh rgba(0,0,0,.35); }
   .cta .glyph { background: #1a0d33; }
@@ -127,7 +128,7 @@
   .glyph { display: inline-grid; place-items: center; width: 3.2vh; height: 3.2vh; border-radius: 50%; background: rgba(10,4,24,.75);
            box-shadow: 0 0 0 .15vh rgba(255,255,255,.25) inset; vertical-align: middle; }
   .glyph svg { width: 1.7vh; height: 1.7vh; fill: none; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
-  .g-cross svg { stroke: var(--ps-cross); } .g-circle svg { stroke: var(--ps-circle); } .g-tri svg { stroke: var(--ps-tri); }
+  .g-cross svg { stroke: var(--ps-cross); } .g-circle svg { stroke: var(--ps-circle); } .g-tri svg { stroke: var(--ps-tri); } .g-square svg { stroke: var(--ps-square); }
 
   /* ---------- footer, toast, dialogs */
   footer { position: fixed; left: 0; right: 0; bottom: 0; height: 7vh; display: flex; align-items: center; gap: 2.6vw; padding: 0 5vw;
@@ -135,6 +136,7 @@
   footer > span { display: inline-flex; align-items: center; gap: .8vh; }
   footer .sound { margin-left: auto; color: var(--dim); }
   body:not(.modal) footer .back { display: none; } /* ○ only does something in a dialog */
+  body:not(.on-game) footer .opts, body.modal footer .opts { display: none; } /* □ only does something on a game */
   #toast { position: fixed; right: 3vw; top: 3vh; transform: translateX(4vw); opacity: 0; transition: all .3s ease;
            background: #1c0c3c; color: #fff; padding: 1.6vh 2.4vh; border-radius: 1.4vh;
            font: 600 2vh/1.3 var(--ui); box-shadow: 0 1.4vh 3vh rgba(0,0,0,.5); pointer-events: none; z-index: 20; }
@@ -169,6 +171,8 @@
     <symbol id="g-cross" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"/></symbol>
     <symbol id="g-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></symbol>
     <symbol id="g-tri" viewBox="0 0 24 24"><path d="M12 4l9 15H3z"/></symbol>
+    <symbol id="g-square" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
     <symbol id="i-resume" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z"/></symbol>
     <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
     <symbol id="i-phone" viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></symbol>
@@ -202,6 +206,7 @@
 <footer>
   <span><span class="glyph g-cross"><svg viewBox="0 0 24 24"><use href="#g-cross"/></svg></span>Select</span>
   <span class="back"><span class="glyph g-circle"><svg viewBox="0 0 24 24"><use href="#g-circle"/></svg></span>Back</span>
+  <span class="opts"><span class="glyph g-square"><svg viewBox="0 0 24 24"><use href="#g-square"/></svg></span>Options</span>
   <span><span class="glyph g-tri"><svg viewBox="0 0 24 24"><use href="#g-tri"/></svg></span>Phone remote</span>
   <span class="sound" id="sound-hint"></span>
 </footer>
@@ -420,7 +425,7 @@ function build() {
   }
 
   const games = $("#games"); games.innerHTML = "";
-  if (!info.games.length) games.append(el("div", "empty", "No Steam games installed."));
+  if (!info.games.length) games.append(el("div", "empty", info.hidden?.length ? "All your games are hidden. Show them again from the PC row." : "No Steam games installed."));
   for (const g of info.games) {
     const t = el("div", "item poster", `<img alt="" loading="lazy"><div class="name">${esc(g.name)}</div>${badge()}`);
     const img = t.querySelector("img");
@@ -433,6 +438,7 @@ function build() {
     t.dataset.meta = g.meta || ago(g.lastPlayed);
     t.dataset.hero = g.hero || `/art/${g.appid}/hero`;
     t.dataset.cta = "Play";
+    t.game = g;  // for the □ menu
     t.onactivate = () => launch(g.id ? { id: g.id } : { game: g.appid }, g.name);
     games.append(t);
   }
@@ -441,6 +447,7 @@ function build() {
   const sysItems = [
     ["phone", "Phone remote", "Scan a code to control the PC from your phone", "Show code", "", showPhone],
     [Sound.on ? "sound" : "mute", Sound.on ? "Sound on" : "Sound off", "Menu sounds when you move and select", Sound.on ? "Turn off" : "Turn on", "", () => { Sound.toggle(); soundHint(); const r = pos.r, c = pos.c; build(); focus(r, c); }],
+    ...(info.hidden?.length ? [["eye", "Hidden games", info.hidden.join(", "), "Show all", "", () => setChoice("unhide-all")]] : []),
     ["moon", "Sleep", "Wake it with the PC's power button", "Sleep", "", () => { toast("Sleeping…"); api("/api/power", { action: "sleep" }).catch(() => {}); }],  // waking undoes it, so no dialog
     ["restart", "Restart", "Closes all apps and restarts the PC", "Restart", "danger", () => confirmPower("restart", "Restart", "Restart the PC now? Unsaved work in other apps will be lost.")],
     ["power", "Shut down", "Closes all apps and turns the PC off", "Shut down", "danger", () => confirmPower("shutdown", "Shut down", "Shut down the PC now? Unsaved work in other apps will be lost.")],
@@ -469,6 +476,7 @@ function focus(r, c) {
   const e = rows[r][c]; e.classList.add("focus");
   document.querySelectorAll("#rows section").forEach(sec => sec.classList.toggle("active", sec.contains(e)));
   document.body.classList.add("chosen");
+  document.body.classList.toggle("on-game", !!e.closest("#games"));
   showDetails(e);
   // horizontal: keep focused tile in view
   const strip = e.parentElement;
@@ -538,22 +546,50 @@ function openModal(overlay, els, onBack) {
 }
 function closeModal(overlay) { overlay.classList.remove("show"); document.body.classList.remove("modal"); modal = null; }
 
-// Cancel is focused first: these actions can't be undone
-function confirmAction(title, text, yesLabel, onYes) {
+// A dialog of [label, action, class] choices; the first one is focused, ○ closes it
+function choose(title, text, choices) {
   const d = $("#dialog");
   $("#dlg-title").textContent = title; $("#dlg-text").textContent = text;
-  const no = el("div", "item choice", "Cancel"), yes = el("div", "item choice danger", esc(yesLabel));
-  no.onactivate = () => closeModal(d);
-  yes.onactivate = () => { closeModal(d); onYes(); };
-  const c = $("#dlg-choices"); c.innerHTML = ""; c.append(no, yes);
-  openModal(d, [no, yes]);
+  const els = choices.map(([label, fn, cls = ""]) => {
+    const b = el("div", "item choice " + cls, esc(label));
+    b.onactivate = () => { closeModal(d); if (fn) fn(); };
+    return b;
+  });
+  const c = $("#dlg-choices"); c.innerHTML = ""; c.append(...els);
+  openModal(d, els);
 }
+// Cancel is focused first: these actions can't be undone
+function confirmAction(title, text, yesLabel, onYes) { choose(title, text, [["Cancel"], [yesLabel, onYes, "danger"]]); }
 function confirmPower(action, title, text) {
   confirmAction(title + "?", text, title, () => { toast(title + "…"); api("/api/power", { action }).catch(() => {}); });
 }
 async function windowAction(action) {
   const r = await api("/api/window", { action }).catch(() => null);
   if (!r?.ok) { toast(r?.error || "Couch server isn't responding"); refresh(); }
+}
+
+// □ on a game: pin it to the front or hide it (the server keeps this in choices.json)
+function gameOptions() {
+  const t = !modal && chosen && rows[pos.r][pos.c], g = t && t.game;
+  if (!g) return Sound.bump();
+  choose(g.name, "Hidden games can be shown again from the PC row.", [
+    [g.pinned ? "Unpin" : "Pin to front", () => setChoice(g.pinned ? "unpin" : "pin", g)],
+    ["Hide", () => setChoice("hide", g)],
+    ["Cancel"],
+  ]);
+}
+async function setChoice(action, g) {
+  const r = await api("/api/games", { action, key: g?.key }).catch(() => null);
+  if (!r?.ok) return toast(r?.error || "Couch server isn't responding");
+  toast({ pin: `${g?.name} pinned`, unpin: `${g?.name} unpinned`, hide: `${g?.name} hidden`, "unhide-all": "Hidden games are back" }[action]);
+  await refresh();
+  if (g) {  // follow a pinned or unpinned game to its new place
+    const i = rows[pos.r].findIndex(t => t.game?.key === g.key);
+    if (i >= 0) focus(pos.r, i);
+  } else {  // "Show all": go to the games, not to whatever slid under the cursor (Sleep)
+    const r = rows.findIndex(row => row[0].closest("#games"));
+    if (r >= 0) focus(r, 0);
+  }
 }
 
 function showPhone() {
@@ -593,6 +629,7 @@ function onPad(a) {
   if (wake()) return;
   if (a === "a") activate(); else if (a === "b") back();
   else if (a === "l1" || a === "r1") page(a === "l1" ? -5 : 5);
+  else if (a === "x") gameOptions();
   else if (a === "y") { if (modal) back(); else { Sound.select(); showPhone(); } }
   else move(a);
 }

@@ -27,6 +27,7 @@ ROOT = Path(__file__).resolve().parent
 WEB = ROOT / "web"
 CONFIG_FILE = ROOT / "config.json"
 APPS_FILE = ROOT / "apps.json"
+CHOICES_FILE = ROOT / "choices.json"  # games hidden or pinned with the launcher's □ button
 PROFILES = ROOT / "profiles"
 LAUNCHER_TITLE = "Couch Launcher"
 TV_USER_AGENT = ("Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.0) AppleWebKit/537.36 "
@@ -149,6 +150,55 @@ def steam_games():
                           "size": int(st.get("SizeOnDisk", "0") or 0)})
     games.sort(key=lambda g: (-g["lastPlayed"], g["name"].lower()))
     return games
+
+
+CHOICES_LOCK = threading.Lock()
+
+
+def game_key(g):
+    return g["id"] if "id" in g else f"steam:{g['appid']}"
+
+
+def load_choices():
+    try:
+        d = json.loads(CHOICES_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        d = {}  # none yet, or unreadable: show everything
+    return {"hidden": list(d.get("hidden", [])), "pinned": list(d.get("pinned", []))}
+
+
+def library():
+    """(games to show, names of hidden games), with the □ choices applied: pinned first, newest pin first."""
+    c = load_choices()
+    games = load_games() + steam_games()
+    for g in games:
+        g["key"] = game_key(g)
+        g["pinned"] = g["key"] in c["pinned"]
+    shown = [g for g in games if g["key"] not in c["hidden"]]
+    shown.sort(key=lambda g: c["pinned"].index(g["key"]) if g["pinned"] else len(c["pinned"]))  # stable: rest keep order
+    return shown, [g["name"] for g in games if g["key"] in c["hidden"]]
+
+
+def set_choice(action, key=""):
+    """The launcher's □ menu: hide, pin or unpin one game, or show every hidden game again."""
+    with CHOICES_LOCK:
+        c = load_choices()
+        if action == "unhide-all":
+            c["hidden"] = []
+        elif action in ("hide", "pin", "unpin"):
+            if key not in {game_key(g) for g in load_games() + steam_games()}:
+                raise KeyError(key)
+            c = {k: [x for x in v if x != key] for k, v in c.items()}
+            if action == "hide":
+                c["hidden"].append(key)
+            elif action == "pin":
+                c["pinned"].insert(0, key)
+        else:
+            raise ValueError(f"unknown action {action!r}")
+        tmp = CHOICES_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"_help": "Games hidden or pinned with the launcher's Square button. Delete this file to reset.",
+                                   **c}, indent=2), encoding="utf-8")
+        tmp.replace(CHOICES_FILE)  # all or nothing, even if the PC goes off mid-write
 
 
 def art_file(appid, kind="poster"):
@@ -575,7 +625,7 @@ def _controller_loop():
     buttons = {B.CONTROLLER_BUTTON_A: "a", B.CONTROLLER_BUTTON_B: "b", B.CONTROLLER_BUTTON_Y: "y",
                B.CONTROLLER_BUTTON_DPAD_UP: "up", B.CONTROLLER_BUTTON_DPAD_DOWN: "down",
                B.CONTROLLER_BUTTON_DPAD_LEFT: "left", B.CONTROLLER_BUTTON_DPAD_RIGHT: "right",
-               B.CONTROLLER_BUTTON_GUIDE: "guide",
+               B.CONTROLLER_BUTTON_X: "x", B.CONTROLLER_BUTTON_GUIDE: "guide",  # SDL's X is the west button: □
                B.CONTROLLER_BUTTON_LEFTSHOULDER: "l1", B.CONTROLLER_BUTTON_RIGHTSHOULDER: "r1"}
     held = {}  # direction -> time of next repeat
     stick = {"x": 0, "y": 0}
@@ -858,7 +908,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.stream_events()
             if path == "/api/info":
                 apps, _ = load_apps()
-                info = {"name": socket.gethostname(), "apps": apps, "games": load_games() + steam_games()}
+                games, hidden = library()
+                info = {"name": socket.gethostname(), "apps": apps, "games": games, "hidden": hidden}
                 if kind == "local":
                     info["urls"] = [f"http://{ip}:{CONFIG['port']}/remote" for ip in lan_ips()]
                     if running_window():
@@ -910,6 +961,8 @@ class Handler(BaseHTTPRequestHandler):
                 mouse_scroll(max(-1200, min(1200, float(b.get("dy", 0)))))
             elif path == "/api/power":
                 power(str(b.get("action")))
+            elif path == "/api/games":
+                set_choice(str(b.get("action")), str(b.get("key", "")))
             elif path == "/api/window":
                 act = b.get("action")
                 if act == "launcher":

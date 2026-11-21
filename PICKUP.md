@@ -7,8 +7,9 @@ A couch-gaming setup for a Windows 11 PC on a Samsung TV with DualSense controll
 - Stack: Python 3.13 stdlib HTTP server + **pygame** (SDL) for the controller; pages are single HTML files (no build), opened in Edge `--app` full screen.
 - Working style the user asked for: **ponytail mode (full)** — smallest complete change, no extras, end replies with "skipped / risk".
 - UI pass to remove "AI slop" (§4) is done and committed (2fcf0d6).
-- apple-design skill (project, `.claude/skills/apple-design`) review + features done 2026-11-21, **uncommitted**: see `.scratch/couch-launcher/ui-review.md`. Added reduced-motion, bigger TV text, Back hint only in dialogs, Sleep without dialog, L1/R1 paging, controller battery (issue 05), 10-min idle dim. New idea issues 06–09; 06 (Resume / Close game) done too, tested on the TV by the user. Server was restarted headless (no `--open`) to load it.
+- apple-design skill (project, `.claude/skills/apple-design`) review + features done 2026-11-21, committed in 784604d: see `.scratch/couch-launcher/ui-review.md`. Added reduced-motion, bigger TV text, Back hint only in dialogs, Sleep without dialog, L1/R1 paging, controller battery (issue 05), 10-min idle dim. New idea issues 06–09; 06 (Resume / Close game) done too, tested on the TV by the user. Server was restarted headless (no `--open`) to load it.
 - YouTube and Netflix tiles removed (user wants games only, 2026-11-21); their Edge profiles went to the Recycle Bin. The `web` app kind still works if a site is ever added back.
+- □ on a game: Pin to front / Hide (issue 08), saved in `couch-remote/choices.json`; "Hidden games" tile in the PC row brings them back. **Uncommitted.**
 
 ### Skill status (2026-11-21)
 - **frontend-design** (Anthropic): enabled on the user's claude.ai account, but it never loaded in the old session (skills load at session start; `/reload-plugins` didn't pick it up). If it isn't in the skill list, read it directly: `C:\Users\eli\.claude\plugins\marketplaces\claude-plugins-official\plugins\frontend-design\skills\frontend-design\SKILL.md`.
@@ -94,7 +95,7 @@ A couch-gaming setup for a Windows 11 PC on a Samsung TV with DualSense controll
 1. In the new session, check the skill list: frontend-design loaded? Taste Skill installed? Use them if loaded; either way §4 is already derived from both.
 2. Apply §4, then verify: open `http://127.0.0.1:8765/launcher?preview` in the browser pane at 1920×1080, move focus with arrow keys, finish non-infinite animations via `document.getAnimations()`, review; **close the preview tab afterwards** (see gotchas). Then reload the TV launcher: `POST /api/window {"action":"close-launcher"}` then `{"action":"launcher"}` (header `X-Couch: 1`).
 3. Commit the scroll fix + UI pass (ask the user first).
-4. Work the open issues in `.scratch/couch-launcher/issues/` (01 sleep timer & 02 restore points = user commands; 04 cache GTA art locally — needs download OK; 07–09 feature ideas; 03, 05, 06 resolved).
+4. Work the open issues in `.scratch/couch-launcher/issues/` (01 sleep timer & 02 restore points = user commands; 04 cache GTA art locally — needs download OK; 09 feature idea; 03, 05, 06, 08 resolved; 07 wontfix).
 5. Offer the real-app-logos follow-up (§4, skipped).
 
 ## 6. Gotchas & decisions

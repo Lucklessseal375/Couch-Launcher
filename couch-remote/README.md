@@ -16,13 +16,13 @@ python -m pip install pygame
 ```
 
 ## Launcher (TV)
-- **D-pad / left stick:** move · **✕:** select · **○:** back · **△:** phone QR code
+- **D-pad / left stick:** move · **✕:** select · **○:** back · **△:** phone QR code · **□ on a game:** pin it to the front or hide it · **L1/R1:** jump 5 tiles
 - The server reads the controller itself, so it works with or without Steam running. Steam only starts when you pick Big Picture or a Steam game.
 - **PS button:** brings the launcher back when Steam isn't running (Steam keeps it for itself when it is).
 - Arrow keys / Enter / Esc and the mouse work too.
-- Rows: **Stage I** apps, **Stage II** games (GTA V Enhanced + installed Steam games, most recently played first), **Stage III** camp (phone remote, sound, sleep, restart, shut down, desktop).
+- Rows: **Now playing** (Resume / Close, while something you started is open), **Apps** (game stores), **Games** (GTA V Enhanced + installed Steam games, pinned first, then most recently played), **PC** (phone remote, sound, hidden games, sleep, restart, shut down, desktop).
 - When you start something, the launcher stays on screen until the new window appears (no black flash), then that window gets focus so the controller works there right away. Quit it and you're back on the launcher.
-- Sounds: hoofbeats, spur jingles and a steel-ball whir. Turn them off in **Camp → Sound**.
+- Sounds: hoofbeats, spur jingles and a steel-ball whir. Turn them off in **PC → Sound**.
 
 ## Phone remote
 On the launcher, press △ (or open **Phone remote**) and scan the QR code. The phone has to be on the same Wi-Fi.
@@ -33,6 +33,7 @@ On the launcher, press △ (or open **Phone remote**) and scan the QR code. The 
 
 ## Settings
 - `apps.json`: the app tiles (`apps`) and non-Steam games (`games`, with cover/hero image links). Edits show the next time the launcher comes to the front.
+- `choices.json`: games you hid or pinned with □ on the launcher (made the first time you do). Delete it to undo all of it.
 - `config.json`: the port (8765) and the Edge path.
 - `web/poster.webp`: the launcher's background picture. `make_icon.py` redraws `icon.ico` / `web/icon.png`.
 - `server.log`: errors and launches (capped at about 1 MB).
