@@ -10,62 +10,67 @@
 <meta name="color-scheme" content="dark">
 <link href="https://fonts.googleapis.com/css2?family=Lobster&family=Archivo:wdth,wght@62..125,400..900&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <style>
-  /* Poster look: lavender polka dots on purple, pink script with a cyan rim, Johnny's cyan, Gyro's green,
-     a gold horseshoe. Layout and buttons follow the PS5 home screen. */
+  /* OLED cinema x Steel Ball Run. Obsidian surfaces and frosted glass; the show's key art (and then the
+     focused game's art) fills the screen. The SBR identity is the signature: pink Couch script with a cyan
+     rim, the gold horseshoe, Gyro's steel ball on the focused tile, ゴゴゴ, and Johnny's cyan as the
+     ice-blue focus glow. Layout, buttons and prompts follow the PS5. */
   :root {
-    --deep: #24104a; --purple: #5b2fa6; --pink: #e0306e; --johnny: #5ec8ef; --gyro: #6fae3e;
-    --gold: #f2b844; --ink: #ffffff; --dim: #cdbfe8;
+    --obsidian: #0b0d12; --glass: rgba(22, 26, 36, .56); --glass-hi: rgba(26, 30, 42, .84); --line: rgba(255, 255, 255, .11);
+    --ink: #f4f6fb; --dim: #aeb6c8; --faint: #7d859a;
+    --ice: #8fe3ff; --pink: #e0306e; --johnny: #5ec8ef; --gyro: #6fae3e; --gold: #f2b844;
     --ps-cross: #7ea6ff; --ps-circle: #ff6f7d; --ps-tri: #43d6b0; --ps-square: #f08bd8;
     --logo: "Lobster", "Segoe Script", cursive;
-    --ui: "Archivo","Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
-    --tile: 17vh; --poster-h: 28vh;
+    --ui: "Archivo", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+    --spring: cubic-bezier(.22, 1, .36, 1);
+    --tile: 17vh; --poster-h: 27vh; --pad: 5vw;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; overflow: hidden; }
-  body { background: var(--deep); color: var(--ink); font: 500 2vh/1.3 var(--ui); cursor: default; user-select: none; }
+  body { background: var(--obsidian); color: var(--ink); font: 500 2.2vh/1.3 var(--ui); cursor: default; user-select: none; }
 
-  /* ---------- backdrop */
-  .sky { position: fixed; inset: 0; background:
-      url("/poster.webp") right top / auto 100% no-repeat,
-      radial-gradient(circle, rgba(232,216,255,.62) 0 2.4vh, rgba(232,216,255,.22) 2.9vh, transparent 3.3vh) 0 0 / 9vh 9vh,
-      radial-gradient(140vw 100vh at 30% 10%, #9466dc 0%, var(--purple) 45%, var(--deep) 100%); }
-  .bg { position: fixed; inset: 0; background-size: cover; background-position: center 30%; opacity: 0;
-        transition: opacity .7s ease; filter: saturate(1.1) brightness(.6); }
-  .bg.on { opacity: 1; }
-  .shade { position: fixed; inset: 0; background:
-      linear-gradient(90deg, rgba(36,16,74,.92) 0%, rgba(36,16,74,.5) 48%, rgba(36,16,74,.1) 100%),
-      linear-gradient(0deg, rgba(24,10,52,.96) 0%, rgba(24,10,52,.2) 55%, rgba(24,10,52,.5) 100%); }
-  .spiral-mark { position: fixed; right: -14vh; bottom: -20vh; width: 78vh; height: 78vh; opacity: .08; color: var(--gold); pointer-events: none; }
+  /* ---------- full-bleed hero: the show's key art at home, the focused game's art over it, crossfaded */
+  .sky, .bg { position: fixed; inset: 0; opacity: 0; transition: opacity 1.2s ease; }
+  .sky { background: right center / auto 100% no-repeat; }
+  .sky.on, .bg.on { opacity: 1; }
+  .bg { background-size: cover; background-position: center 30%; background-color: var(--obsidian); filter: saturate(1.08) brightness(.66); }
+  .shade { position: fixed; inset: 0; pointer-events: none; transition: opacity .6s ease; background:
+      linear-gradient(90deg, rgba(11,13,18,.97) 0%, rgba(11,13,18,.84) 30%, rgba(11,13,18,.32) 60%, rgba(11,13,18,.06) 100%),
+      linear-gradient(0deg, rgba(11,13,18,.98) 0%, rgba(11,13,18,.6) 36%, rgba(11,13,18,0) 62%),
+      linear-gradient(180deg, rgba(11,13,18,.72) 0%, rgba(11,13,18,0) 20%); }
+  .spiral-mark { position: fixed; right: -14vh; bottom: -20vh; width: 78vh; height: 78vh; opacity: .05; color: var(--gold); pointer-events: none; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .app-shell { position: relative; height: 100%; animation: enter .45s ease-out; }
-  @keyframes enter { from { opacity: 0; transform: translateY(1.5vh); } }
+  .app-shell { position: relative; height: 100%; animation: enter .7s var(--spring); transition: opacity .35s ease; }
+  @keyframes enter { from { opacity: 0; transform: translateY(2vh); } }
 
   /* ---------- header */
-  header { display: flex; align-items: center; justify-content: space-between; height: 11vh; padding: 2.6vh 5vw 0; }
-  .brand { display: flex; align-items: center; gap: 1.4vw; }
-  .brand h1 { margin: 0; font: 400 5.6vh/1 var(--logo); color: var(--pink); -webkit-text-stroke: .18vh #fff;
-              text-shadow: .35vh .35vh 0 var(--johnny), .7vh .7vh 1.4vh rgba(0,0,0,.45); transform: rotate(-4deg); }
-  .brand .mark { width: 4.4vh; height: 4.4vh; filter: drop-shadow(0 .3vh .4vh rgba(0,0,0,.5)); }
+  header { display: flex; align-items: center; justify-content: space-between; height: 11vh; padding: 2.8vh var(--pad) 0; }
+  .brand { display: flex; align-items: center; gap: 1.2vw; }
+  .brand h1 { margin: 0; font: 400 5.8vh/1 var(--logo); color: var(--pink); -webkit-text-stroke: .18vh #fff;
+              text-shadow: .35vh .35vh 0 var(--johnny), .7vh .7vh 1.6vh rgba(0,0,0,.5); transform: rotate(-4deg); }
+  .brand .mark { width: 4.6vh; height: 4.6vh; filter: drop-shadow(0 .3vh .4vh rgba(0,0,0,.5)); }
+  .status { display: flex; align-items: center; gap: 2.6vw; }
   .time { text-align: right; }
-  #clock { font: 600 3.6vh/1 var(--ui); font-variant-numeric: tabular-nums; }
-  #date, #pad { color: var(--dim); font-size: 1.9vh; margin-top: .5vh; }
-  #pad.low { color: var(--ps-circle); }
-  /* idle: dark screen with a wandering clock so the TV doesn't hold a still image for hours */
-  #idle { position: fixed; inset: 0; background: #05020c; opacity: 0; pointer-events: none; transition: opacity 1.2s; z-index: 30; }
-  body.idle #idle { opacity: 1; }  /* nothing still and bright on the TV, just the clock */
-  #idle-clock { position: absolute; font: 600 6vh/1 var(--ui); color: #8a80a0; font-variant-numeric: tabular-nums; }
+  #clock { font: 650 4.2vh/1 var(--ui); font-variant-numeric: tabular-nums; }
+  #date { color: var(--dim); font-size: 2.1vh; margin-top: .7vh; }
+  #pad { display: flex; align-items: center; gap: 1vh; color: var(--dim); font-size: 2.1vh; }
+  #pad svg { width: 5.2vh; height: 2.8vh; color: var(--ink); }
+  #pad.low, #pad.low svg { color: var(--ps-circle); }
+  /* idle: nothing still and bright on the TV, just a dim clock that moves every minute */
+  #idle { position: fixed; inset: 0; background: #05060a; opacity: 0; pointer-events: none; transition: opacity 1.2s; z-index: 30; }
+  body.idle #idle { opacity: 1; }
+  #idle-clock { position: absolute; font: 600 6vh/1 var(--ui); color: #6f7790; font-variant-numeric: tabular-nums; }
 
   /* ---------- details of the focused tile (PS5 game hub) */
-  .details { position: relative; height: 20vh; padding: .6vh 5vw 0; }
-  #d-title { margin: 0; font: 800 7.2vh/1.02 var(--ui); font-stretch: 75%; max-width: 70vw;
-             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 .4vh 1.6vh rgba(0,0,0,.6); }
-  #d-meta { color: var(--dim); font-size: 2vh; margin-top: .5vh; min-height: 1.3em; max-width: 70vw;
+  .details { position: relative; height: 21vh; padding: .4vh var(--pad) 0; }
+  #d-title { margin: 0; font: 800 7.6vh/1.02 var(--ui); font-stretch: 75%; max-width: 64vw;
+             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 .4vh 2vh rgba(0,0,0,.65); }
+  #d-meta { color: var(--dim); font-size: 2.6vh; margin-top: .7vh; min-height: 1.3em; max-width: 64vw;
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .cta { display: inline-flex; align-items: center; gap: 1vh; margin-top: 1.4vh; padding: 1vh 3vh 1vh 1.2vh; border-radius: 99vh;
-         background: #fff; color: #1a0d33; font: 800 2.1vh/1 var(--ui); box-shadow: 0 .8vh 2.4vh rgba(0,0,0,.35); }
-  .cta .glyph { background: #1a0d33; }
+  .cta { display: inline-flex; align-items: center; gap: 1.2vh; margin-top: 1.5vh; padding: 1.1vh 3.4vh 1.1vh 1.3vh; border-radius: 99vh;
+         background: #fff; color: var(--obsidian); font: 800 2.5vh/1 var(--ui); box-shadow: 0 1vh 3vh rgba(0,0,0,.45); }
+  .cta .glyph { background: var(--obsidian); }
   body:not(.chosen) .cta { visibility: hidden; } /* ✕ does nothing until a tile is selected */
-  .details.swap #d-title { animation: dash .38s cubic-bezier(.2,.9,.2,1); }
+  .details.swap #d-title { animation: dash .5s var(--spring); }
   @keyframes dash { from { opacity: 0; transform: translateX(-3vw) skewX(-12deg); } to { opacity: 1; transform: none; } }
   #sfx { position: absolute; right: 7vw; top: 0; font: 900 6vh/1 "Yu Gothic UI", "Meiryo", "MS Gothic", sans-serif; color: var(--pink);
          -webkit-text-stroke: .22vh #fff; letter-spacing: -.05em; opacity: 0; transform: skewX(-14deg); pointer-events: none;
@@ -78,116 +83,158 @@
   @keyframes menace { 0% { opacity: 0; transform: skewX(-14deg) translateY(1vh) scale(.9); } 12% { opacity: .95; transform: skewX(-14deg) scale(1.04); }
                       70% { opacity: .75; } 100% { opacity: 0; transform: skewX(-14deg) translateY(-1vh); } }
   @keyframes shake { 0%,100% { transform: translate(0,0); } 25% { transform: translate(.25vh,-.2vh); } 75% { transform: translate(-.25vh,.2vh); } }
-  /* Windows "Animation effects" off: keep ゴゴゴ as a fade, stop spinning, shaking and sliding */
-  @media (prefers-reduced-motion: reduce) {
-    .app-shell, .details.swap #d-title, .details.swap #sfx span, .item.focus .badge img, .card, .overlay.show, .launch .ball { animation: none !important; }
-    .details.swap #sfx { animation: fade-sfx 1.6s ease-out; }
-    #rows, .item, .item .badge { transition: opacity .2s, box-shadow .2s, filter .2s; }
-    .item.focus, .card .choice.focus { transform: none; }
-  }
-  @keyframes fade-sfx { 12% { opacity: .95; } 70% { opacity: .75; } 100% { opacity: 0; } }
 
-  /* ---------- rows (PS5 tiles) */
-  main { height: calc(100% - 11vh - 20vh - 7vh); overflow: hidden;
+  /* ---------- rows: carousels that glide on a spring */
+  main { height: calc(100% - 11vh - 21vh - 8vh); overflow: hidden;
          -webkit-mask-image: linear-gradient(#000 calc(100% - 4vh), transparent); mask-image: linear-gradient(#000 calc(100% - 4vh), transparent); }
-  #rows { transition: transform .32s cubic-bezier(.2,.8,.2,1); }
-  section { padding: .4vh 0 .2vh; opacity: .55; transition: opacity .3s; }
+  #rows { transition: transform .6s var(--spring); }
+  section { padding: .2vh 0; opacity: .5; transition: opacity .45s ease; }
   section.active, body:not(.chosen) section { opacity: 1; }
-  section h2 { display: flex; align-items: baseline; gap: 1vw; margin: 0 0 0 5vw; font: 600 2vh/1 var(--ui); color: var(--dim); }
-  .strip { display: flex; gap: 1.4vw; padding: 3vh 5vw 2.4vh; overflow: hidden; scroll-behavior: smooth; }
+  section h2 { margin: 0 0 0 var(--pad); font: 650 2.5vh/1 var(--ui); color: var(--dim); }
+  section.active h2 { color: var(--ink); }
+  .strip { padding: 3vh var(--pad) 2.2vh; overflow: hidden; }
+  .track { position: relative; display: flex; gap: 1.5vw; transition: transform .6s var(--spring); }
 
-  .item { flex: 0 0 auto; position: relative; border-radius: 1.6vh; outline: none; cursor: pointer;
-          box-shadow: 0 1.2vh 2.4vh rgba(10,4,24,.45);
-          transition: transform .18s ease, box-shadow .18s ease, filter .18s; filter: brightness(.82); }
-  .item.focus { transform: scale(1.1); z-index: 3; filter: none;
-                box-shadow: 0 0 0 .35vh #fff, 0 2.4vh 4vh rgba(0,0,0,.55); }
-  .item .badge { position: absolute; top: -2.4vh; right: -2.4vh; width: 6.2vh; height: 6.2vh; opacity: 0;
-                 transform: scale(.4) rotate(-90deg); transition: opacity .2s, transform .35s cubic-bezier(.2,.9,.3,1.4); pointer-events: none;
+  .item { flex: 0 0 auto; position: relative; border-radius: 1.4vh; outline: none; cursor: pointer;
+          box-shadow: 0 1.4vh 3vh rgba(0,0,0,.5);
+          transition: transform .5s var(--spring), box-shadow .35s ease, filter .35s ease; filter: brightness(.8) saturate(.92); }
+  .item::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+                 box-shadow: inset 0 0 0 1px var(--line); }  /* the 1px inner light edge, drawn over art too */
+  .item.focus { transform: scale(1.07); z-index: 3; filter: none;
+                box-shadow: 0 0 0 .32vh #fff, 0 0 0 .8vh rgba(143,227,255,.28), 0 0 6vh .6vh rgba(143,227,255,.32), 0 2.6vh 5vh rgba(0,0,0,.6); }
+  .item .badge { position: absolute; top: -2vh; right: -2vh; width: 5.8vh; height: 5.8vh; opacity: 0; z-index: 2;
+                 transform: scale(.4) rotate(-90deg); transition: opacity .2s, transform .5s var(--spring); pointer-events: none;
                  filter: drop-shadow(0 .3vh .6vh rgba(0,0,0,.7)); }
   .item.focus .badge { opacity: 1; transform: scale(1); }
   .item .badge img { width: 100%; height: 100%; display: block; }
   .item.focus .badge img { animation: spin .9s linear infinite; }
 
-  .app { width: var(--tile); height: var(--tile); display: flex; flex-direction: column; justify-content: flex-end; padding: 1.6vh;
-         background: var(--c); }
-  .app .name { font: 800 3.2vh/.95 var(--ui); font-stretch: 75%; }
+  .app { width: var(--tile); height: var(--tile); display: flex; flex-direction: column; justify-content: flex-end; padding: 1.8vh; background: var(--c); }
+  .app .name { font: 800 3.3vh/.95 var(--ui); font-stretch: 75%; }
   /* with the app's real icon: a dark card tinted by the brand colour, the icon centred, the name as a caption */
-  .app.logo { justify-content: center; align-items: center; background: color-mix(in srgb, var(--c) 28%, #13082b); }
-  .app.logo .appicon { width: 9.2vh; height: 9.2vh; object-fit: contain; margin-bottom: 2.2vh; filter: drop-shadow(0 .6vh 1.2vh rgba(0,0,0,.35)); }
-  .app.logo .name { position: absolute; left: 1vh; right: 1vh; bottom: 1.5vh; text-align: center; font: 700 1.7vh/1.1 var(--ui); color: var(--dim); }
+  .app.logo { justify-content: center; align-items: center; background: color-mix(in srgb, var(--c) 24%, #10131a); }
+  .app.logo .appicon { width: 9vh; height: 9vh; object-fit: contain; margin-bottom: 2.4vh; filter: drop-shadow(0 .6vh 1.2vh rgba(0,0,0,.4)); }
+  .app.logo .name { position: absolute; left: 1vh; right: 1vh; bottom: 1.5vh; text-align: center; font: 700 1.9vh/1.1 var(--ui); color: var(--dim);
+                    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .app.logo.focus .name { color: #fff; }
 
-  .poster { width: calc(var(--poster-h) * 2 / 3); height: var(--poster-h); background: linear-gradient(160deg, var(--purple), var(--deep)); }
-  .poster .art { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: inherit; opacity: 0; transition: opacity .4s ease; }
+  .poster { width: calc(var(--poster-h) * 2 / 3); height: var(--poster-h); background: #161a24; }
+  .poster .art { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: inherit; opacity: 0; transition: opacity .5s ease; }
   .poster.loaded .art { opacity: 1; }
-  .poster .name { position: absolute; inset: auto 0 0 0; padding: 4vh 1.2vh 1.2vh; font: 700 1.8vh/1.15 var(--ui);
-                  background: linear-gradient(transparent, rgba(24,10,52,.92)); border-radius: 0 0 1.6vh 1.6vh; }
+  .poster .name { position: absolute; inset: auto 0 0 0; padding: 4vh 1.3vh 1.3vh; font: 700 2vh/1.15 var(--ui);
+                  background: linear-gradient(transparent, rgba(11,13,18,.94)); border-radius: 0 0 1.4vh 1.4vh; }
   .poster.loaded .name { display: none; }  /* the name shows until the art arrives, or if there is none */
   .poster.noart .art { display: none; }
 
-  .sys { width: 13vh; height: 13vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.2vh;
-         font: 700 1.9vh/1.1 var(--ui); text-align: center; background: #301866; }
-  .sys svg.icon { width: 4.4vh; height: 4.4vh; color: #fff; }
+  .sys { width: 15vh; height: 15vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.4vh;
+         font: 700 2.1vh/1.1 var(--ui); text-align: center; background: var(--glass); backdrop-filter: blur(18px) saturate(1.2); }
+  .sys svg.icon { width: 5vh; height: 5vh; color: #fff; }
   .sys.danger svg.icon { color: var(--ps-circle); }
-  .empty { color: var(--dim); padding: 2vh 0; }
+  .empty { color: var(--dim); padding: 2vh 0; font-size: 2.4vh; }
 
-  /* ---------- PlayStation-style button glyphs */
-  .glyph { display: inline-grid; place-items: center; width: 3.2vh; height: 3.2vh; border-radius: 50%; background: rgba(10,4,24,.75);
-           box-shadow: 0 0 0 .15vh rgba(255,255,255,.25) inset; vertical-align: middle; }
-  .glyph svg { width: 1.7vh; height: 1.7vh; fill: none; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+  /* ---------- PlayStation button glyphs (SVG) */
+  .glyph { display: inline-grid; place-items: center; width: 3.7vh; height: 3.7vh; border-radius: 50%; flex: none;
+           background: rgba(255,255,255,.08); box-shadow: inset 0 0 0 .14vh rgba(255,255,255,.24); vertical-align: middle; }
+  .glyph svg { width: 2vh; height: 2vh; fill: none; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
   .g-cross svg { stroke: var(--ps-cross); } .g-circle svg { stroke: var(--ps-circle); } .g-tri svg { stroke: var(--ps-tri); } .g-square svg { stroke: var(--ps-square); }
+  .sh { display: inline-grid; place-items: center; flex: none; color: var(--ink); }
+  .sh svg { width: 6.2vh; height: 3.7vh; }
 
-  /* ---------- footer, toast, dialogs */
-  footer { position: fixed; left: 0; right: 0; bottom: 0; height: 7vh; display: flex; align-items: center; gap: 2.6vw; padding: 0 5vw;
-           color: var(--ink); font-size: 2vh; font-weight: 600; background: linear-gradient(transparent, rgba(16,6,36,.85)); }
-  footer > span { display: inline-flex; align-items: center; gap: .8vh; }
-  footer .sound { margin-left: auto; color: var(--dim); }
-  body:not(.modal) footer .back { display: none; } /* ○ only does something in a dialog */
-  body:not(.on-game) footer .opts, body.modal footer .opts { display: none; } /* □ only does something on a game */
-  #toast { position: fixed; right: 3vw; top: 3vh; transform: translateX(4vw); opacity: 0; transition: all .3s ease;
-           background: #1c0c3c; color: #fff; padding: 1.6vh 2.4vh; border-radius: 1.4vh;
-           font: 600 2vh/1.3 var(--ui); box-shadow: 0 1.4vh 3vh rgba(0,0,0,.5); pointer-events: none; z-index: 20; }
+  /* ---------- context-aware prompt bar */
+  footer { position: fixed; left: 0; right: 0; bottom: 0; height: 8vh; display: flex; align-items: center; gap: 3vw; padding: 0 var(--pad);
+           font: 600 2.4vh/1 var(--ui); color: var(--ink); background: rgba(11,13,18,.5); backdrop-filter: blur(22px) saturate(1.3);
+           box-shadow: inset 0 1px 0 var(--line); z-index: 12; }
+  footer .p { display: inline-flex; align-items: center; gap: 1.1vh; white-space: nowrap; }
+  footer .p .sh + .sh { margin-left: -.4vh; }
+  footer .sound { margin-left: auto; color: var(--dim); font-weight: 500; }
+  footer .sound svg { width: 2.8vh; height: 2.8vh; }
+
+  /* ---------- toast, overlays, dialogs: frosted glass with a 1px inner light edge */
+  #toast { position: fixed; right: var(--pad); top: 3vh; transform: translateY(-2vh); opacity: 0; transition: opacity .35s ease, transform .5s var(--spring);
+           background: var(--glass-hi); backdrop-filter: blur(24px); color: #fff; padding: 1.6vh 3vh; border-radius: 99vh;
+           font: 600 2.3vh/1.25 var(--ui); box-shadow: inset 0 0 0 1px var(--line), 0 1.4vh 3vh rgba(0,0,0,.5); pointer-events: none; z-index: 20; }
   #toast.show { opacity: 1; transform: none; }
-  .overlay { position: fixed; inset: 0; background: rgba(14,6,32,.78); backdrop-filter: blur(6px); display: none; align-items: center; justify-content: center; z-index: 10; }
-  .overlay.show { display: flex; animation: fade .2s ease; }
+  .overlay { position: fixed; inset: 0; background: rgba(5,6,9,.6); backdrop-filter: blur(16px) saturate(1.1); display: none; align-items: center; justify-content: center; z-index: 10; }
+  .overlay.show { display: flex; animation: fade .25s ease; }
   @keyframes fade { from { opacity: 0; } }
-  .card { position: relative; background: rgba(34,18,70,.96); color: #fff; border-radius: 2.4vh; padding: 4vh 4.5vw; text-align: center; max-width: 80vw;
-          border: 1px solid rgba(255,255,255,.12); box-shadow: 0 3vh 6vh rgba(0,0,0,.55); animation: pop .28s cubic-bezier(.2,.9,.3,1.2); }
-  @keyframes pop { from { transform: scale(.9); opacity: 0; } }
-  .card h3 { margin: 0 0 1vh; font: 800 3.6vh/1.1 var(--ui); }
-  .card p { margin: .6vh 0; color: var(--dim); font-size: 2vh; }
-  .card .choices { display: flex; gap: 1.6vw; justify-content: center; margin-top: 3vh; }
-  .card .choice { padding: 1.5vh 4vh; border-radius: 99vh; font: 700 2.1vh/1 var(--ui); background: rgba(255,255,255,.12); color: #fff; filter: none; }
-  .card .choice.focus { background: #fff; color: #1a0d33; transform: scale(1.06); }
+  .card { position: relative; background: var(--glass-hi); backdrop-filter: blur(30px) saturate(1.2); color: #fff; border-radius: 2.8vh; padding: 4.4vh 4.6vw;
+          text-align: center; max-width: 80vw; box-shadow: inset 0 0 0 1px var(--line), 0 4vh 8vh rgba(0,0,0,.6); animation: pop .45s var(--spring); }
+  @keyframes pop { from { transform: scale(.94); opacity: 0; } }
+  .card h3 { margin: 0 0 1vh; font: 800 4vh/1.1 var(--ui); }
+  .card p { margin: .8vh 0; color: var(--dim); font-size: 2.3vh; }
+  .card .choices { display: flex; gap: 1.4vw; justify-content: center; margin-top: 3.2vh; }
+  .card .choice { display: inline-flex; align-items: center; gap: 1.2vh; padding: 1.7vh 4.2vh; border-radius: 99vh; font: 700 2.4vh/1 var(--ui);
+                  background: rgba(255,255,255,.1); color: #fff; filter: none; box-shadow: inset 0 0 0 1px var(--line); }
+  .card .choice::after { display: none; }
+  .card .choice.focus { background: #fff; color: var(--obsidian); transform: scale(1.06); box-shadow: 0 0 0 .3vh #fff, 0 0 4vh rgba(143,227,255,.4); }
   .card .choice.danger.focus { color: #c0203a; }
-  /* list dialogs (audio outputs): full-width rows, a second line, a check on the current one */
-  .card .choices.vertical { flex-direction: column; align-items: stretch; gap: 1vh; min-width: 38vw; }
-  .card .choices.vertical .choice { display: flex; align-items: center; gap: 2vh; padding: 1.8vh 2.6vh; border-radius: 1.6vh; text-align: left; }
-  .card .choice small { display: block; margin-top: .6vh; font: 500 1.7vh/1.2 var(--ui); color: var(--dim); }
-  .card .choice.focus small { color: #5b4a80; }
-  .card .choice .check { width: 2.8vh; height: 2.8vh; margin-left: auto; flex: none; color: var(--johnny); }
-  .card .choice.focus .check { color: #1a0d33; }
-  .card .choice .dev { width: 3.6vh; height: 3.6vh; flex: none; color: var(--dim); }
-  .card .choice.focus .dev { color: #1a0d33; }
-  /* starting a game: the steel ball spins over the game's art until its window takes the screen */
-  #starting { background: radial-gradient(60vw 60vh at 50% 50%, rgba(14,6,32,.6), rgba(14,6,32,.15)); backdrop-filter: none; }
-  .app-shell { transition: opacity .35s ease; }
-  body.starting .app-shell { opacity: 0; }                       /* just the game's art behind the ball */
+  .card .choice .dev { width: 2.8vh; height: 2.8vh; flex: none; color: var(--dim); }
+  .card .choice.focus .dev { color: var(--obsidian); }
+  /* list dialogs (menu, audio outputs): rows with a second line and a check on the current one */
+  .card .choices.vertical { flex-direction: column; align-items: stretch; gap: .9vh; min-width: 42vw; }
+  .card .choices.vertical .choice { gap: 2vh; padding: 1.4vh 2.4vh; border-radius: 1.6vh; text-align: left; transform-origin: center; }
+  .card .choices.vertical .choice.focus { transform: scale(1.03); }
+  .card .choices.vertical .dev { width: 3.4vh; height: 3.4vh; }
+  .card .choice small { display: block; margin-top: .5vh; font: 500 1.8vh/1.2 var(--ui); color: var(--dim); }
+  .card .choice.focus small { color: #4d5568; }
+  .card .choice .bar { margin-left: auto; width: 14vh; height: .8vh; border-radius: 99vh; background: rgba(255,255,255,.14); overflow: hidden; flex: none; }
+  .card .choice .bar i { display: block; height: 100%; background: var(--ice); border-radius: inherit; transition: width .3s var(--spring); }
+  .card .choice.focus .bar { background: rgba(11,13,18,.15); }
+  .card .choice.focus .bar i { background: var(--obsidian); }
+  .card .choice .check { width: 2.8vh; height: 2.8vh; margin-left: auto; flex: none; color: var(--ice); }
+  .card .choice.focus .check { color: var(--obsidian); }
+  /* game details (□): the cover beside its facts and actions */
+  #dlg-art { display: none; }
+  .card.art { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4.4vh; align-items: center; text-align: left; max-width: 76vw; }
+  .card.art #dlg-art { display: block; width: 27vh; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 1.6vh; box-shadow: 0 2vh 4vh rgba(0,0,0,.5); }
+  .card.art h3 { font: 800 6vh/1.02 var(--ui); font-stretch: 75%; }
+  .card.art .choices { justify-content: flex-start; }
+  #dlg-lines { list-style: none; padding: 0; margin: 1.4vh 0 0; display: grid; gap: .9vh; font-size: 2.5vh; color: var(--dim); }
+  #dlg-lines[hidden], #dlg-text[hidden] { display: none; }
+  #dlg-lines li::before { content: ""; display: inline-block; width: .9vh; height: .9vh; margin: 0 1.4vh .25vh 0; border-radius: 50%; background: var(--gold); }
+
+  /* ---------- △ search: on-screen keyboard and results */
+  #search { align-items: flex-start; }
+  .search { width: 90vw; margin-top: 7vh; }
+  .sq { display: flex; align-items: center; gap: 2vh; height: 9vh; padding: 0 3vh; border-radius: 2vh; background: var(--glass-hi);
+        box-shadow: inset 0 0 0 1px var(--line); font: 700 4.4vh/1 var(--ui); }
+  .sq svg { width: 4vh; height: 4vh; color: var(--dim); flex: none; }
+  .sq-hint { color: var(--faint); font-weight: 500; font-size: 3vh; }
+  .caret { width: .35vh; height: 5vh; background: var(--ice); margin-left: -1.2vh; }
+  .keys { display: grid; grid-template-columns: repeat(13, 1fr); gap: 1vh; margin: 3vh 0 2vh; }
+  .key { height: 7.4vh; display: grid; place-items: center; border-radius: 1.3vh; background: rgba(255,255,255,.07);
+         box-shadow: inset 0 0 0 1px var(--line); font: 700 3vh/1 var(--ui); transition: transform .4s var(--spring), background .2s, color .2s; }
+  .key .kicon { width: 3.4vh; height: 3.4vh; }
+  .key.focus { background: #fff; color: var(--obsidian); transform: scale(1.08); box-shadow: 0 0 0 .3vh #fff, 0 0 4vh rgba(143,227,255,.45); }
+  .results-wrap h2 { margin: 0; font: 650 2.5vh/1 var(--ui); color: var(--dim); min-height: 2.5vh; }
+  .results-wrap .strip { padding: 3vh 1.6vh 2vh; margin: 0 -1.6vh; }  /* room for the focus glow */
+  #results { --poster-h: 24vh; --tile: 15vh; }
+
+  /* ---------- starting a game: the steel ball spins over the game's own art until its window takes over */
+  #starting { background: radial-gradient(60vw 60vh at 50% 50%, rgba(11,13,18,.6), rgba(11,13,18,.12)); backdrop-filter: none; }
+  body.starting .app-shell { opacity: 0; }
   body.starting .shade { opacity: .55; }
-  .shade { transition: opacity .6s ease; }
-  body.starting footer > span:not(.back) { visibility: hidden; }  /* only ○ does something here */
   body.starting .bg { filter: saturate(1.1) brightness(.8); transition: opacity .7s ease, filter .6s ease; }
   .launch { text-align: center; max-width: 80vw; }
   .launch .ball { width: 13vh; height: 13vh; animation: spin .9s linear infinite; filter: drop-shadow(0 1vh 2vh rgba(0,0,0,.6)); }
-  .launch h3 { margin: 3.4vh 0 1.2vh; font: 800 7vh/1.02 var(--ui); font-stretch: 75%; text-shadow: 0 .4vh 2vh rgba(0,0,0,.7); }
-  .launch p { margin: 0; color: var(--dim); font-size: 2.2vh; }
+  .launch h3 { margin: 3.4vh 0 1.2vh; font: 800 7.2vh/1.02 var(--ui); font-stretch: 75%; text-shadow: 0 .4vh 2vh rgba(0,0,0,.7); }
+  .launch p { margin: 0; color: var(--dim); font-size: 2.4vh; }
   #qr { background: #fff; padding: 1.4vh; border-radius: 1.4vh; display: inline-block; margin: 2vh 0; }
   #qr svg { display: block; width: 30vh; height: 30vh; }
   .url { font-family: Consolas, monospace; color: #fff !important; }
+
+  /* Windows "Animation effects" off: ゴゴゴ becomes a fade; nothing spins, shakes, slides or zooms */
+  @media (prefers-reduced-motion: reduce) {
+    .app-shell, .details.swap #d-title, .details.swap #sfx span, .item.focus .badge img, .card, .overlay.show, .launch .ball { animation: none !important; }
+    .details.swap #sfx { animation: fade-sfx 1.6s ease-out; }
+    #rows, .track, .item, .item .badge, .key { transition: opacity .2s, box-shadow .2s, filter .2s; }
+    .item.focus, .card .choice.focus, .key.focus { transform: none; }
+  }
+  @keyframes fade-sfx { 12% { opacity: .95; } 70% { opacity: .75; } 100% { opacity: 0; } }
 </style>
 </head>
 <body>
-<div class="sky"></div>
+<div class="sky" id="skyA"></div><div class="sky" id="skyB"></div>
 <div class="bg" id="bgA"></div><div class="bg" id="bgB"></div>
 <div class="shade"></div>
 <svg class="spiral-mark" viewBox="0 0 2 2"><use href="#spiral"/></svg>
@@ -196,13 +243,23 @@
   <defs>
     <symbol id="spiral" viewBox="-1 -1 2 2"><path id="spiral-path" fill="none" stroke="currentColor" stroke-width=".06" stroke-linecap="round"/></symbol>
     <symbol id="horseshoe" viewBox="-1 -1 2 2"><path d="M-.55-.82V-.05A.55.55 0 0 0 .55-.05V-.82" fill="none" stroke="#f2b844" stroke-width=".3" stroke-linecap="round"/><path d="M-.55-.82V-.05A.55.55 0 0 0 .55-.05V-.82" fill="none" stroke="#ffe19a" stroke-width=".08" stroke-linecap="round" transform="translate(-.05 -.03)"/><g fill="#6b4a10"><circle cx="-.55" cy="-.5" r=".05"/><circle cx="-.5" cy="-.15" r=".05"/><circle cx=".55" cy="-.5" r=".05"/><circle cx=".5" cy="-.15" r=".05"/></g></symbol>
+    <!-- PlayStation buttons -->
     <symbol id="g-cross" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"/></symbol>
     <symbol id="g-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></symbol>
     <symbol id="g-tri" viewBox="0 0 24 24"><path d="M12 4l9 15H3z"/></symbol>
     <symbol id="g-square" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14"/></symbol>
+    <symbol id="g-l1" viewBox="0 0 44 26"><rect x="1.5" y="1.5" width="41" height="23" rx="8" fill="rgba(255,255,255,.08)" stroke="currentColor" stroke-opacity=".5" stroke-width="1.6"/><text x="22" y="17.6" text-anchor="middle" font-family="Archivo, Segoe UI, sans-serif" font-size="13" font-weight="800" fill="currentColor">L1</text></symbol>
+    <symbol id="g-r1" viewBox="0 0 44 26"><rect x="1.5" y="1.5" width="41" height="23" rx="8" fill="rgba(255,255,255,.08)" stroke="currentColor" stroke-opacity=".5" stroke-width="1.6"/><text x="22" y="17.6" text-anchor="middle" font-family="Archivo, Segoe UI, sans-serif" font-size="13" font-weight="800" fill="currentColor">R1</text></symbol>
+    <symbol id="g-options" viewBox="0 0 44 26"><rect x="1.5" y="1.5" width="41" height="23" rx="11.5" fill="rgba(255,255,255,.08)" stroke="currentColor" stroke-opacity=".5" stroke-width="1.6"/><path d="M15 8.5h14M15 13h14M15 17.5h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <!-- interface icons -->
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20.5 20.5l-4.6-4.6"/></symbol>
+    <symbol id="i-del" viewBox="0 0 24 24"><path d="M21 5H8l-6 7 6 7h13a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1z"/><path d="M17 9l-6 6M11 9l6 6"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 16v6M8 3h8l-1.5 6 3.5 3.5V16H6v-3.5L9.5 9z"/></symbol>
     <symbol id="i-speaker" viewBox="0 0 24 24"><rect x="5" y="2.5" width="14" height="19" rx="2.5"/><circle cx="12" cy="14.5" r="3.5"/><path d="M12 7h.01"/></symbol>
     <symbol id="i-tv" viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
     <symbol id="i-headphones" viewBox="0 0 24 24"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1v-6h3zM3 19a2 2 0 0 0 2 2h1v-6H3z"/></symbol>
+    <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></symbol>
+    <symbol id="i-voice" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
     <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
     <symbol id="i-resume" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z"/></symbol>
@@ -220,7 +277,7 @@
 <div class="app-shell">
   <header>
     <div class="brand"><svg class="mark" viewBox="0 0 2 2"><use href="#horseshoe"/></svg><h1>Couch</h1></div>
-    <div class="time"><div id="clock">--:--</div><div id="date"></div><div id="pad"></div></div>
+    <div class="status"><div id="pad"></div><div class="time"><div id="clock">--:--</div><div id="date"></div></div></div>
   </header>
   <div class="details" id="details">
     <h2 id="d-title">Pick something to play</h2>
@@ -229,24 +286,26 @@
     <div id="sfx" aria-hidden="true"><span>ゴ</span><span>ゴ</span><span>ゴ</span></div>
   </div>
   <main><div id="rows">
-    <section id="now-row" hidden><h2>Now playing</h2><div class="strip" id="now"></div></section>
-    <section><h2>Apps</h2><div class="strip" id="apps"></div></section>
-    <section><h2>Games</h2><div class="strip" id="games"><div class="empty">Loading games…</div></div></section>
-    <section><h2>PC</h2><div class="strip" id="system"></div></section>
+    <section id="now-row" hidden><h2>Now playing</h2><div class="strip"><div class="track" id="now"></div></div></section>
+    <section><h2>Apps</h2><div class="strip"><div class="track" id="apps"></div></div></section>
+    <section><h2>Games</h2><div class="strip"><div class="track" id="games"><div class="empty">Loading games…</div></div></div></section>
+    <section><h2>PC</h2><div class="strip"><div class="track" id="system"></div></div></section>
   </div></main>
 </div>
-<footer>
-  <span><span class="glyph g-cross"><svg viewBox="0 0 24 24"><use href="#g-cross"/></svg></span>Select</span>
-  <span class="back"><span class="glyph g-circle"><svg viewBox="0 0 24 24"><use href="#g-circle"/></svg></span>Back</span>
-  <span class="opts"><span class="glyph g-square"><svg viewBox="0 0 24 24"><use href="#g-square"/></svg></span>Options</span>
-  <span><span class="glyph g-tri"><svg viewBox="0 0 24 24"><use href="#g-tri"/></svg></span>Phone remote</span>
-  <span class="sound" id="sound-hint"></span>
-</footer>
+<footer id="prompts"></footer>
 <div id="toast"></div>
 <div id="idle"><div id="idle-clock"></div></div>
-<div class="overlay" id="dialog"><div class="card">
-  <h3 id="dlg-title"></h3><p id="dlg-text"></p>
-  <div class="choices" id="dlg-choices"></div>
+<div class="overlay" id="dialog"><div class="card" id="dlg-card">
+  <img id="dlg-art" alt="">
+  <div class="dlg-body">
+    <h3 id="dlg-title"></h3><p id="dlg-text"></p><ul id="dlg-lines"></ul>
+    <div class="choices" id="dlg-choices"></div>
+  </div>
+</div></div>
+<div class="overlay" id="search"><div class="search">
+  <div class="sq"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><use href="#i-search"/></svg><span id="sq-text"></span><span class="caret"></span><span class="sq-hint" id="sq-hint">Search games and apps</span></div>
+  <div class="keys" id="keys"></div>
+  <div class="results-wrap"><h2 id="sr-title"></h2><div class="strip"><div class="track" id="results"></div></div></div>
 </div></div>
 <div class="overlay" id="starting"><div class="launch">
   <img class="ball" src="/steelball.png" alt="">
@@ -258,7 +317,6 @@
   <p>Scan with your phone's camera (same Wi-Fi as this PC).</p>
   <div id="qr"></div>
   <p>Or open <span class="url" id="phone-url"></span></p>
-  <p>Press ○ to close</p>
 </div></div>
 
 <script async src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
@@ -272,13 +330,14 @@ const store = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch {} },
 };
+const PREVIEW = location.search.includes("preview");  // a test copy: no microphone check, no startup music
 
 let info = null;
 let rows = [];            // arrays of focusable elements, one per row
 let pos = { r: 1, c: 0 };  // where the first press lands (first game)
 let chosen = false;        // nothing is selected until you move, so ✕ can't launch by accident
 const lastCol = [];
-let modal = null;         // { els: [...], i, onBack }
+let modal = null;         // { els, i, onBack, move?, activate?, del?, search? }
 
 // ---------- golden spiral (r grows by the golden ratio every quarter turn)
 (() => {
@@ -294,14 +353,31 @@ let modal = null;         // { els: [...], i, onBack }
 const badge = () => '<span class="badge"><img src="/steelball.png" alt=""></span>';
 const icon = (name, cls = "icon") =>
   `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-${name}"/></svg>`;
+// PlayStation button glyphs for prompts, all SVG
+const GLYPH = {
+  cross: '<span class="glyph g-cross"><svg viewBox="0 0 24 24"><use href="#g-cross"/></svg></span>',
+  circle: '<span class="glyph g-circle"><svg viewBox="0 0 24 24"><use href="#g-circle"/></svg></span>',
+  square: '<span class="glyph g-square"><svg viewBox="0 0 24 24"><use href="#g-square"/></svg></span>',
+  tri: '<span class="glyph g-tri"><svg viewBox="0 0 24 24"><use href="#g-tri"/></svg></span>',
+  l1: '<span class="sh"><svg viewBox="0 0 44 26"><use href="#g-l1"/></svg></span>',
+  r1: '<span class="sh"><svg viewBox="0 0 44 26"><use href="#g-r1"/></svg></span>',
+  options: '<span class="sh"><svg viewBox="0 0 44 26"><use href="#g-options"/></svg></span>',
+};
 
-// ---------- sound: everything is synthesized, no files
+// ---------- sound: synthesized menu sounds, plus your intro music if there's a file for it
 const Sound = (() => {
-  let ctx, out, on = store.get("couchSound") !== "off", foot = 0;
+  let ctx, out, music = null, bgm = null, on = store.get("couchSound") !== "off", foot = 0;
+  let sfxVol = +(store.get("couchSfxVol") ?? 0.8), musicOn = store.get("couchMusic") !== "off";
+  let musicVol = +(store.get("couchMusicVol") ?? 0.35), voiceOn = store.get("couchVoice") !== "off";
+  // Your clips from web/audio/sbr, decoded once at load: slot -> [{ buf, voice, name }]. Variants
+  // (launch-1, launch-2...) play at random; files with "-voice" in the name are character voice lines.
+  const clips = {};
+  const SLOT_OF = n => ({ "nav-move": "move", "tab-switch": "tab", "confirm-launch": "launch", launch: "launch", back: "back",
+                          "control-center": "menu", "bgm-loop": "bgm" })[n.replace(/\.[^.]+$/, "").replace("-voice", "").replace(/-\d+$/, "")];
   function ac() {
     if (!ctx) {
       ctx = new AudioContext();
-      out = ctx.createGain(); out.gain.value = 0.55;
+      out = ctx.createGain(); out.gain.value = 0.55 * sfxVol;
       const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 9000;
       out.connect(lp).connect(ctx.destination);
     }
@@ -331,23 +407,144 @@ const Sound = (() => {
   const jingle = t0 => [2350, 3120, 4060].forEach((f, i) => tone(f * (0.98 + Math.random() * 0.04), t0 + i * 0.018, 0.22, "triangle", 0.035));
   const whir = t0 => { tone(140, t0, 0.35, "sawtooth", 0.025, 900); noise(t0, 0.3, 600, 4000, 0.05, 6); }; // steel ball spin-up
   const play = fn => { if (on) try { fn(); } catch {} };
-  return {
-    get on() { return on; },
-    toggle() { on = !on; store.set("couchSound", on ? "on" : "off"); if (on) this.select(); },
-    move: () => play(() => clop(0, (foot ^= 1))),                    // clip-clop as you move
-    bump: () => play(() => tone(95, 0, 0.12, "sine", 0.18, 60)),     // can't go further
-    select: () => play(() => { tone(660, 0, 0.09, "triangle", 0.08); tone(990, 0.05, 0.16, "triangle", 0.08); jingle(0.03); whir(0); }),
-    back: () => play(() => noise(0, 0.2, 2400, 500, 0.14, 0.9)),     // rope swish
-    open: () => play(() => { noise(0, 0.32, 400, 3200, 0.09, 0.8); tone(784, 0.22, 0.3, "sine", 0.06); }),
-    launch: () => play(() => {                                       // gallop off + golden chord
+  // A clip for this slot, started right away (clips overlap; nothing waits for them). False = none added.
+  function clip(slot, gain = sfxVol) {
+    const list = (clips[slot] || []).filter(c => voiceOn || !c.voice);
+    if (!list.length) return false;
+    const c = ac(), s = c.createBufferSource(), g = c.createGain();
+    s.buffer = list[Math.floor(Math.random() * list.length)].buf; g.gain.value = gain;
+    s.connect(g).connect(c.destination); s.start();
+    return true;
+  }
+  // Built-in sounds, used for any slot you haven't added a clip for
+  const synth = {
+    move: () => clop(0, (foot ^= 1)),                                 // clip-clop as you move
+    tab: () => { whir(0); tone(1320, 0.02, 0.08, "triangle", 0.05); }, // steel ball deflects
+    back: () => noise(0, 0.2, 2400, 500, 0.14, 0.9),                  // rope swish
+    menu: () => { noise(0, 0.32, 400, 3200, 0.09, 0.8); tone(784, 0.22, 0.3, "sine", 0.06); },
+    launch: () => {                                                   // gallop off + golden chord
       [0, .09, .2, .36, .45, .56].forEach((t, i) => clop(t, i % 3 === 2));
       [392, 494, 587, 784].forEach((f, i) => tone(f, 0.62 + i * 0.07, 0.9, "triangle", 0.06)); whir(0.55);
       jingle(0.62);
+    },
+  };
+  const cue = slot => play(() => clip(slot) || synth[slot]());
+  function startBgm() {  // looping menu music, low and faded in
+    if (!on || !musicOn || bgm || !clips.bgm) return;
+    const c = ac(), s = c.createBufferSource(), g = c.createGain(), t = c.currentTime;
+    s.buffer = clips.bgm[0].buf; s.loop = true;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(Math.max(musicVol, 0.001), t + 2.5);
+    s.connect(g).connect(c.destination); s.start(t);
+    bgm = { s, g };
+  }
+  function stopBgm(fade = 0.8) {  // ducks it away (a game is starting, or music was turned off)
+    if (!bgm) return;
+    const t = ac().currentTime, { s, g } = bgm; bgm = null;
+    try { g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(Math.max(g.gain.value, 0.0001), t); g.gain.exponentialRampToValueAtTime(0.0001, t + fade); s.stop(t + fade + 0.05); } catch {}
+  }
+  function stopMusic(fade = 0.6) {
+    if (!music) return;
+    const t = ac().currentTime, { s, g } = music; music = null;
+    try { g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(Math.max(g.gain.value, 0.0001), t); g.gain.exponentialRampToValueAtTime(0.0001, t + fade); s.stop(t + fade + 0.05); } catch {}
+  }
+  return {
+    get on() { return on; },
+    toggle() { on = !on; store.set("couchSound", on ? "on" : "off"); if (on) { this.select(); startBgm(); } else { stopMusic(); stopBgm(); } },
+    unlock() { if (ctx && ctx.state === "suspended") ctx.resume(); },  // browsers start audio on the first press
+    async loadClips(names) {
+      await Promise.all(names.map(async name => {
+        const slot = SLOT_OF(name);
+        if (!slot) return;
+        try {
+          const buf = await ac().decodeAudioData(await (await fetch("/audio/sbr/" + encodeURIComponent(name))).arrayBuffer());
+          (clips[slot] ||= []).push({ buf, voice: name.includes("-voice"), name });
+        } catch {}  // a file that won't decode is skipped; the built-in sound stays
+      }));
+    },
+    has: slot => !!clips[slot]?.length,
+    names: slot => (clips[slot] || []).map(c => c.name),
+    get sfxVol() { return sfxVol; },
+    set sfxVol(v) { sfxVol = v; store.set("couchSfxVol", v); if (out) out.gain.value = 0.55 * v; },
+    get musicOn() { return musicOn; },
+    set musicOn(v) { musicOn = v; store.set("couchMusic", v ? "on" : "off"); v ? startBgm() : stopBgm(); },
+    get musicVol() { return musicVol; },
+    set musicVol(v) { musicVol = v; store.set("couchMusicVol", v); if (bgm) bgm.g.gain.setTargetAtTime(Math.max(v, 0.0001), ac().currentTime, 0.1); },
+    get voiceOn() { return voiceOn; },
+    set voiceOn(v) { voiceOn = v; store.set("couchVoice", v ? "on" : "off"); },
+    startBgm, stopBgm,
+    test(slot) {  // the soundboard: plays a slot even with sounds off
+      if (slot === "bgm") { if (clips.bgm) this.music(clips.bgm[0].buf, 8, Math.max(musicVol, 0.05), true); return; }
+      clip(slot) || synth[slot]();
+    },
+    // where everything plays: "" = Windows' default (the TV), or the DualSense speaker's device id
+    route(id) { const c = ac(); if (c.setSinkId) c.setSinkId(id).catch(() => {}); },
+    decode: data => ac().decodeAudioData(data),
+    music(buf, seconds, gain, force) {  // fades in, plays `seconds`, fades out
+      if (!on && !force) return;
+      stopMusic(0.3);
+      const c = ac(), s = c.createBufferSource(), g = c.createGain(), t = c.currentTime, end = Math.min(seconds, buf.duration);
+      s.buffer = buf;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + 1.2);
+      g.gain.setValueAtTime(gain, t + Math.max(1.3, end - 3)); g.gain.exponentialRampToValueAtTime(0.0001, t + end);
+      s.connect(g).connect(c.destination); s.start(t); s.stop(t + end + 0.05);
+      music = { s, g };
+    },
+    stopMusic,
+    move: () => cue("move"),
+    tab: () => cue("tab"),
+    menu: () => cue("menu"),
+    bump: () => play(() => tone(95, 0, 0.12, "sine", 0.18, 60)),     // can't go further
+    select: () => play(() => { tone(660, 0, 0.09, "triangle", 0.08); tone(990, 0.05, 0.16, "triangle", 0.08); jingle(0.03); whir(0); }),
+    back: () => cue("back"),
+    open: () => play(() => { noise(0, 0.32, 400, 3200, 0.09, 0.8); tone(784, 0.22, 0.3, "sine", 0.06); }),
+    battery: () => play(() => { tone(880, 0, 0.16, "triangle", 0.1); tone(587, 0.2, 0.26, "triangle", 0.1); }),  // controller low
+    launch: () => { stopBgm(0.5); cue("launch"); },
+    fanfare: () => play(() => {                                      // original "race start": gallop, bugle call, spurs
+      [0, .11, .24, .42, .53, .66, .84, .95, 1.08].forEach((t, i) => clop(t, i % 3 === 2));
+      [[392, 1.2, .2], [523, 1.4, .2], [659, 1.6, .2], [784, 1.8, 1]].forEach(([f, t, d]) => { tone(f, t, d, "sawtooth", 0.03); tone(f * 2, t, d, "triangle", 0.025); });
+      jingle(1.85); whir(1.75);
     }),
   };
 })();
-function soundHint() { $("#sound-hint").innerHTML = `${icon(Sound.on ? "sound" : "mute", "icon")}`.replace('class="icon"', 'class="icon" style="width:2.6vh;height:2.6vh;vertical-align:middle;margin-right:.6vw"') + (Sound.on ? "Menu sounds on" : "Menu sounds off"); }
-soundHint();
+
+// ---------- where launcher sounds play: the DualSense speaker when Windows has it (controller on a USB
+// cable; over Bluetooth Windows doesn't offer it), otherwise the TV. Device names need a media permission;
+// the server starts this page with Edge's fake-ui flag, which grants it without a prompt.
+const Out = {
+  id: "", where: "TV",
+  async detect() {
+    if (PREVIEW) return;
+    try {
+      const md = navigator.mediaDevices;
+      let devs = await md.enumerateDevices();
+      if (!devs.some(d => d.kind === "audiooutput" && d.label)) {
+        const s = await md.getUserMedia({ audio: true }); s.getTracks().forEach(t => t.stop());
+        devs = await md.enumerateDevices();
+      }
+      const pad = devs.find(d => d.kind === "audiooutput" && /wireless controller|dualsense/i.test(d.label));
+      const id = pad ? pad.deviceId : "";
+      if (id !== this.id) { this.id = id; this.where = pad ? "controller" : "TV"; Sound.route(id); if (info) build(); updatePrompts(); }
+    } catch {}
+  },
+};
+navigator.mediaDevices?.addEventListener?.("devicechange", () => Out.detect());
+
+// Intro music: the first file in web/audio (e.g. the SBR opening, from your own copy). At startup it plays on
+// the controller, or on the TV since nothing else is playing yet; when a game starts, only on the controller.
+const Intro = {
+  buf: null,
+  async get() {
+    if (!info?.intro) return null;
+    if (!this.buf) try { this.buf = await Sound.decode(await (await fetch("/audio/intro")).arrayBuffer()); } catch { return null; }
+    return this.buf;
+  },
+  async play(when) {
+    if (!Sound.on || (when === "launch" && !Out.id)) return;
+    const buf = await this.get();
+    if (buf) Sound.music(buf, when === "launch" ? 25 : 45, Out.id ? 0.6 : 0.35);
+    else if (when === "startup") Sound.fanfare();
+  },
+};
 
 // ---------- clock
 function tick() {
@@ -358,7 +555,7 @@ function tick() {
 }
 tick(); setInterval(tick, 10000);
 
-// ---------- idle: after 10 minutes without input, dim to a wandering clock; the next press only wakes it
+// ---------- idle: after 10 minutes without input, a dark screen and a wandering clock; the next press only wakes it
 const IDLE_MS = 10 * 60 * 1000;
 let lastInput = Date.now();
 function wake() {
@@ -377,20 +574,43 @@ setInterval(() => {
 }, 60000);
 addEventListener("mousemove", wake);
 
-// ---------- controller battery (sent by the server as pad:<level>)
+// ---------- controller battery (sent by the server as pad:<level>): a DualSense-style battery icon
+let padLevel = null;
 function showPad(level) {
-  const p = $("#pad");
-  p.textContent = { none: "No controller", empty: "Controller battery empty", low: "Controller battery low",
-                    medium: "Controller battery half", wired: "Controller charging" }[level] || "";
-  p.classList.toggle("low", level === "empty" || level === "low");
+  const low = level === "empty" || level === "low", p = $("#pad");
+  if (low && padLevel && padLevel !== "low" && padLevel !== "empty") { Sound.battery(); toast("Controller battery low. Charge it soon."); }
+  padLevel = level;
+  p.classList.toggle("low", low);
+  if (level === "none") { p.innerHTML = "<span>No controller</span>"; p.title = ""; return; }
+  const fill = { empty: .08, low: .25, medium: .6 }[level] ?? 1;
+  const label = { empty: "Battery empty", low: "Battery low", wired: "Charging" }[level] || "";
+  p.innerHTML = `<svg viewBox="0 0 34 18" aria-hidden="true"><rect x="1" y="1" width="28" height="16" rx="3.5" fill="none" stroke="currentColor" stroke-width="2"/>`
+    + `<rect x="30" y="6" width="3" height="6" rx="1" fill="currentColor"/><rect x="4" y="4" width="${(22 * fill).toFixed(1)}" height="10" rx="1.5" fill="currentColor"/>`
+    + (level === "wired" ? '<path d="M16.5 3l-5 7h4l-2 5 6-8h-4z" fill="#0b0d12"/>' : "") + `</svg><span>${label}</span>`;
+  p.title = `Controller: ${label || level}`;
 }
 
 // ---------- toast
 let toastTimer;
 function toast(msg) {
   const t = $("#toast"); t.textContent = msg; t.classList.add("show");
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 2600);
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 2800);
 }
+
+// ---------- home backdrop: the show's official key art, crossfading slowly; a focused game's art covers it
+const SKIES = ["/poster.webp", "/img/sbr-riders.jpg", "/img/sbr-race.jpg"];
+let skyFront = $("#skyA"), skyBack = $("#skyB"), skyN = 0;
+function nextSky() {
+  const url = SKIES[skyN++ % SKIES.length], img = new Image();
+  img.onload = () => {
+    skyBack.style.backgroundImage = `url("${url}")`;
+    skyBack.classList.add("on"); skyFront.classList.remove("on");
+    [skyFront, skyBack] = [skyBack, skyFront];
+  };
+  img.src = url;
+}
+nextSky();
+setInterval(() => { if (!document.hidden && !bgWant) nextSky(); }, 20000);
 
 // ---------- backdrop: the focused game's art, crossfaded
 let bgFront = $("#bgA"), bgBack = $("#bgB"), bgWant = null, bgTimer;
@@ -432,9 +652,41 @@ function showDetails(e) {
   setBackdrop(e.dataset.hero || null);
 }
 
+// ---------- context-aware prompt bar (PS5 style)
+function setPrompts(items) {
+  $("#prompts").innerHTML = items.map(([g, label]) => `<span class="p">${[].concat(g).map(x => GLYPH[x]).join("")}<span>${esc(label)}</span></span>`).join("")
+    + `<span class="p sound">${icon(Sound.on ? "sound" : "mute")}<span>${Sound.on ? `Menu sounds on the ${Out.where}` : "Menu sounds off"}</span></span>`;
+}
+function updatePrompts() {
+  if (document.body.classList.contains("starting")) return setPrompts([["circle", "Hide"]]);
+  if (modal?.search) return setPrompts([["cross", S?.zone === "results" ? "Open" : "Type"], ["square", "Delete"], ["circle", "Close"]]);
+  if (modal) return setPrompts(modal.els.length ? [["cross", "Select"], ["circle", "Back"]] : [["circle", "Close"]]);
+  const t = chosen && rows[pos.r]?.[pos.c];
+  const nav = [["tri", "Search"], [["l1", "r1"], "Category"], ["options", "Menu"]];
+  if (!t) return setPrompts([["cross", "Select"], ...nav]);
+  if (t.game) return setPrompts([["cross", "Play"], ["square", "Details"], ...nav]);
+  setPrompts([["cross", t.dataset.cta || "Select"], ...nav]);
+}
+
 // ---------- build
 function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+// The PC row and the Options menu share these
+function pcItems() {
+  return [
+    { icon: "phone", label: "Phone remote", meta: "Scan a code to control the PC from your phone", cta: "Show code", fn: showPhone },
+    { icon: deviceIcon(info.audio?.name || ""), label: "Audio output", meta: info.audio ? `Playing on ${deviceName(info.audio.name)[0]}` : "Choose where games and videos play", cta: "Change", fn: pickAudio },
+    { icon: Sound.on ? "sound" : "mute", label: "Sound", meta: Sound.on ? `Effects on, playing on the ${Out.where}` : "Effects off", cta: "Settings", fn: () => soundSettings() },
+    ...(info.hidden?.length ? [{ icon: "eye", label: "Hidden games", meta: info.hidden.join(", "), cta: "Show all", fn: () => setChoice("unhide-all") }] : []),
+    { icon: "moon", label: "Sleep", meta: "Wake it with the PC's power button", cta: "Sleep", fn: sleepNow },  // waking undoes it, so no dialog
+    { icon: "restart", label: "Restart", meta: "Closes all apps and restarts the PC", cta: "Restart", cls: "danger",
+      fn: () => confirmPower("restart", "Restart", "Restart the PC now? Unsaved work in other apps will be lost.") },
+    { icon: "power", label: "Shut down", meta: "Closes all apps and turns the PC off", cta: "Shut down", cls: "danger",
+      fn: () => confirmPower("shutdown", "Shut down", "Shut down the PC now? Unsaved work in other apps will be lost.") },
+    { icon: "exit", label: "Desktop", meta: "Closes the launcher and shows the desktop", cta: "Go to desktop", fn: () => api("/api/window", { action: "close-launcher" }) },
+  ];
+}
 
 function build() {
   // what's running (launched from here, window still open): Resume / Close, like the PS5's first tile
@@ -485,35 +737,38 @@ function build() {
     t.dataset.meta = g.meta || [ago(g.lastPlayed), playtime(g.playtime)].filter(Boolean).join(", ");
     t.dataset.hero = g.hero || `/art/${g.appid}/hero`;
     t.dataset.cta = "Play";
-    t.game = g;  // for the □ menu
+    t.game = g;  // for □ Details
     t.onactivate = () => launch(g.id ? { id: g.id } : { game: g.appid }, g.name);
     games.append(t);
   }
 
   const sys = $("#system"); sys.innerHTML = "";
-  const sysItems = [
-    ["phone", "Phone remote", "Scan a code to control the PC from your phone", "Show code", "", showPhone],
-    [deviceIcon(info.audio?.name || ""), "Audio output", info.audio ? `Playing on ${deviceName(info.audio.name)[0]}` : "Choose where games and videos play", "Change", "", pickAudio],
-    [Sound.on ? "sound" : "mute", "Menu sounds", Sound.on ? "On" : "Off", Sound.on ? "Turn off" : "Turn on", "", () => { Sound.toggle(); soundHint(); const r = pos.r, c = pos.c; build(); focus(r, c); }],
-    ...(info.hidden?.length ? [["eye", "Hidden games", info.hidden.join(", "), "Show all", "", () => setChoice("unhide-all")]] : []),
-    ["moon", "Sleep", "Wake it with the PC's power button", "Sleep", "", () => { toast("Sleeping…"); api("/api/power", { action: "sleep" }).catch(() => {}); }],  // waking undoes it, so no dialog
-    ["restart", "Restart", "Closes all apps and restarts the PC", "Restart", "danger", () => confirmPower("restart", "Restart", "Restart the PC now? Unsaved work in other apps will be lost.")],
-    ["power", "Shut down", "Closes all apps and turns the PC off", "Shut down", "danger", () => confirmPower("shutdown", "Shut down", "Shut down the PC now? Unsaved work in other apps will be lost.")],
-    ["exit", "Desktop", "Closes the launcher and shows the desktop", "Go to desktop", "", () => api("/api/window", { action: "close-launcher" })],
-  ];
-  for (const [ic, label, meta, cta, cls, fn] of sysItems) {
-    const t = el("div", "item sys " + cls, `${icon(ic)}<span>${esc(label)}</span>${badge()}`);
-    t.dataset.title = label; t.dataset.meta = meta; t.dataset.cta = cta;
-    t.onactivate = fn; sys.append(t);
+  for (const p of pcItems()) {
+    const t = el("div", "item sys " + (p.cls || ""), `${icon(p.icon)}<span>${esc(p.label)}</span>${badge()}`);
+    t.dataset.title = p.label; t.dataset.meta = p.meta; t.dataset.cta = p.cta;
+    t.onactivate = p.fn; sys.append(t);
   }
 
-  rows = [...document.querySelectorAll(".strip")].map(s => [...s.querySelectorAll(".item")]).filter(r => r.length);
+  for (const tr of document.querySelectorAll("#rows .track")) { tr.dataset.x = 0; tr.style.transform = ""; }
+  rows = [...document.querySelectorAll("#rows .track")].map(s => [...s.querySelectorAll(".item")]).filter(r => r.length);
   rows.forEach((row, r) => row.forEach((e, c) => {
     // Steam's desktop layout moves the mouse with the right stick; don't let that steal focus.
     e.addEventListener("mouseenter", () => { if (!modal && performance.now() - lastPadAt > 1500 && (pos.r !== r || pos.c !== c)) { focus(r, c); Sound.move(); } });
     e.addEventListener("click", () => { if (!modal) { focus(r, c); Sound.select(); e.onactivate(); } });
   }));
   if (chosen) focus(Math.min(pos.r, rows.length - 1), lastCol[pos.r] ?? 0);
+  updatePrompts();
+}
+
+// Horizontal: glide the row (on a spring) so the tile is in view
+function slide(e) {
+  const track = e.parentElement, strip = track.parentElement;
+  const padL = parseFloat(getComputedStyle(strip).paddingLeft) || 0, view = strip.clientWidth - 2 * padL;
+  let x = +track.dataset.x || 0;
+  const left = e.offsetLeft, w = e.offsetWidth;
+  if (left < x) x = left; else if (left + w > x + view) x = left + w - view;
+  x = Math.max(0, Math.min(x, Math.max(0, track.scrollWidth - view)));
+  track.dataset.x = x; track.style.transform = `translateX(${-x}px)`;
 }
 
 function focus(r, c) {
@@ -524,13 +779,8 @@ function focus(r, c) {
   const e = rows[r][c]; e.classList.add("focus");
   document.querySelectorAll("#rows section").forEach(sec => sec.classList.toggle("active", sec.contains(e)));
   document.body.classList.add("chosen");
-  document.body.classList.toggle("on-game", !!e.closest("#games"));
   showDetails(e);
-  // horizontal: keep focused tile in view
-  const strip = e.parentElement;
-  const left = e.offsetLeft - strip.offsetLeft, pad = window.innerWidth * 0.05;
-  if (left - strip.scrollLeft < pad) strip.scrollLeft = left - pad;
-  else if (left + e.offsetWidth - strip.scrollLeft > strip.clientWidth - pad) strip.scrollLeft = left + e.offsetWidth - strip.clientWidth + pad;
+  slide(e);
   // vertical: slide rows so the focused row is visible
   const sec = e.closest("section"), main = $("main");
   // rects, not offsetTop: once #rows has a transform it becomes the offsetParent.
@@ -540,10 +790,14 @@ function focus(r, c) {
   const want = Math.min(sec.getBoundingClientRect().top - y0 - 4, box.scrollHeight - main.clientHeight);
   const shift = Math.max(0, tops.find(t => t >= want));
   box.style.transform = `translateY(${-shift}px)`;
+  updatePrompts();
 }
 
 function move(dir) {
   if (modal) {
+    if (modal.move) return modal.move(dir);
+    const cur = modal.els[modal.i];
+    if ((dir === "left" || dir === "right") && cur?.choice?.adjust) return cur.choice.adjust(dir === "left" ? -1 : 1, cur);
     const step = { left: -1, up: -1, right: 1, down: 1 }[dir];  // rows of buttons and lists alike
     if (step) {
       const i = Math.max(0, Math.min(modal.els.length - 1, modal.i + step));
@@ -561,15 +815,19 @@ function move(dir) {
   if (dir === "down" && pos.r < rows.length - 1) focus(pos.r + 1, lastCol[pos.r + 1] ?? 0);
   (pos.r + ":" + pos.c === before) ? Sound.bump() : Sound.move();
 }
-// L1/R1: jump 5 tiles along the row (long game lists)
-function page(n) {
-  if (modal || !chosen) return move(n < 0 ? "left" : "right");
-  const before = pos.c;
-  focus(pos.r, pos.c + n);
-  pos.c === before ? Sound.bump() : Sound.move();
+// L1/R1: previous/next category (row)
+function category(step) {
+  if (modal) return Sound.bump();
+  if (!chosen) { focus(pos.r, 0); return Sound.move(); }
+  const r = pos.r + step;
+  if (r < 0 || r >= rows.length) return Sound.bump();
+  focus(r, lastCol[r] ?? 0); Sound.tab();
 }
 function activate() {
-  if (modal) { const e = modal.els[modal.i]; if (e) { Sound.select(); e.onactivate(); } return; }
+  if (modal) {
+    if (modal.activate) return modal.activate();
+    const e = modal.els[modal.i]; if (e) { Sound.select(); e.onactivate(); } return;
+  }
   if (!chosen) return;
   Sound.select(); rows[pos.r][pos.c].onactivate();
 }
@@ -581,6 +839,7 @@ async function launch(body, name) {
   if (launching) return;
   launching = true; setTimeout(() => launching = false, 3000);
   Sound.launch();
+  Intro.play("launch");
   showStarting(name);
   try {
     const r = await api("/api/launch", body);
@@ -598,34 +857,44 @@ function showStarting(name) {
   $("#starting").classList.add("show"); document.body.classList.add("modal", "starting");
   modal = { els: [], i: 0, onBack: hideStarting };
   clearTimeout(startTimer); startTimer = setTimeout(hideStarting, 60000);
+  updatePrompts();
 }
 function hideStarting() {
   clearTimeout(startTimer); clearTimeout(slowTimer);
   document.body.classList.remove("starting");
   if (modal?.onBack === hideStarting) closeModal($("#starting"));
+  updatePrompts();
 }
 addEventListener("blur", hideStarting);
 
-function openModal(overlay, els, onBack, start = 0) {
-  overlay.classList.add("show"); document.body.classList.add("modal"); Sound.open();
+function openModal(overlay, els, onBack, start = 0, sound = "open") {
+  overlay.classList.add("show"); document.body.classList.add("modal"); Sound[sound]();
   modal = { els, i: start, onBack: onBack || (() => closeModal(overlay)) };
   els.forEach((e, i) => { e.classList.toggle("focus", i === start); e.onclick = () => { Sound.select(); e.onactivate(); }; });
+  updatePrompts();
 }
-function closeModal(overlay) { overlay.classList.remove("show"); document.body.classList.remove("modal"); modal = null; }
+function closeModal(overlay) { overlay.classList.remove("show"); document.body.classList.remove("modal"); modal = null; updatePrompts(); }
 
 // A dialog of choices ({label, sub, fn, cls, check, icon}); ○ closes it.
-// vertical: a list (audio outputs), start: which one is focused first.
-function choose(title, text, choices, { vertical = false, start = 0 } = {}) {
-  const d = $("#dialog");
-  $("#dlg-title").textContent = title; $("#dlg-text").textContent = text;
-  const els = choices.map(({ label, sub, fn, cls = "", check, icon: ic }) => {
+// vertical: a list (menu, audio outputs); start: which one is focused first; art + lines: a game's details.
+function choose(title, text, choices, { vertical = false, start = 0, art = "", lines = [], sound = "open" } = {}) {
+  const d = $("#dialog"), card = $("#dlg-card"), pic = $("#dlg-art");
+  card.classList.toggle("art", !!art);
+  if (art) pic.src = art; else pic.removeAttribute("src");
+  $("#dlg-title").textContent = title;
+  $("#dlg-text").textContent = text; $("#dlg-text").hidden = !text;
+  $("#dlg-lines").innerHTML = lines.map(l => `<li>${esc(l)}</li>`).join(""); $("#dlg-lines").hidden = !lines.length;
+  const els = choices.map(ch => {
+    const { label, sub, fn, cls = "", check, icon: ic, stay, bar } = ch;
     const b = el("div", "item choice " + cls,
-      `${ic ? icon(ic, "dev") : ""}<span>${esc(label)}${sub ? `<small>${esc(sub)}</small>` : ""}</span>${check ? icon("check", "check") : ""}`);
-    b.onactivate = () => { closeModal(d); if (fn) fn(); };
+      `${ic ? icon(ic, "dev") : ""}<span>${esc(label)}${sub ? `<small>${esc(sub)}</small>` : ""}</span>`
+      + (bar != null ? `<span class="bar"><i style="width:${Math.round(bar * 100)}%"></i></span>` : "") + (check ? icon("check", "check") : ""));
+    b.choice = ch;
+    b.onactivate = () => { if (!stay) closeModal(d); if (fn) fn(b); };
     return b;
   });
   const c = $("#dlg-choices"); c.innerHTML = ""; c.append(...els); c.classList.toggle("vertical", vertical);
-  openModal(d, els, null, start);
+  openModal(d, els, null, start, sound);
 }
 // Cancel is focused first: these actions can't be undone
 function confirmAction(title, text, yesLabel, onYes) {
@@ -661,25 +930,66 @@ async function setAudio(d) {
 function confirmPower(action, title, text) {
   confirmAction(title + "?", text, title, () => { toast(title + "…"); api("/api/power", { action }).catch(() => {}); });
 }
+function sleepNow() { toast("Sleeping…"); api("/api/power", { action: "sleep" }).catch(() => {}); }
+function rebuildKeepFocus() { const r = pos.r, c = pos.c; build(); if (chosen) focus(r, c); }
+
+// Sound settings (Menu > Sound): effects, volumes, menu music, voice lines, and a soundboard to test your clips.
+// Up/down moves; left/right changes a volume.
+function soundSettings(start = 0) {
+  const pct = v => `${Math.round(v * 100)}%`;
+  const slider = key => ({
+    sub: `${pct(Sound[key])}. Left and right change it`, bar: Sound[key], stay: true,
+    adjust(step, b) {
+      Sound[key] = Math.max(0, Math.min(1, Math.round((Sound[key] + step * 0.1) * 10) / 10));
+      b.querySelector(".bar i").style.width = pct(Sound[key]);
+      b.querySelector("small").textContent = `${pct(Sound[key])}. Left and right change it`;
+      if (key === "sfxVol") Sound.move();
+    },
+  });
+  const again = i => () => { rebuildKeepFocus(); soundSettings(i); };
+  choose("Sound", "", [
+    { label: "Sound effects", sub: Sound.on ? `On, playing on the ${Out.where}` : "Off", icon: Sound.on ? "sound" : "mute",
+      check: Sound.on, fn: () => { Sound.toggle(); again(0)(); } },
+    { label: "Effects volume", icon: "sound", ...slider("sfxVol") },
+    { label: "Menu music", icon: "music", check: Sound.musicOn,
+      sub: !Sound.musicOn ? "Off" : Sound.has("bgm") ? "On" : "On, once you add bgm-loop.mp3",
+      fn: () => { Sound.musicOn = !Sound.musicOn; again(2)(); } },
+    { label: "Music volume", icon: "music", ...slider("musicVol") },
+    { label: "Voice lines", icon: "voice", check: Sound.voiceOn, sub: Sound.voiceOn ? "On" : "Off: effects only",
+      fn: () => { Sound.voiceOn = !Sound.voiceOn; again(4)(); } },
+    { label: "Test sounds", icon: "resume", sub: "Hear each slot, with your clips or the built-in sounds", fn: soundboard },
+  ], { vertical: true, start });
+}
+const SLOTS = [["move", "Move", "nav-move"], ["tab", "Category (L1 / R1)", "tab-switch"], ["launch", "Start a game", "launch-1"],
+               ["back", "Back", "back"], ["menu", "Menu", "control-center"], ["bgm", "Menu music", "bgm-loop"]];
+function soundboard() {
+  choose("Test sounds", "Clips go in couch-remote/web/audio/sbr. A slot without one uses the built-in sound.",
+    SLOTS.map(([slot, label, file]) => ({
+      label, icon: "resume", stay: true, fn: () => Sound.test(slot),
+      sub: Sound.has(slot) ? Sound.names(slot).join(", ") : slot === "bgm" ? `None yet (add ${file}.mp3)` : `Built-in (add ${file}.mp3)`,
+    })), { vertical: true });
+}
 async function windowAction(action) {
   const r = await api("/api/window", { action }).catch(() => null);
   if (!r?.ok) { toast(r?.error || "Couch server isn't responding"); refresh(); }
 }
 
-// □ on a game: pin it to the front or hide it (the server keeps this in choices.json)
-function gameOptions() {
+// □ Details on a game: its cover, facts, and Play / Pin to front / Hide (the server keeps pins and hides)
+function gameDetails() {
   const t = !modal && chosen && rows[pos.r][pos.c], g = t && t.game;
   if (!g) return Sound.bump();
-  choose(g.name, "Hidden games can be shown again from the PC row.", [
-    { label: g.pinned ? "Unpin" : "Pin to front", fn: () => setChoice(g.pinned ? "unpin" : "pin", g) },
-    { label: "Hide", fn: () => setChoice("hide", g) },
-    { label: "Cancel" },
-  ]);
+  const lines = [ago(g.lastPlayed), g.playtime ? playtime(g.playtime).replace(" in total", " played") : "",
+                 g.size ? `${(g.size / 1e9).toFixed(g.size > 1e10 ? 0 : 1)} GB on disk` : "", g.appid ? "Steam" : g.meta || ""].filter(Boolean);
+  choose(g.name, "", [
+    { label: "Play", icon: "resume", fn: () => t.onactivate() },
+    { label: g.pinned ? "Unpin" : "Pin to front", icon: "pin", fn: () => setChoice(g.pinned ? "unpin" : "pin", g) },
+    { label: "Hide", icon: "eye", fn: () => setChoice("hide", g) },
+  ], { art: t.classList.contains("loaded") ? t.querySelector(".art").src : "", lines });
 }
 async function setChoice(action, g) {
   const r = await api("/api/games", { action, key: g?.key }).catch(() => null);
   if (!r?.ok) return toast(r?.error || "Couch server isn't responding");
-  toast({ pin: `${g?.name} pinned`, unpin: `${g?.name} unpinned`, hide: `${g?.name} hidden`, "unhide-all": "Hidden games are back" }[action]);
+  toast({ pin: `${g?.name} pinned`, unpin: `${g?.name} unpinned`, hide: `${g?.name} hidden. Show it again from the PC row.`, "unhide-all": "Hidden games are back" }[action]);
   await refresh();
   if (g) {  // follow a pinned or unpinned game to its new place
     const i = rows[pos.r].findIndex(t => t.game?.key === g.key);
@@ -688,6 +998,12 @@ async function setChoice(action, g) {
     const r = rows.findIndex(row => row[0].closest("#games"));
     if (r >= 0) focus(r, 0);
   }
+}
+
+// Options button: the quick menu (everything in the PC row, from anywhere)
+function quickMenu() {
+  if (modal || !info) return Sound.bump();
+  choose("Menu", "", pcItems().map(p => ({ label: p.label, sub: p.meta, icon: p.icon, fn: p.fn, cls: p.cls })), { vertical: true, sound: "menu" });
 }
 
 function showPhone() {
@@ -702,33 +1018,120 @@ function showPhone() {
   openModal(p, [], () => closeModal(p));
 }
 
-// ---------- keyboard (also what Steam's desktop controller layout sends)
+// ---------- △ Search: an on-screen keyboard (or the phone's keyboard) filters your games and apps
+const KEYS = [..."ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", "space", "del"];
+const keyPos = i => i < 26 ? [Math.floor(i / 13), i % 13, 1] : i < 36 ? [2, i - 26, 1] : i === 36 ? [2, 10, 2] : [2, 12, 1];  // [row, col, span]
+let S = null;  // { q, zone: "keys" | "results", k, r, results: [{ el, orig }] }
+function openSearch() {
+  if (!info) return;
+  S = { q: "", zone: "keys", k: 0, r: 0, results: [] };
+  const keys = $("#keys"); keys.innerHTML = "";
+  KEYS.forEach((k, i) => {
+    const b = el("div", "key", k === "space" ? "Space" : k === "del" ? icon("del", "kicon") : k);
+    b.style.gridColumn = `span ${keyPos(i)[2]}`;
+    b.onclick = () => { S.zone = "keys"; S.k = i; searchActivate(); };
+    keys.append(b);
+  });
+  $("#search").classList.add("show"); document.body.classList.add("modal"); Sound.open();
+  modal = { search: true, els: [], i: 0, onBack: closeSearch, move: searchMove, activate: searchActivate, del: () => searchDelete() };
+  renderSearch();
+}
+function closeSearch() { S = null; closeModal($("#search")); }
+function renderSearch() {
+  $("#sq-text").textContent = S.q;
+  $("#sq-hint").hidden = !!S.q;
+  const q = S.q.trim().toLowerCase();
+  const pool = rows.flat().filter(t => t.closest("#apps, #games"));
+  const hits = q ? pool.filter(t => (t.dataset.title || "").toLowerCase().includes(q)) : [];
+  const box = $("#results"); box.innerHTML = ""; box.dataset.x = 0; box.style.transform = "";
+  S.results = hits.map(orig => {
+    const c = orig.cloneNode(true); c.classList.remove("focus");
+    c.onclick = () => { closeSearch(); orig.onactivate(); };
+    box.append(c); return { el: c, orig };
+  });
+  $("#sr-title").textContent = !q ? "" : hits.length ? `${hits.length} result${hits.length === 1 ? "" : "s"}` : "Nothing matches";
+  if (!S.results.length) S.zone = "keys";
+  S.r = Math.min(S.r, Math.max(0, S.results.length - 1));
+  paintSearch();
+}
+function paintSearch() {
+  [...$("#keys").children].forEach((b, i) => b.classList.toggle("focus", S.zone === "keys" && i === S.k));
+  S.results.forEach(({ el }, i) => el.classList.toggle("focus", S.zone === "results" && i === S.r));
+  if (S.zone === "results" && S.results[S.r]) slide(S.results[S.r].el);
+  updatePrompts();
+}
+function searchMove(dir) {
+  const before = `${S.zone}${S.k}:${S.r}`;
+  if (S.zone === "keys") {
+    const [row, col] = keyPos(S.k);
+    if (dir === "left" && S.k > 0 && keyPos(S.k - 1)[0] === row) S.k--;
+    else if (dir === "right" && S.k < KEYS.length - 1 && keyPos(S.k + 1)[0] === row) S.k++;
+    else if (dir === "down" && row === 2) { if (S.results.length) S.zone = "results"; }
+    else if (dir === "up" || dir === "down") {
+      const tr = row + (dir === "up" ? -1 : 1);
+      const n = KEYS.findIndex((_, i) => { const [r2, c2, s2] = keyPos(i); return r2 === tr && c2 <= col && col < c2 + s2; });
+      if (n >= 0) S.k = n;
+    }
+  } else if (dir === "left" && S.r > 0) S.r--;
+  else if (dir === "right" && S.r < S.results.length - 1) S.r++;
+  else if (dir === "up") S.zone = "keys";
+  `${S.zone}${S.k}:${S.r}` === before ? Sound.bump() : Sound.move();
+  paintSearch();
+}
+function searchActivate() {
+  if (S.zone === "results") {
+    const hit = S.results[S.r];
+    if (hit) { Sound.select(); closeSearch(); hit.orig.onactivate(); }
+    return;
+  }
+  const k = KEYS[S.k];
+  if (k === "del") return searchDelete();
+  Sound.select();
+  S.q = (S.q + (k === "space" ? " " : k)).slice(0, 30);
+  renderSearch();
+}
+function searchDelete() {
+  if (!S.q) return Sound.bump();
+  Sound.back(); S.q = S.q.slice(0, -1); renderSearch();
+}
+
+// ---------- keyboard (also what Steam's desktop controller layout sends, and the phone's typing box)
 // Once controller presses arrive from the server, ignore the keys Steam also sends for them,
 // otherwise one press would count twice.
 let padSeen = false;
 addEventListener("keydown", e => {
+  Sound.unlock();
+  if (modal?.search && e.key.length === 1 && /[a-z0-9 ]/i.test(e.key)) {  // typing into the search
+    e.preventDefault(); S.q = (S.q + e.key.toUpperCase()).slice(0, 30); renderSearch(); return;
+  }
+  if (modal?.search && e.key === "Backspace") { e.preventDefault(); S.q ? searchDelete() : back(); return; }
   const k = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" }[e.key];
   const padKey = k || ["Enter", " ", "Escape", "Backspace"].includes(e.key);
   if (padKey) e.preventDefault();
   if (wake()) return;
   if (padSeen && padKey) return;
   if (k) move(k);
-  else if (e.key === "PageUp" || e.key === "PageDown") { e.preventDefault(); page(e.key === "PageUp" ? -5 : 5); }
+  else if (e.key === "PageUp" || e.key === "PageDown") { e.preventDefault(); category(e.key === "PageUp" ? -1 : 1); }
   else if (e.key === "Enter" || e.key === " ") activate();
   else if (e.key === "Escape" || e.key === "Backspace") back();
-  else if (e.key === "p" || e.key === "y") { if (!modal) { Sound.select(); showPhone(); } }
+  else if (e.key === "/" || e.key === "y") { if (!modal) { Sound.select(); openSearch(); } }
+  else if (e.key === "x") gameDetails();
+  else if (e.key === "m") quickMenu();
+  else if (e.key === "p") { if (!modal) { Sound.select(); showPhone(); } }
 });
 
 // ---------- controller: the server reads it (works with or without Steam) and streams presses here
 let lastPadAt = -1e9;
 function onPad(a) {
   if (a.startsWith("pad:")) return showPad(a.slice(4));
-  padSeen = true; lastPadAt = performance.now();
+  padSeen = true; lastPadAt = performance.now(); Sound.unlock();
   if (wake()) return;
-  if (a === "a") activate(); else if (a === "b") back();
-  else if (a === "l1" || a === "r1") page(a === "l1" ? -5 : 5);
-  else if (a === "x") gameOptions();
-  else if (a === "y") { if (modal) back(); else { Sound.select(); showPhone(); } }
+  if (a === "a") activate();
+  else if (a === "b") back();
+  else if (a === "l1" || a === "r1") category(a === "l1" ? -1 : 1);
+  else if (a === "x") { if (modal?.del) modal.del(); else gameDetails(); }
+  else if (a === "y") { if (modal) back(); else { Sound.select(); openSearch(); } }
+  else if (a === "options") { if (modal) back(); else quickMenu(); }
   else move(a);
 }
 async function listenPad() {
@@ -753,14 +1156,51 @@ async function listenPad() {
 }
 listenPad();
 
+// Fallback when the server can't read the controller (pygame missing): the browser's Gamepad API with the
+// standard DualSense mapping. 0 ✕, 1 ○, 2 □, 3 △, 4 L1, 5 R1, 9 Options, 12-15 D-pad, left stick to move.
+let gamepadOn = false;
+function gamepadLoop() {
+  if (gamepadOn) return;
+  gamepadOn = true;
+  const map = { 0: "a", 1: "b", 2: "x", 3: "y", 4: "l1", 5: "r1", 9: "options" };
+  const dpad = { 12: "up", 13: "down", 14: "left", 15: "right" }, down = {}, held = {};
+  (function poll() {
+    const gp = [...(navigator.getGamepads?.() || [])].find(Boolean);
+    if (gp) {
+      const now = performance.now(), dirs = new Set();
+      for (const [i, a] of Object.entries(map)) {
+        const p = !!gp.buttons[i]?.pressed;
+        if (p && !down[a]) onPad(a);
+        down[a] = p;
+      }
+      for (const [i, d] of Object.entries(dpad)) if (gp.buttons[i]?.pressed) dirs.add(d);
+      const [x = 0, y = 0] = gp.axes;
+      if (x < -.6) dirs.add("left"); if (x > .6) dirs.add("right"); if (y < -.6) dirs.add("up"); if (y > .6) dirs.add("down");
+      for (const d of ["up", "down", "left", "right"]) {   // repeat while held, like the server does
+        if (!dirs.has(d)) { delete held[d]; continue; }
+        if (!(d in held)) { held[d] = now + 380; onPad(d); }
+        else if (now >= held[d]) { held[d] = now + 110; onPad(d); }
+      }
+    }
+    requestAnimationFrame(poll);
+  })();
+}
+
 // ---------- load
 async function load() {
   try {
     info = await api("/api/info");
     if (info.running) pos.r = 0;  // reloaded mid-game: first press lands on Resume
     build();
+    if (!info.padReader) gamepadLoop();
+    const clipsReady = Sound.loadClips(info.sounds || []);  // decoded in the background; nothing waits on it
+    if (!PREVIEW) {
+      await Out.detect(); await clipsReady;
+      if (Sound.has("bgm") && Sound.musicOn) Sound.startBgm(); else Intro.play("startup");
+    }
   } catch { $("#games").innerHTML = '<div class="empty">Couch server isn\'t running. Trying again…</div>'; setTimeout(load, 3000); }
 }
+updatePrompts();
 load();
 // Re-read the library and what's running. The Now playing row coming or going shifts every row by one.
 async function refresh(toResume) {
@@ -774,7 +1214,7 @@ async function refresh(toResume) {
   build();
   if (toResume && info.running) focus(0, 0);  // back from the game: Resume is where you'd want to be
 }
-addEventListener("focus", () => { wake(); refresh(true); });
+addEventListener("focus", () => { wake(); refresh(true); Out.detect(); if (!PREVIEW) Sound.startBgm(); });
 </script>
 </body>
 </html>

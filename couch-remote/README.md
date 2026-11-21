@@ -16,13 +16,15 @@ python -m pip install pygame
 ```
 
 ## Launcher (TV)
-- **D-pad / left stick:** move · **✕:** select · **○:** back · **△:** phone QR code · **□ on a game:** pin it to the front or hide it · **L1/R1:** jump 5 tiles
+- **D-pad / left stick:** move · **✕:** select · **○:** back · **△:** phone QR code · **□ on a game:** Details (Play, Pin to front, Hide) · **△:** Search (on-screen keyboard, or type on the phone) · **L1/R1:** previous/next row · **Options:** Menu (audio output, sound settings, phone remote, power)
 - The server reads the controller itself, so it works with or without Steam running. Steam only starts when you pick Big Picture or a Steam game.
 - **PS button:** brings the launcher back when Steam isn't running (Steam keeps it for itself when it is).
 - Arrow keys / Enter / Esc and the mouse work too.
 - Rows: **Now playing** (Resume / Close, while something you started is open), **Apps** (game stores), **Games** (GTA V Enhanced + installed Steam games, pinned first, then most recently played), **PC** (phone remote, audio output, menu sounds, hidden games, sleep, restart, shut down, desktop). Store tiles show each app's real icon, taken from its program on this PC; Steam games show hours played.
 - When you start something, a Starting screen (the game's art and the spinning steel ball) stays up until its window appears (no black flash); ○ hides it. Then that window gets focus so the controller works there right away. Quit it and you're back on the launcher.
 - **Audio output** (PC row, or the phone's Remote tab): pick where all sound plays. The server makes it Windows' default for games, videos and calls, and switches back within 3 s if Windows moves it (the TV turning on late, a headset connecting). It leaves Steam Remote Play's device alone, and backs off for 10 minutes if another app keeps taking over. `python audio.py` lists the outputs; `python audio.py samsung` sets one from a terminal.
+- **Sounds:** drop your own Steel Ball Run clips in `web/audio/sbr/` (slot names in the README there: `nav-move`, `tab-switch`, `launch-1`..., `back`, `control-center`, `bgm-loop`). Missing slots use the built-in sounds. Menu > Sound has effects/music volume, menu music, voice lines and a soundboard. One song in `web/audio/` plays at startup and when a game starts.
+- **Controller speaker:** with the DualSense on a USB cable, all launcher sounds play on its speaker and the TV stays clean (Windows doesn't offer the speaker over Bluetooth). Over Bluetooth the controller gives haptic cues instead: a double pulse when a game starts, three pulses when the battery gets low.
 - After 10 minutes without input the screen goes dark with a small wandering clock (kind to the TV); the next press only wakes it.
 - Sounds: hoofbeats, spur jingles and a steel-ball whir. Turn them off in **PC → Menu sounds**.
 

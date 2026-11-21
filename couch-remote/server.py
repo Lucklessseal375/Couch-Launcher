@@ -466,7 +466,7 @@ def focus_window(h):
         user32.SwitchToThisWindow(h, True)  # last resort
 
 
-def edge_kiosk(url, profile, user_agent=None):
+def edge_kiosk(url, profile, user_agent=None, extra=()):
     edge = CONFIG.get("edge")
     if not edge:
         raise RuntimeError("Microsoft Edge not found; set \"edge\" in config.json")
@@ -479,6 +479,7 @@ def edge_kiosk(url, profile, user_agent=None):
             f"--user-data-dir={PROFILES / profile}"]
     if user_agent:
         args.append(f"--user-agent={user_agent}")
+    args += list(extra)
     subprocess.Popen(args, creationflags=0x00000008 | 0x00000200)  # DETACHED | NEW_PROCESS_GROUP
 
 
@@ -492,7 +493,9 @@ def open_launcher():
         focus_window(h)
     elif time.time() - _launcher_spawned[0] > 15:  # its title isn't set until the page loads
         _launcher_spawned[0] = time.time()
-        edge_kiosk(f"http://127.0.0.1:{CONFIG['port']}/launcher", "launcher")
+        # fake-ui flag: lets the launcher page see audio device names without a prompt, so it can play
+        # its sounds on the DualSense speaker (only our own local page runs in this profile)
+        edge_kiosk(f"http://127.0.0.1:{CONFIG['port']}/launcher", "launcher", extra=("--use-fake-ui-for-media-stream",))
 
         def bring_forward():  # Windows won't let a window started from the background take focus
             for _ in range(120):  # up to 30 s
@@ -738,6 +741,34 @@ def app_icon(app_id):
 LISTENERS = []  # one queue per open launcher page
 LISTENERS_LOCK = threading.Lock()
 PAD_STATUS = "pad:none"  # last controller/battery state sent to the launcher; new pages get it on connect
+PAD_READER = False  # True once the server reads the controller; otherwise the page uses the Gamepad API
+RUMBLES = []  # (when, low, high, ms): haptic pulses waiting for the controller loop
+RUMBLE_LOCK = threading.Lock()
+# Controller-side cues that keep the TV quiet; they work over Bluetooth, unlike the speaker.
+PATTERNS = {"launch": [(0, .45, .25, 110), (.22, .9, .55, 240)],          # the race starts
+            "low": [(0, .7, .7, 90), (.2, .7, .7, 90), (.4, .7, .7, 90)]}  # battery low
+
+
+def rumble(pattern):
+    now = time.time()
+    with RUMBLE_LOCK:
+        RUMBLES.extend((now + t, lo, hi, ms) for t, lo, hi, ms in PATTERNS[pattern])
+
+
+AUDIO_TYPES = {".mp3": "audio/mpeg", ".m4a": "audio/mp4", ".ogg": "audio/ogg", ".opus": "audio/ogg",
+               ".wav": "audio/wav", ".flac": "audio/flac"}
+
+
+def sound_clips():
+    """File names in web/audio/sbr (the launcher's clip slots, see the README there)."""
+    folder = WEB / "audio" / "sbr"
+    return sorted(p.name for p in folder.iterdir() if p.suffix.lower() in AUDIO_TYPES) if folder.is_dir() else []
+
+
+def intro_file():
+    """The music for startup and game starts: the first audio file you put in web/audio, or None."""
+    folder = WEB / "audio"
+    return next((p for p in sorted(folder.iterdir()) if p.suffix.lower() in AUDIO_TYPES), None) if folder.is_dir() else None
 
 
 def emit(action):
@@ -778,7 +809,7 @@ def controller_loop():
 
 
 def _controller_loop():
-    global PAD_STATUS
+    global PAD_STATUS, PAD_READER
     os.environ["SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS"] = "1"  # read it even when our window isn't focused
     os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
     try:
@@ -800,11 +831,13 @@ def _controller_loop():
                B.CONTROLLER_BUTTON_DPAD_UP: "up", B.CONTROLLER_BUTTON_DPAD_DOWN: "down",
                B.CONTROLLER_BUTTON_DPAD_LEFT: "left", B.CONTROLLER_BUTTON_DPAD_RIGHT: "right",
                B.CONTROLLER_BUTTON_X: "x", B.CONTROLLER_BUTTON_GUIDE: "guide",  # SDL's X is the west button: □
-               B.CONTROLLER_BUTTON_LEFTSHOULDER: "l1", B.CONTROLLER_BUTTON_RIGHTSHOULDER: "r1"}
+               B.CONTROLLER_BUTTON_LEFTSHOULDER: "l1", B.CONTROLLER_BUTTON_RIGHTSHOULDER: "r1",
+               B.CONTROLLER_BUTTON_START: "options"}  # DualSense Options
     held = {}  # direction -> time of next repeat
     stick = {"x": 0, "y": 0}
     dpad = set()
     log.info("controller support on")
+    PAD_READER = True
     next_status = 0.0
 
     def pad_status():
@@ -852,8 +885,20 @@ def _controller_loop():
         if now >= next_status:  # battery changes slowly; check every 5 s, tell the page only on change
             next_status, s = now + 5, pad_status()
             if s != PAD_STATUS:
+                if s in ("pad:low", "pad:empty"):
+                    rumble("low")
                 PAD_STATUS = s
                 emit(s)
+        if RUMBLES:  # haptic pulses that are due, on every connected controller
+            with RUMBLE_LOCK:
+                due = [r for r in RUMBLES if r[0] <= now]
+                RUMBLES[:] = [r for r in RUMBLES if r[0] > now]
+            for _, lo, hi, ms in due:
+                for c in pads.values():
+                    try:
+                        c.rumble(lo, hi, ms)
+                    except (pygame.error, AttributeError):
+                        pass
         dirs = set(dpad)
         dz = 0.6 * 32767
         if stick["x"] < -dz: dirs.add("left")
@@ -1085,7 +1130,8 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/info":
                 apps, _ = load_apps()
                 games, hidden = library()
-                info = {"name": socket.gethostname(), "apps": apps, "games": games, "hidden": hidden}
+                info = {"name": socket.gethostname(), "apps": apps, "games": games, "hidden": hidden,
+                        "padReader": PAD_READER, "intro": bool(intro_file()), "sounds": sound_clips()}
                 try:
                     info["audio"] = audio_state()["current"]
                 except Exception:  # noqa: BLE001  (optional extra: never lose the library over it)
@@ -1104,6 +1150,13 @@ class Handler(BaseHTTPRequestHandler):
             path = "/launcher" if kind == "local" else "/remote"
         if path in STATIC:
             return self.send_file(WEB / STATIC[path], "text/html; charset=utf-8")
+        m = re.fullmatch(r"/audio/sbr/([\w-]+\.(mp3|ogg|wav|m4a|opus))", path)  # your SBR sound clips
+        if m and (WEB / "audio" / "sbr" / m.group(1)).is_file():
+            return self.send_file(WEB / "audio" / "sbr" / m.group(1), AUDIO_TYPES["." + m.group(2)])
+        if path == "/audio/intro":
+            f = intro_file()
+            if f:
+                return self.send_file(f, AUDIO_TYPES[f.suffix.lower()])
         if path in ("/icon.png", "/poster.webp", "/steelball.png"):
             return self.send_file(WEB / path[1:], "image/png" if path.endswith(".png") else "image/webp")
         m = re.fullmatch(r"/art/(\d+)(/hero)?", path)
@@ -1133,6 +1186,7 @@ class Handler(BaseHTTPRequestHandler):
                 before = visible_windows()
                 name = launch_game(b["game"]) if "game" in b else launch_app(str(b.get("id")))
                 RUNNING.update(name=name, windows=[])
+                rumble("launch")
                 threading.Thread(target=focus_what_opens, args=(before,), daemon=True).start()
                 WATCHER.arm()
                 return self.send_json({"ok": True, "name": name})
