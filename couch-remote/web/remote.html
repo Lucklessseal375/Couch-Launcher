@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#24104a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Couch Remote</title>
+<link rel="icon" href="/icon.png">
+<link rel="apple-touch-icon" href="/icon.png">
+<link href="https://fonts.googleapis.com/css2?family=Lobster&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<style>
+  :root { --bg: #24104a; --panel: rgba(255,255,255,.08); --panel2: rgba(255,255,255,.14); --text: #fff; --dim: #cdbfe8; --accent: #5ec8ef; --danger: #ff6f7d; --pink: #e0306e; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: radial-gradient(circle, rgba(232,216,255,.16) 0 18px, transparent 21px) 0 0 / 64px 64px, radial-gradient(120vw 90vh at 30% 0%, #6a3cc0, var(--bg) 70%) fixed; color: var(--text); font: 500 16px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  body { display: flex; flex-direction: column; padding-top: env(safe-area-inset-top); user-select: none; -webkit-user-select: none; overscroll-behavior: none; }
+  header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; }
+  header b { font: 400 28px/1 Lobster, "Segoe Script", cursive; color: var(--pink); -webkit-text-stroke: 1px #fff; text-shadow: 2px 2px 0 var(--accent); transform: rotate(-4deg); }
+  #status { font-size: 13px; color: var(--dim); display: flex; align-items: center; gap: 6px; }
+  #status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
+  #status.ok::before { background: #6fae3e; } #status.bad::before { background: var(--danger); }
+  main { flex: 1; overflow-y: auto; padding: 4px 16px 16px; }
+  .tab { display: none; } .tab.on { display: block; }
+  nav { display: flex; background: rgba(20,8,44,.92); padding-bottom: env(safe-area-inset-bottom); border-top: 1px solid rgba(255,255,255,.12); }
+  nav button { flex: 1; background: none; border: 0; color: var(--dim); padding: 12px 0 10px; font: inherit; font-size: 13px; }
+  nav button.on { color: var(--accent); }
+  button.k { background: var(--panel2); color: var(--text); border: 0; border-radius: 14px; font: inherit; font-size: 15px; padding: 14px 8px; touch-action: manipulation; }
+  button.k:active { background: rgba(94,200,239,.35); transform: scale(.97); }
+  button.k.danger { color: #ffc9cb; } button.k.primary { background: #fff; color: #1a0d33; font-weight: 700; border-radius: 99px; }
+  h2 { font-size: 13px; color: var(--dim); text-transform: uppercase; letter-spacing: .1em; margin: 20px 0 8px; font-weight: 600; }
+  .grid { display: grid; gap: 10px; } .g2 { grid-template-columns: 1fr 1fr; } .g3 { grid-template-columns: repeat(3, 1fr); }
+  /* d-pad */
+  .pad { position: relative; width: min(78vw, 300px); aspect-ratio: 1; margin: 18px auto 8px; border-radius: 50%; background: var(--panel); }
+  .pad button { position: absolute; background: none; border: 0; color: var(--text); font-size: 26px; touch-action: manipulation; }
+  .pad button:active { color: var(--accent); }
+  .pad .u { top: 0; left: 33%; width: 34%; height: 33%; } .pad .d { bottom: 0; left: 33%; width: 34%; height: 33%; }
+  .pad .l { left: 0; top: 33%; width: 33%; height: 34%; } .pad .r { right: 0; top: 33%; width: 33%; height: 34%; }
+  .pad .ok { top: 33%; left: 33%; width: 34%; height: 34%; border-radius: 50%; background: rgba(10,4,24,.7); box-shadow: inset 0 0 0 2px rgba(255,255,255,.25); font-size: 30px; font-weight: 400; color: #7ea6ff; }
+  /* touchpad */
+  #touch { height: 52vh; border-radius: 18px; background: var(--panel); border: 1px solid rgba(255,255,255,.12); display: grid; place-items: center; color: var(--dim); font-size: 14px; text-align: center; touch-action: none; padding: 20px; }
+  #touch.active { background: rgba(94,200,239,.12); }
+  .row { display: flex; gap: 8px; margin-top: 10px; }
+  .row input { flex: 1; min-width: 0; background: var(--panel); border: 1px solid rgba(255,255,255,.18); color: var(--text); border-radius: 12px; padding: 12px; font: inherit; font-size: 16px; }
+  /* apps */
+  .tile { display: flex; align-items: center; gap: 12px; text-align: left; padding: 10px; }
+  .tile .sw { width: 38px; height: 38px; border-radius: 10px; flex: none; display: grid; place-items: center; font-weight: 800; }
+  .games { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .game { position: relative; aspect-ratio: 2/3; border-radius: 10px; overflow: hidden; background: linear-gradient(160deg, #5b2fa6, #24104a); border: 0; padding: 0; color: var(--text); font: inherit; }
+  .game img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .game span { position: absolute; inset: auto 0 0; padding: 18px 6px 6px; font-size: 11px; background: linear-gradient(transparent, rgba(0,0,0,.85)); text-align: left; }
+  .game:active { transform: scale(.96); }
+  #toast { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); background: rgba(20,8,44,.95); border-left: 4px solid var(--accent); padding: 10px 16px; border-radius: 12px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; white-space: nowrap; }
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<header><b>Couch</b><span id="status">Connecting…</span></header>
+<main>
+  <section class="tab on" id="t-remote">
+    <div class="pad">
+      <button class="u" data-key="up" aria-label="Up">▲</button>
+      <button class="l" data-key="left" aria-label="Left">◀</button>
+      <button class="ok" data-key="enter" aria-label="OK">✕</button>
+      <button class="r" data-key="right" aria-label="Right">▶</button>
+      <button class="d" data-key="down" aria-label="Down">▼</button>
+    </div>
+    <div class="grid g2"><button class="k" data-key="escape"><span style="color:#ff6f7d">○</span> Back</button><button class="k" data-win="launcher">Launcher</button></div>
+    <h2>Volume</h2>
+    <div class="grid g3"><button class="k" data-key="voldown">−</button><button class="k" data-key="mute">Mute</button><button class="k" data-key="volup">+</button></div>
+    <h2>Media</h2>
+    <div class="grid g3"><button class="k" data-key="prev">⏮</button><button class="k" data-key="playpause">⏯</button><button class="k" data-key="next">⏭</button></div>
+  </section>
+
+  <section class="tab" id="t-touch">
+    <div id="touch">Drag to move the mouse<br>Tap = click · Two-finger tap = right-click<br>Two-finger drag = scroll</div>
+    <div class="row"><input id="text" placeholder="Type on the PC…" autocomplete="off" autocapitalize="off" enterkeyhint="send"><button class="k" id="send">Send</button></div>
+    <div class="grid g3" style="margin-top:10px">
+      <button class="k" data-key="backspace">⌫</button><button class="k" data-key="enter">Enter</button><button class="k" data-key="escape">Esc</button>
+    </div>
+  </section>
+
+  <section class="tab" id="t-apps">
+    <h2>Apps</h2><div class="grid g2" id="apps"></div>
+    <h2>Steam games</h2><div class="games" id="games"></div>
+  </section>
+
+  <section class="tab" id="t-power">
+    <h2>Windows</h2>
+    <div class="grid g2">
+      <button class="k" data-win="launcher">Show launcher</button>
+      <button class="k" data-confirm="close-app">Close current app</button>
+    </div>
+    <h2>Power</h2>
+    <div class="grid">
+      <button class="k" data-power="sleep">Sleep</button>
+      <button class="k danger" data-power="restart">Restart</button>
+      <button class="k danger" data-power="shutdown">Shut down</button>
+    </div>
+  </section>
+</main>
+<nav>
+  <button data-tab="remote" class="on">Remote</button>
+  <button data-tab="touch">Touchpad</button>
+  <button data-tab="apps">Apps</button>
+  <button data-tab="power">Power</button>
+</nav>
+
+<div id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} },
+};
+
+let toastTimer;
+function toast(m) { const t = $("#toast"); t.textContent = m; t.classList.add("show"); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 1800); }
+function buzz() { navigator.vibrate?.(8); }
+function setStatus(ok, text) { const s = $("#status"); s.className = ok ? "ok" : "bad"; s.textContent = text; }
+
+async function api(path, body) {
+  const opt = { headers: { "X-Couch": "1" } };
+  if (body !== undefined) Object.assign(opt, { method: "POST", body: JSON.stringify(body) }), opt.headers["Content-Type"] = "application/json";
+  let r;
+  try { r = await fetch(path, opt); } catch { setStatus(false, "PC not reachable"); throw new Error("offline"); }
+  const j = await r.json();
+  if (!r.ok) { toast(j.error || "Error"); throw new Error(j.error); }
+  return j;
+}
+const send = (path, body) => api(path, body).catch(() => {});
+
+// ---------- tabs
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("nav button").forEach(x => x.classList.toggle("on", x === b));
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("on", t.id === "t-" + b.dataset.tab));
+});
+
+// ---------- buttons (hold arrows to repeat)
+document.querySelectorAll("[data-key]").forEach(b => {
+  const key = b.dataset.key, repeat = ["up", "down", "left", "right", "volup", "voldown", "backspace"].includes(key);
+  let t1, t2;
+  const stop = () => { clearTimeout(t1); clearInterval(t2); };
+  b.addEventListener("pointerdown", e => {
+    e.preventDefault(); buzz(); send("/api/key", { key });
+    if (repeat) t1 = setTimeout(() => t2 = setInterval(() => send("/api/key", { key }), 110), 420);
+  });
+  ["pointerup", "pointerleave", "pointercancel"].forEach(ev => b.addEventListener(ev, stop));
+  b.addEventListener("contextmenu", e => e.preventDefault());
+});
+document.querySelectorAll("[data-win]").forEach(b => b.onclick = () => { buzz(); send("/api/window", { action: b.dataset.win }); });
+document.querySelectorAll("[data-confirm]").forEach(b => b.onclick = () => {
+  if (confirm("Close the app that's in front on the PC (Alt+F4)?")) send("/api/window", { action: b.dataset.confirm });
+});
+document.querySelectorAll("[data-power]").forEach(b => b.onclick = () => {
+  const a = b.dataset.power, label = b.textContent;
+  if (confirm(`${label} the PC now?`)) send("/api/power", { action: a }).then(() => toast(label + "…"));
+});
+
+// ---------- touchpad
+(() => {
+  const pad = $("#touch");
+  const SPEED = 1.8;
+  let acc = { dx: 0, dy: 0, sy: 0 }, inflight = false;
+  let start = null, last = null, fingers = 0, moved = 0;
+
+  function flush() {
+    if (inflight) return;
+    const { dx, dy, sy } = acc;
+    if (Math.abs(sy) >= 1) { acc.sy = 0; inflight = true; api("/api/scroll", { dy: Math.round(sy) }).catch(() => {}).finally(() => { inflight = false; flush(); }); return; }
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+    acc.dx = dx - Math.trunc(dx); acc.dy = dy - Math.trunc(dy);
+    inflight = true;
+    api("/api/mouse", { dx: Math.trunc(dx), dy: Math.trunc(dy) }).catch(() => {}).finally(() => { inflight = false; flush(); });
+  }
+  const mid = t => { let x = 0, y = 0; for (const p of t) { x += p.clientX; y += p.clientY; } return { x: x / t.length, y: y / t.length }; };
+
+  pad.addEventListener("touchstart", e => {
+    e.preventDefault(); pad.classList.add("active");
+    fingers = Math.max(fingers, e.touches.length);
+    if (!start) { start = performance.now(); moved = 0; }
+    last = mid(e.touches);
+  }, { passive: false });
+  pad.addEventListener("touchmove", e => {
+    e.preventDefault();
+    const m = mid(e.touches), dx = m.x - last.x, dy = m.y - last.y; last = m;
+    moved += Math.abs(dx) + Math.abs(dy);
+    if (e.touches.length >= 2) acc.sy += dy * 6; // scroll, phone-style: swipe up = page moves up
+    else { const accel = 1 + Math.min(2, Math.hypot(dx, dy) / 12); acc.dx += dx * SPEED * accel; acc.dy += dy * SPEED * accel; }
+    flush();
+  }, { passive: false });
+  pad.addEventListener("touchend", e => {
+    e.preventDefault();
+    if (e.touches.length) { last = mid(e.touches); return; }
+    pad.classList.remove("active");
+    if (performance.now() - start < 260 && moved < 12) { buzz(); send("/api/click", { button: fingers >= 2 ? "right" : "left" }); }
+    start = null; fingers = 0;
+  }, { passive: false });
+
+  pad.addEventListener("contextmenu", e => e.preventDefault());
+})();
+
+// ---------- typing
+function sendText() { const t = $("#text").value; if (!t) return; send("/api/text", { text: t }); $("#text").value = ""; buzz(); }
+$("#send").onclick = sendText;
+$("#text").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); sendText(); } });
+
+// ---------- apps & games
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+function render(info) {
+  const apps = $("#apps"); apps.innerHTML = "";
+  for (const a of info.apps) {
+    const b = document.createElement("button"); b.className = "k tile";
+    b.innerHTML = `<span class="sw" style="background:${esc(a.color || "#333")}">${esc(a.name[0])}</span>${esc(a.name)}`;
+    b.onclick = () => { buzz(); toast(`Starting ${a.name}…`); send("/api/launch", { id: a.id }); };
+    apps.append(b);
+  }
+  const games = $("#games"); games.innerHTML = "";
+  if (!info.games.length) games.innerHTML = '<p style="color:var(--dim);grid-column:1/-1">No installed Steam games found.</p>';
+  for (const g of info.games) {
+    const b = document.createElement("button"); b.className = "game";
+    b.innerHTML = `<img alt="" loading="lazy" src="${esc(g.art || `/art/${g.appid}`)}"><span>${esc(g.name)}</span>`;
+    b.querySelector("img").onerror = function () { this.remove(); };
+    b.onclick = () => { if (confirm(`Start ${g.name}?`)) { toast(`Starting ${g.name}…`); send("/api/launch", g.id ? { id: g.id } : { game: g.appid }); } };
+    games.append(b);
+  }
+}
+
+async function load() {
+  try { const info = await api("/api/info"); setStatus(true, info.name); render(info); } catch {}
+}
+load();
+setInterval(() => { if (document.visibilityState === "visible") api("/api/ping").then(i => setStatus(true, i.name)).catch(() => {}); }, 15000);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") load(); });
+</script>
+</body>
+</html>

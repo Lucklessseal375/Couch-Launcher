@@ -1,0 +1,9 @@
+# Edge profiles hold YouTube/Netflix sign-ins (cookies) — never commit
+couch-remote/profiles/
+# logs
+*.log
+*.log.*
+# python
+__pycache__/
+# third-party skill state, if ever used
+.taste-skill/
