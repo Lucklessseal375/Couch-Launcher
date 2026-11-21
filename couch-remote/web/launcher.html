@@ -48,7 +48,12 @@
   .brand .mark { width: 4.4vh; height: 4.4vh; filter: drop-shadow(0 .3vh .4vh rgba(0,0,0,.5)); }
   .time { text-align: right; }
   #clock { font: 600 3.6vh/1 var(--ui); font-variant-numeric: tabular-nums; }
-  #date { color: var(--dim); font-size: 1.7vh; margin-top: .5vh; }
+  #date, #pad { color: var(--dim); font-size: 1.9vh; margin-top: .5vh; }
+  #pad.low { color: var(--ps-circle); }
+  /* idle: dark screen with a wandering clock so the TV doesn't hold a still image for hours */
+  #idle { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity 1.2s; z-index: 30; }
+  body.idle #idle { opacity: .94; }
+  #idle-clock { position: absolute; font: 600 6vh/1 var(--ui); color: #8a80a0; font-variant-numeric: tabular-nums; }
 
   /* ---------- details of the focused tile (PS5 game hub) */
   .details { position: relative; height: 20vh; padding: .6vh 5vw 0; }
@@ -72,6 +77,14 @@
   @keyframes menace { 0% { opacity: 0; transform: skewX(-14deg) translateY(1vh) scale(.9); } 12% { opacity: .95; transform: skewX(-14deg) scale(1.04); }
                       70% { opacity: .75; } 100% { opacity: 0; transform: skewX(-14deg) translateY(-1vh); } }
   @keyframes shake { 0%,100% { transform: translate(0,0); } 25% { transform: translate(.25vh,-.2vh); } 75% { transform: translate(-.25vh,.2vh); } }
+  /* Windows "Animation effects" off: keep ゴゴゴ as a fade, stop spinning, shaking and sliding */
+  @media (prefers-reduced-motion: reduce) {
+    .app-shell, .details.swap #d-title, .details.swap #sfx span, .item.focus .badge img, .card, .overlay.show { animation: none !important; }
+    .details.swap #sfx { animation: fade-sfx 1.6s ease-out; }
+    #rows, .item, .item .badge { transition: opacity .2s, box-shadow .2s, filter .2s; }
+    .item.focus, .card .choice.focus { transform: none; }
+  }
+  @keyframes fade-sfx { 12% { opacity: .95; } 70% { opacity: .75; } 100% { opacity: 0; } }
 
   /* ---------- rows (PS5 tiles) */
   main { height: calc(100% - 11vh - 20vh - 7vh); overflow: hidden; }
@@ -105,7 +118,7 @@
   .poster.noart img { display: none; }
 
   .sys { width: 13vh; height: 13vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.2vh;
-         font: 700 1.6vh/1.1 var(--ui); text-align: center; background: #301866; }
+         font: 700 1.9vh/1.1 var(--ui); text-align: center; background: #301866; }
   .sys svg.icon { width: 4.4vh; height: 4.4vh; color: #fff; }
   .sys.danger svg.icon { color: var(--ps-circle); }
   .empty { color: var(--dim); padding: 2vh 0; }
@@ -118,9 +131,10 @@
 
   /* ---------- footer, toast, dialogs */
   footer { position: fixed; left: 0; right: 0; bottom: 0; height: 7vh; display: flex; align-items: center; gap: 2.6vw; padding: 0 5vw;
-           color: var(--ink); font-size: 1.8vh; font-weight: 600; background: linear-gradient(transparent, rgba(16,6,36,.85)); }
+           color: var(--ink); font-size: 2vh; font-weight: 600; background: linear-gradient(transparent, rgba(16,6,36,.85)); }
   footer > span { display: inline-flex; align-items: center; gap: .8vh; }
   footer .sound { margin-left: auto; color: var(--dim); }
+  body:not(.modal) footer .back { display: none; } /* ○ only does something in a dialog */
   #toast { position: fixed; right: 3vw; top: 3vh; transform: translateX(4vw); opacity: 0; transition: all .3s ease;
            background: #1c0c3c; color: #fff; padding: 1.6vh 2.4vh; border-radius: 1.4vh;
            font: 600 2vh/1.3 var(--ui); box-shadow: 0 1.4vh 3vh rgba(0,0,0,.5); pointer-events: none; z-index: 20; }
@@ -155,6 +169,8 @@
     <symbol id="g-cross" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"/></symbol>
     <symbol id="g-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></symbol>
     <symbol id="g-tri" viewBox="0 0 24 24"><path d="M12 4l9 15H3z"/></symbol>
+    <symbol id="i-resume" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
     <symbol id="i-phone" viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></symbol>
     <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
     <symbol id="i-restart" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/></symbol>
@@ -168,7 +184,7 @@
 <div class="app-shell">
   <header>
     <div class="brand"><svg class="mark" viewBox="0 0 2 2"><use href="#horseshoe"/></svg><h1>Couch</h1></div>
-    <div class="time"><div id="clock">--:--</div><div id="date"></div></div>
+    <div class="time"><div id="clock">--:--</div><div id="date"></div><div id="pad"></div></div>
   </header>
   <div class="details" id="details">
     <h2 id="d-title">Pick something to play</h2>
@@ -177,6 +193,7 @@
     <div id="sfx" aria-hidden="true"><span>ゴ</span><span>ゴ</span><span>ゴ</span></div>
   </div>
   <main><div id="rows">
+    <section id="now-row" hidden><h2>Now playing</h2><div class="strip" id="now"></div></section>
     <section><h2>Apps</h2><div class="strip" id="apps"></div></section>
     <section><h2>Games</h2><div class="strip" id="games"><div class="empty">Loading games…</div></div></section>
     <section><h2>PC</h2><div class="strip" id="system"></div></section>
@@ -184,11 +201,12 @@
 </div>
 <footer>
   <span><span class="glyph g-cross"><svg viewBox="0 0 24 24"><use href="#g-cross"/></svg></span>Select</span>
-  <span><span class="glyph g-circle"><svg viewBox="0 0 24 24"><use href="#g-circle"/></svg></span>Back</span>
+  <span class="back"><span class="glyph g-circle"><svg viewBox="0 0 24 24"><use href="#g-circle"/></svg></span>Back</span>
   <span><span class="glyph g-tri"><svg viewBox="0 0 24 24"><use href="#g-tri"/></svg></span>Phone remote</span>
   <span class="sound" id="sound-hint"></span>
 </footer>
 <div id="toast"></div>
+<div id="idle"><div id="idle-clock"></div></div>
 <div class="overlay" id="dialog"><div class="card">
   <h3 id="dlg-title"></h3><p id="dlg-text"></p>
   <div class="choices" id="dlg-choices"></div>
@@ -294,8 +312,36 @@ function tick() {
   const d = new Date();
   $("#clock").textContent = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   $("#date").textContent = d.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+  $("#idle-clock").textContent = $("#clock").textContent;
 }
 tick(); setInterval(tick, 10000);
+
+// ---------- idle: after 10 minutes without input, dim to a wandering clock; the next press only wakes it
+const IDLE_MS = 10 * 60 * 1000;
+let lastInput = Date.now();
+function wake() {
+  lastInput = Date.now();
+  if (!document.body.classList.contains("idle")) return false;
+  document.body.classList.remove("idle");
+  return true;
+}
+function placeIdleClock() {
+  const c = $("#idle-clock");
+  c.style.left = 5 + Math.random() * 75 + "vw"; c.style.top = 5 + Math.random() * 80 + "vh";
+}
+setInterval(() => {
+  if (document.body.classList.contains("idle")) placeIdleClock();
+  else if (!modal && Date.now() - lastInput > IDLE_MS) { placeIdleClock(); document.body.classList.add("idle"); }
+}, 60000);
+addEventListener("mousemove", wake);
+
+// ---------- controller battery (sent by the server as pad:<level>)
+function showPad(level) {
+  const p = $("#pad");
+  p.textContent = { none: "No controller", empty: "Controller battery empty", low: "Controller battery low",
+                    medium: "Controller battery half", wired: "Controller charging" }[level] || "";
+  p.classList.toggle("low", level === "empty" || level === "low");
+}
 
 // ---------- toast
 let toastTimer;
@@ -343,6 +389,26 @@ function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 function build() {
+  // what's running (launched from here, window still open): Resume / Close, like the PS5's first tile
+  const now = $("#now"); now.innerHTML = "";
+  $("#now-row").hidden = !info.running;
+  if (info.running) {
+    const name = info.running.name, g = info.games.find(g => g.name === name);
+    for (const [ic, label, cta, cls, fn] of [
+      ["resume", "Resume", "Resume", "", () => windowAction("resume")],
+      ["close", "Close", "Close game", "danger", () => confirmAction(`Close ${name}?`, "Progress since your last save will be lost.", "Close game", async () => {
+        toast(`Closing ${name}…`);
+        await windowAction("close-game");
+        setTimeout(refresh, 2500); setTimeout(refresh, 6000);
+      })],
+    ]) {
+      const t = el("div", "item sys " + cls, `${icon(ic)}<span>${label}</span>${badge()}`);
+      t.dataset.title = name; t.dataset.meta = "Running now"; t.dataset.cta = cta;
+      if (g) t.dataset.hero = g.hero || `/art/${g.appid}/hero`;
+      t.onactivate = fn; now.append(t);
+    }
+  }
+
   const apps = $("#apps"); apps.innerHTML = "";
   for (const a of info.apps) {
     const t = el("div", "item app", `<span class="name">${esc(a.name)}</span>${badge()}`);
@@ -375,7 +441,7 @@ function build() {
   const sysItems = [
     ["phone", "Phone remote", "Scan a code to control the PC from your phone", "Show code", "", showPhone],
     [Sound.on ? "sound" : "mute", Sound.on ? "Sound on" : "Sound off", "Menu sounds when you move and select", Sound.on ? "Turn off" : "Turn on", "", () => { Sound.toggle(); soundHint(); const r = pos.r, c = pos.c; build(); focus(r, c); }],
-    ["moon", "Sleep", "Wake it with the PC's power button", "Sleep", "", () => confirmPower("sleep", "Sleep", "Put the PC to sleep?")],
+    ["moon", "Sleep", "Wake it with the PC's power button", "Sleep", "", () => { toast("Sleeping…"); api("/api/power", { action: "sleep" }).catch(() => {}); }],  // waking undoes it, so no dialog
     ["restart", "Restart", "Closes all apps and restarts the PC", "Restart", "danger", () => confirmPower("restart", "Restart", "Restart the PC now? Unsaved work in other apps will be lost.")],
     ["power", "Shut down", "Closes all apps and turns the PC off", "Shut down", "danger", () => confirmPower("shutdown", "Shut down", "Shut down the PC now? Unsaved work in other apps will be lost.")],
     ["exit", "Desktop", "Closes the launcher and shows the desktop", "Go to desktop", "", () => api("/api/window", { action: "close-launcher" })],
@@ -438,6 +504,13 @@ function move(dir) {
   if (dir === "down" && pos.r < rows.length - 1) focus(pos.r + 1, lastCol[pos.r + 1] ?? 0);
   (pos.r + ":" + pos.c === before) ? Sound.bump() : Sound.move();
 }
+// L1/R1: jump 5 tiles along the row (long game lists)
+function page(n) {
+  if (modal || !chosen) return move(n < 0 ? "left" : "right");
+  const before = pos.c;
+  focus(pos.r, pos.c + n);
+  pos.c === before ? Sound.bump() : Sound.move();
+}
 function activate() {
   if (modal) { const e = modal.els[modal.i]; if (e) { Sound.select(); e.onactivate(); } return; }
   if (!chosen) return;
@@ -459,20 +532,28 @@ async function launch(body, name) {
 }
 
 function openModal(overlay, els, onBack) {
-  overlay.classList.add("show"); Sound.open();
+  overlay.classList.add("show"); document.body.classList.add("modal"); Sound.open();
   modal = { els, i: 0, onBack: onBack || (() => closeModal(overlay)) };
   els.forEach((e, i) => { e.classList.toggle("focus", i === 0); e.onclick = () => { Sound.select(); e.onactivate(); }; });
 }
-function closeModal(overlay) { overlay.classList.remove("show"); modal = null; }
+function closeModal(overlay) { overlay.classList.remove("show"); document.body.classList.remove("modal"); modal = null; }
 
-function confirmPower(action, title, text) {
+// Cancel is focused first: these actions can't be undone
+function confirmAction(title, text, yesLabel, onYes) {
   const d = $("#dialog");
-  $("#dlg-title").textContent = title + "?"; $("#dlg-text").textContent = text;
-  const no = el("div", "item choice", "Cancel"), yes = el("div", "item choice danger", esc(title));
+  $("#dlg-title").textContent = title; $("#dlg-text").textContent = text;
+  const no = el("div", "item choice", "Cancel"), yes = el("div", "item choice danger", esc(yesLabel));
   no.onactivate = () => closeModal(d);
-  yes.onactivate = async () => { closeModal(d); toast(title + "…"); await api("/api/power", { action }).catch(() => {}); };
+  yes.onactivate = () => { closeModal(d); onYes(); };
   const c = $("#dlg-choices"); c.innerHTML = ""; c.append(no, yes);
   openModal(d, [no, yes]);
+}
+function confirmPower(action, title, text) {
+  confirmAction(title + "?", text, title, () => { toast(title + "…"); api("/api/power", { action }).catch(() => {}); });
+}
+async function windowAction(action) {
+  const r = await api("/api/window", { action }).catch(() => null);
+  if (!r?.ok) { toast(r?.error || "Couch server isn't responding"); refresh(); }
 }
 
 function showPhone() {
@@ -495,8 +576,10 @@ addEventListener("keydown", e => {
   const k = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" }[e.key];
   const padKey = k || ["Enter", " ", "Escape", "Backspace"].includes(e.key);
   if (padKey) e.preventDefault();
+  if (wake()) return;
   if (padSeen && padKey) return;
   if (k) move(k);
+  else if (e.key === "PageUp" || e.key === "PageDown") { e.preventDefault(); page(e.key === "PageUp" ? -5 : 5); }
   else if (e.key === "Enter" || e.key === " ") activate();
   else if (e.key === "Escape" || e.key === "Backspace") back();
   else if (e.key === "p" || e.key === "y") { if (!modal) { Sound.select(); showPhone(); } }
@@ -505,8 +588,11 @@ addEventListener("keydown", e => {
 // ---------- controller: the server reads it (works with or without Steam) and streams presses here
 let lastPadAt = -1e9;
 function onPad(a) {
+  if (a.startsWith("pad:")) return showPad(a.slice(4));
   padSeen = true; lastPadAt = performance.now();
+  if (wake()) return;
   if (a === "a") activate(); else if (a === "b") back();
+  else if (a === "l1" || a === "r1") page(a === "l1" ? -5 : 5);
   else if (a === "y") { if (modal) back(); else { Sound.select(); showPhone(); } }
   else move(a);
 }
@@ -536,11 +622,24 @@ listenPad();
 async function load() {
   try {
     info = await api("/api/info");
+    if (info.running) pos.r = 0;  // reloaded mid-game: first press lands on Resume
     build();
-  } catch { $("#games").innerHTML = '<div class="empty">Couch server isn\'t running.</div>'; setTimeout(load, 3000); }
+  } catch { $("#games").innerHTML = '<div class="empty">Couch server isn\'t running. Trying again…</div>'; setTimeout(load, 3000); }
 }
 load();
-addEventListener("focus", () => { if (info) api("/api/info").then(i => { info = i; const r = pos.r, c = lastCol[pos.r] ?? 0; build(); focus(r, c); }).catch(() => {}); });
+// Re-read the library and what's running. The Now playing row coming or going shifts every row by one.
+async function refresh(toResume) {
+  if (!info) return;
+  let i;
+  try { i = await api("/api/info"); } catch { return; }
+  const shift = !!i.running - !!info.running;
+  if (shift > 0) lastCol.unshift(0); else if (shift < 0) lastCol.shift();
+  pos.r = Math.max(0, pos.r + shift);
+  info = i;
+  build();
+  if (toResume && info.running) focus(0, 0);  // back from the game: Resume is where you'd want to be
+}
+addEventListener("focus", () => { wake(); refresh(true); });
 </script>
 </body>
 </html>

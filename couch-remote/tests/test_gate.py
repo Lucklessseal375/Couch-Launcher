@@ -57,5 +57,21 @@ class VdfTest(unittest.TestCase):
         self.assertEqual(server.parse_vdf(text), {"a": {"path": "C:\\Steam", "apps": {"10": "1"}, "empty": ""}})
 
 
+
+class PadStatusTest(unittest.TestCase):
+    def test_weakest_battery_wins(self):
+        self.assertEqual(server.pad_status_for([]), "pad:none")
+        self.assertEqual(server.pad_status_for(["full", "low"]), "pad:low")
+        self.assertEqual(server.pad_status_for(["wired", "medium"]), "pad:medium")
+        self.assertEqual(server.pad_status_for(["unknown"]), "pad:max")
+
+
+class PickRunningTest(unittest.TestCase):
+    def test_game_window_beats_store_windows(self):
+        self.assertIsNone(server.pick_running([]))
+        self.assertEqual(server.pick_running([(1, "steam.exe"), (2, "game.exe"), (3, "steamwebhelper.exe")]), 2)
+        self.assertEqual(server.pick_running([(1, "steam.exe"), (3, "steamwebhelper.exe")]), 3)  # Big Picture
+
+
 if __name__ == "__main__":
     unittest.main()

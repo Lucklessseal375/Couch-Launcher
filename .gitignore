@@ -1,4 +1,4 @@
-# Edge profiles hold YouTube/Netflix sign-ins (cookies) — never commit
+# Edge profiles can hold sign-ins (cookies) — never commit
 couch-remote/profiles/
 # logs
 *.log

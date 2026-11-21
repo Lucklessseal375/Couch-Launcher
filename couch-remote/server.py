@@ -401,15 +401,58 @@ def visible_windows():
     return found
 
 
+kernel32.OpenProcess.restype = wintypes.HANDLE
+kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+kernel32.QueryFullProcessImageNameW.argtypes = (wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD))
+kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+user32.IsWindow.argtypes = (wintypes.HWND,)
+
+
+def window_exe(h):
+    """Lower-case file name of the program that owns window h ("" if it can't be read)."""
+    pid = wintypes.DWORD()
+    user32.GetWindowThreadProcessId(h, ctypes.byref(pid))
+    ph = kernel32.OpenProcess(0x1000, False, pid.value)  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not ph:
+        return ""
+    try:
+        buf, n = ctypes.create_unicode_buffer(260), wintypes.DWORD(260)
+        return Path(buf.value).name.lower() if kernel32.QueryFullProcessImageNameW(ph, 0, buf, ctypes.byref(n)) else ""
+    finally:
+        kernel32.CloseHandle(ph)
+
+
+# Store/launcher windows that open on the way to a game; the game is the window that isn't one of these.
+LAUNCHER_EXES = {"steam.exe", "steamwebhelper.exe", "epicgameslauncher.exe", "eadesktop.exe", "ealauncher.exe",
+                 "upc.exe", "ubisoftconnect.exe", "launcher.exe", "launcherpatcher.exe", "socialclubhelper.exe"}
+RUNNING = {"name": None, "windows": []}  # what was launched last and the windows that opened for it, oldest first
+
+
+def pick_running(cands):
+    """cands: [(hwnd, exe)] still open, oldest first. The newest non-launcher window, else the newest window."""
+    games = [h for h, exe in cands if exe not in LAUNCHER_EXES]
+    return (games or [h for h, _ in cands] or [None])[-1]
+
+
+def running_window():
+    """The launched game/app's window while it's still open, else None."""
+    alive = [(h, window_exe(h)) for h in RUNNING["windows"] if user32.IsWindow(h) and user32.IsWindowVisible(h)]
+    return pick_running(alive)
+
+
 def focus_what_opens(before):
     """Windows won't give focus to a window our background process started (Steam, a game...), so the
-    controller wouldn't reach it. Focus each new window as it appears; stop 10 s after the last one."""
+    controller wouldn't reach it. Focus each new window as it appears; stop 10 s after the last one.
+    The windows are also remembered for Resume / Close game."""
+    # shortcut: a game window that appears more than 10 s after the last launcher window isn't tracked;
+    # keep watching longer if slow launchers (Rockstar) turn out to need it.
     seen, last, t0 = set(before), 0.0, time.time()
     while time.time() - t0 < 60:
         time.sleep(0.5)
         new = [h for h in visible_windows() if h not in seen]
         seen.update(new)
         if new:
+            RUNNING["windows"] += new
             time.sleep(0.3)  # let it finish appearing
             focus_window(new[0])
             last = time.time()
@@ -470,6 +513,7 @@ WATCHER = ReturnWatcher()
 
 LISTENERS = []  # one queue per open launcher page
 LISTENERS_LOCK = threading.Lock()
+PAD_STATUS = "pad:none"  # last controller/battery state sent to the launcher; new pages get it on connect
 
 
 def emit(action):
@@ -478,6 +522,13 @@ def emit(action):
     with LISTENERS_LOCK:
         if LISTENERS:
             LISTENERS[-1].put(action)
+
+
+def pad_status_for(levels):
+    """pad:none, or the weakest battery among SDL power levels (wired counts as charged)."""
+    order = ["empty", "low", "medium", "full", "max", "wired"]
+    levels = [lv if lv in order else "max" for lv in levels]  # "unknown": don't alarm anyone
+    return "pad:" + (min(levels, key=order.index) if levels else "none")
 
 
 def launcher_in_front():
@@ -503,6 +554,7 @@ def controller_loop():
 
 
 def _controller_loop():
+    global PAD_STATUS
     os.environ["SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS"] = "1"  # read it even when our window isn't focused
     os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
     try:
@@ -523,11 +575,22 @@ def _controller_loop():
     buttons = {B.CONTROLLER_BUTTON_A: "a", B.CONTROLLER_BUTTON_B: "b", B.CONTROLLER_BUTTON_Y: "y",
                B.CONTROLLER_BUTTON_DPAD_UP: "up", B.CONTROLLER_BUTTON_DPAD_DOWN: "down",
                B.CONTROLLER_BUTTON_DPAD_LEFT: "left", B.CONTROLLER_BUTTON_DPAD_RIGHT: "right",
-               B.CONTROLLER_BUTTON_GUIDE: "guide"}
+               B.CONTROLLER_BUTTON_GUIDE: "guide",
+               B.CONTROLLER_BUTTON_LEFTSHOULDER: "l1", B.CONTROLLER_BUTTON_RIGHTSHOULDER: "r1"}
     held = {}  # direction -> time of next repeat
     stick = {"x": 0, "y": 0}
     dpad = set()
     log.info("controller support on")
+    next_status = 0.0
+
+    def pad_status():
+        levels = []
+        for c in pads.values():
+            try:
+                levels.append(c.as_joystick().get_power_level())
+            except pygame.error:
+                continue
+        return pad_status_for(levels)
 
     def act(action):
         if action == "guide":  # PS / Xbox button: bring up the launcher (Steam uses it when running)
@@ -562,6 +625,11 @@ def _controller_loop():
                     stick["y"] = e.value
         # directions from d-pad or left stick, repeating while held
         now = time.time()
+        if now >= next_status:  # battery changes slowly; check every 5 s, tell the page only on change
+            next_status, s = now + 5, pad_status()
+            if s != PAD_STATUS:
+                PAD_STATUS = s
+                emit(s)
         dirs = set(dpad)
         dz = 0.6 * 32767
         if stick["x"] < -dz: dirs.add("left")
@@ -736,6 +804,7 @@ class Handler(BaseHTTPRequestHandler):
         q = queue.Queue()
         with LISTENERS_LOCK:
             LISTENERS.append(q)
+        q.put(PAD_STATUS)
         try:
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
@@ -792,6 +861,8 @@ class Handler(BaseHTTPRequestHandler):
                 info = {"name": socket.gethostname(), "apps": apps, "games": load_games() + steam_games()}
                 if kind == "local":
                     info["urls"] = [f"http://{ip}:{CONFIG['port']}/remote" for ip in lan_ips()]
+                    if running_window():
+                        info["running"] = {"name": RUNNING["name"]}
                 return self.send_json(info)
             return self.send_json({"error": "not found"}, 404)
 
@@ -821,6 +892,7 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/launch":
                 before = visible_windows()
                 name = launch_game(b["game"]) if "game" in b else launch_app(str(b.get("id")))
+                RUNNING.update(name=name, windows=[])
                 threading.Thread(target=focus_what_opens, args=(before,), daemon=True).start()
                 WATCHER.arm()
                 return self.send_json({"ok": True, "name": name})
@@ -844,6 +916,14 @@ class Handler(BaseHTTPRequestHandler):
                     open_launcher()
                 elif act == "close-launcher":
                     close_launcher()
+                elif act in ("resume", "close-game"):
+                    h = running_window()
+                    if not h:
+                        return self.send_json({"error": "It's no longer running"}, 409)
+                    if act == "resume":
+                        focus_window(h)
+                    else:
+                        user32.PostMessageW(h, 0x0010, 0, 0)  # WM_CLOSE: same as the game's own close button
                 elif act == "close-app":
                     fg = user32.GetForegroundWindow()
                     if fg and window_class(fg) not in ReturnWatcher.DESKTOP:

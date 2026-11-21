@@ -6,7 +6,9 @@ A couch-gaming setup for a Windows 11 PC on a Samsung TV with DualSense controll
 - Design: Steel Ball Run poster look (purple polka dots, pink "Couch" script with cyan rim, Johnny cyan `#5ec8ef`, Gyro green, gold horseshoe, Gyro's steel ball spinning on the selected tile, ゴゴゴ on focus change) + PS5 layout (square tiles, white focus ring, white ✕ Play pill, coloured ✕○△ hints). User OK'd copyrighted art for private home use; it stays on this PC.
 - Stack: Python 3.13 stdlib HTTP server + **pygame** (SDL) for the controller; pages are single HTML files (no build), opened in Edge `--app` full screen.
 - Working style the user asked for: **ponytail mode (full)** — smallest complete change, no extras, end replies with "skipped / risk".
-- UI pass to remove "AI slop" (§4) is **done and uncommitted** (`launcher.html`, `remote.html`, `apps.json`). Next: commit (ask the user), then §5 step 4.
+- UI pass to remove "AI slop" (§4) is done and committed (2fcf0d6).
+- apple-design skill (project, `.claude/skills/apple-design`) review + features done 2026-11-21, **uncommitted**: see `.scratch/couch-launcher/ui-review.md`. Added reduced-motion, bigger TV text, Back hint only in dialogs, Sleep without dialog, L1/R1 paging, controller battery (issue 05), 10-min idle dim. New idea issues 06–09; 06 (Resume / Close game) done too, tested on the TV by the user. Server was restarted headless (no `--open`) to load it.
+- YouTube and Netflix tiles removed (user wants games only, 2026-11-21); their Edge profiles went to the Recycle Bin. The `web` app kind still works if a site is ever added back.
 
 ### Skill status (2026-11-21)
 - **frontend-design** (Anthropic): enabled on the user's claude.ai account, but it never loaded in the old session (skills load at session start; `/reload-plugins` didn't pick it up). If it isn't in the skill list, read it directly: `C:\Users\eli\.claude\plugins\marketplaces\claude-plugins-official\plugins\frontend-design\skills\frontend-design\SKILL.md`.
@@ -26,7 +28,7 @@ A couch-gaming setup for a Windows 11 PC on a Samsung TV with DualSense controll
 - Vertical row scrolling in `focus()` fixed: `offsetTop` broke once `#rows` had a transform (it becomes the offsetParent), so the previous row peeked under the header as colored stripes. Now uses bounding rects and snaps to row starts. Verified at 1920×1080 and 1280×720, down and back up.
 
 ## 3. Current state & uncommitted changes
-- **Uncommitted:** `couch-remote/web/launcher.html` (the scroll fix) and this file. Everything else is in the first WIP commit. `profiles/` (Edge sign-ins, 610 MB), logs and `__pycache__` are git-ignored on purpose.
+- **Uncommitted:** `couch-remote/web/launcher.html` (the scroll fix) and this file. Everything else is in the first WIP commit. `profiles/` (the launcher's Edge profile), logs and `__pycache__` are git-ignored on purpose.
 - Working: launcher, controller, phone remote, startup, game launching, no black flash on launch (launcher no longer minimizes).
 - TV launcher was reloaded after the scroll fix; not looked at on the TV itself.
 - Not verified with a real game: the no-black-flash change and the overlay filter in `visible_windows()`.
@@ -92,7 +94,7 @@ A couch-gaming setup for a Windows 11 PC on a Samsung TV with DualSense controll
 1. In the new session, check the skill list: frontend-design loaded? Taste Skill installed? Use them if loaded; either way §4 is already derived from both.
 2. Apply §4, then verify: open `http://127.0.0.1:8765/launcher?preview` in the browser pane at 1920×1080, move focus with arrow keys, finish non-infinite animations via `document.getAnimations()`, review; **close the preview tab afterwards** (see gotchas). Then reload the TV launcher: `POST /api/window {"action":"close-launcher"}` then `{"action":"launcher"}` (header `X-Couch: 1`).
 3. Commit the scroll fix + UI pass (ask the user first).
-4. Work the open issues in `.scratch/couch-launcher/issues/` (01 sleep timer & 02 restore points = user commands; 03 move `PROFILES` to `%LOCALAPPDATA%`; 04 cache GTA art locally — needs download OK; 05 controller battery idea).
+4. Work the open issues in `.scratch/couch-launcher/issues/` (01 sleep timer & 02 restore points = user commands; 04 cache GTA art locally — needs download OK; 07–09 feature ideas; 03, 05, 06 resolved).
 5. Offer the real-app-logos follow-up (§4, skipped).
 
 ## 6. Gotchas & decisions
@@ -100,10 +102,11 @@ A couch-gaming setup for a Windows 11 PC on a Samsung TV with DualSense controll
 - Edge: use `--app` + `--start-fullscreen`, **not `--kiosk`** (kiosk is InPrivate → loses sign-ins). Keep the occlusion flags (`CalculateNativeWinOcclusion` off, no backgrounding) — without them the launcher shows gray until clicked at boot. `--autoplay-policy=no-user-gesture-required` is needed for sounds.
 - Firewall allows `python.exe`, not `pythonw.exe` → start via `conhost --headless python.exe`, never pythonw.
 - Browser pane: CSS transitions may not advance between tool calls. Finish them via `document.getAnimations()` before reading rects, or you measure mid-transition positions. A viewport size set with `resize_window` applies per tab; set it again on a new tab.
+- **The preview is live:** Enter/✕ or `.onactivate()` on a tile in `/launcher?preview` really launches games/apps on this PC (happened twice on 2026-11-21: Silent Hill 2, YouTube). When testing, never activate tiles; check by reading DOM state. `api` is a `const`, so you can't fake `/api/info` from the console.
 - `rows` is a global in `launcher.html` (used inside `focus()`); don't declare a local `rows` there (TDZ crash).
 - The `<use>` SVG bug: outer `viewBox` must be `0 0 2 2` for symbols defined as `-1 -1 2 2`.
 - Fonts/QR lib load non-blocking (no waiting on the internet at boot) — keep it that way.
 - Don't change Windows system/security settings (Claude can't); give the user commands instead.
 - Don't install third-party plugins for the user (Taste Skill runs its own scripts + a Stop hook); give them the commands.
 - Steam is not started at boot by anything; it only opens when picked in the launcher.
-- Don't reintroduce: PIN, keyboard/mouse mapping of the controller for desktop apps (user rejected), launcher minimizing on launch (caused black flash), opening with a tile pre-selected.
+- Don't reintroduce: PIN, keyboard/mouse mapping of the controller for desktop apps (user rejected), launcher minimizing on launch (caused black flash), opening with a tile pre-selected, streaming apps like YouTube/Netflix (user wants games only).

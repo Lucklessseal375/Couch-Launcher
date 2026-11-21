@@ -36,7 +36,7 @@ On the launcher, press △ (or open **Phone remote**) and scan the QR code. The 
 - `config.json`: the port (8765) and the Edge path.
 - `web/poster.webp`: the launcher's background picture. `make_icon.py` redraws `icon.ico` / `web/icon.png`.
 - `server.log`: errors and launches (capped at about 1 MB).
-- `profiles\`: separate Edge profiles for the launcher, YouTube and Netflix, with your sign-ins. Don't share this folder.
+- `profiles\`: the launcher's Edge profile, plus one per website tile if you add any (with its sign-ins). Don't share this folder.
 
 ## Restart / stop the server
 ```powershell
