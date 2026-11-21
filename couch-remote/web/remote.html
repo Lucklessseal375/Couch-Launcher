@@ -27,7 +27,7 @@
   button.k { background: var(--panel2); color: var(--text); border: 0; border-radius: 14px; font: inherit; font-size: 15px; padding: 14px 8px; touch-action: manipulation; }
   button.k:active { background: rgba(94,200,239,.35); transform: scale(.97); }
   button.k.danger { color: #ffc9cb; } button.k.primary { background: #fff; color: #1a0d33; font-weight: 700; border-radius: 99px; }
-  h2 { font-size: 13px; color: var(--dim); text-transform: uppercase; letter-spacing: .1em; margin: 20px 0 8px; font-weight: 600; }
+  h2 { font-size: 13px; color: var(--dim); margin: 20px 0 8px; font-weight: 600; }
   .grid { display: grid; gap: 10px; } .g2 { grid-template-columns: 1fr 1fr; } .g3 { grid-template-columns: repeat(3, 1fr); }
   /* d-pad */
   .pad { position: relative; width: min(78vw, 300px); aspect-ratio: 1; margin: 18px auto 8px; border-radius: 50%; background: var(--panel); }
@@ -49,7 +49,7 @@
   .game img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .game span { position: absolute; inset: auto 0 0; padding: 18px 6px 6px; font-size: 11px; background: linear-gradient(transparent, rgba(0,0,0,.85)); text-align: left; }
   .game:active { transform: scale(.96); }
-  #toast { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); background: rgba(20,8,44,.95); border-left: 4px solid var(--accent); padding: 10px 16px; border-radius: 12px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; white-space: nowrap; }
+  #toast { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); background: rgba(20,8,44,.95); padding: 10px 16px; border-radius: 12px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; white-space: nowrap; }
   #toast.show { opacity: 1; }
 </style>
 </head>
