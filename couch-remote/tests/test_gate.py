@@ -78,7 +78,7 @@ class PickRunningTest(unittest.TestCase):
 class ChoicesTest(unittest.TestCase):
     def test_hide_pin_and_show_again(self):
         epic = [{"id": "gta5", "name": "GTA"}]
-        steam = [{"appid": 1, "name": "A"}, {"appid": 2, "name": "B"}]
+        steam = [{"appid": 1, "name": "A", "lastPlayed": 20}, {"appid": 2, "name": "B", "lastPlayed": 10}]
         with (tempfile.TemporaryDirectory() as d,
               mock.patch.object(server, "CHOICES_FILE", Path(d) / "choices.json"),
               mock.patch.object(server, "load_games", lambda: [dict(g) for g in epic]),
@@ -90,7 +90,11 @@ class ChoicesTest(unittest.TestCase):
             self.assertEqual(hidden, ["GTA"])
             server.set_choice("unpin", "steam:2")
             server.set_choice("unhide-all")
-            self.assertEqual([g["name"] for g in server.library()[0]], ["GTA", "A", "B"])
+            self.assertEqual([g["name"] for g in server.library()[0]], ["A", "B", "GTA"])  # never played: last
+            c = server.load_choices()
+            c["played"]["gta5"] = 15  # what launch_app records
+            server.save_choices(c)
+            self.assertEqual([g["name"] for g in server.library()[0]], ["A", "GTA", "B"])  # by last played
             with self.assertRaises(KeyError):
                 server.set_choice("hide", "steam:999")  # only games that exist
 

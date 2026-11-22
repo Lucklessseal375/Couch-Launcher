@@ -91,6 +91,58 @@ def pad_paths():
     return [p for p in buf[:n.value].split("\0") if is_bt_dualsense(p)]
 
 
+hid.HidD_GetSerialNumberString.argtypes = (wintypes.HANDLE, ctypes.c_void_p, wintypes.ULONG)
+k32.DeviceIoControl.argtypes = (wintypes.HANDLE, wintypes.DWORD, ctypes.c_void_p, wintypes.DWORD, ctypes.c_void_p,
+                                wintypes.DWORD, ctypes.POINTER(wintypes.DWORD), wintypes.LPVOID)
+bth = ctypes.WinDLL("bthprops.cpl")
+bth.BluetoothFindFirstRadio.restype = wintypes.HANDLE
+bth.BluetoothFindFirstRadio.argtypes = (ctypes.c_void_p, ctypes.POINTER(wintypes.HANDLE))
+bth.BluetoothFindNextRadio.argtypes = (wintypes.HANDLE, ctypes.POINTER(wintypes.HANDLE))
+bth.BluetoothFindRadioClose.argtypes = (wintypes.HANDLE,)
+IOCTL_BTH_DISCONNECT_DEVICE = 0x41000C
+
+
+def addresses():
+    """Bluetooth addresses of the connected DualSenses (Windows gives a Bluetooth HID device's MAC as its serial)."""
+    out = []
+    for p in pad_paths():
+        h = k32.CreateFileW(p, 0, 3, None, 3, 0, None)  # no read/write access needed just to ask
+        if h in (None, INVALID_HANDLE):
+            continue
+        buf = ctypes.create_unicode_buffer(32)
+        if hid.HidD_GetSerialNumberString(h, buf, ctypes.sizeof(buf)):
+            try:
+                out.append(int(buf.value, 16))  # "0c27566ea39d" -> 0x0C27566EA39D
+            except ValueError:
+                pass
+        k32.CloseHandle(h)
+    return out
+
+
+def turn_off():
+    """Drops the Bluetooth link to every wireless DualSense, so it powers off as on a PS5; it stays paired and
+    the PS button connects it again. Returns how many went off."""
+    addrs = addresses()
+    radios, radio = [], wintypes.HANDLE()
+    size = wintypes.DWORD(4)  # BLUETOOTH_FIND_RADIO_PARAMS is just its own size
+    find = bth.BluetoothFindFirstRadio(ctypes.byref(size), ctypes.byref(radio)) if addrs else None
+    if find:
+        radios.append(radio.value)
+        while bth.BluetoothFindNextRadio(find, ctypes.byref(radio)):
+            radios.append(radio.value)
+        bth.BluetoothFindRadioClose(find)
+    n = 0
+    for a in addrs:
+        for r in radios:
+            if k32.DeviceIoControl(r, IOCTL_BTH_DISCONNECT_DEVICE, ctypes.byref(ctypes.c_ulonglong(a)), 8,
+                                   None, 0, ctypes.byref(wintypes.DWORD()), None):
+                n += 1
+                break
+    for r in radios:
+        k32.CloseHandle(r)
+    return n
+
+
 def write(h, report):
     n = wintypes.DWORD()
     # Some Bluetooth stacks refuse big interrupt writes; the controller takes the report as a control transfer too.

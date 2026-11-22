@@ -670,7 +670,10 @@ function placeIdleClock() {
 }
 setInterval(() => {
   if (document.body.classList.contains("idle")) placeIdleClock();
-  else if (!modal && Date.now() - lastInput > IDLE_MS) { placeIdleClock(); document.body.classList.add("idle"); }
+  else if (!modal && Date.now() - lastInput > IDLE_MS) {
+    placeIdleClock(); document.body.classList.add("idle");
+    api("/api/padoff", { idle: true }).catch(() => {});  // like a PS5: save the wireless controller's battery
+  }
 }, 60000);
 addEventListener("mousemove", wake);
 
@@ -779,6 +782,7 @@ function pcItems() {
     { icon: deviceIcon(info.audio?.name || ""), label: "Audio output", meta: info.audio ? `Playing on ${deviceName(info.audio.name)[0]}` : "Choose where games and videos play", cta: "Change", fn: pickAudio },
     { icon: Sound.on ? "sound" : "mute", label: "Sound", meta: Sound.on ? `Effects on, playing on the ${Out.where}` : "Effects off", cta: "Settings", fn: () => soundSettings() },
     ...(info.hidden?.length ? [{ icon: "eye", label: "Hidden games", meta: info.hidden.join(", "), cta: "Show all", fn: () => setChoice("unhide-all") }] : []),
+    { icon: "power", label: "Turn off controller", meta: "Press the PS button to turn it back on", cta: "Turn off", fn: padOff },
     { icon: "moon", label: "Sleep", meta: "Wake it with the PC's power button", cta: "Sleep", fn: sleepNow },  // waking undoes it, so no dialog
     { icon: "restart", label: "Restart", meta: "Closes all apps and restarts the PC", cta: "Restart", cls: "danger",
       fn: () => confirmPower("restart", "Restart", "Restart the PC now? Unsaved work in other apps will be lost.") },
@@ -1057,6 +1061,9 @@ async function setAudio(d) {
 function confirmPower(action, title, text) {
   confirmAction(title + "?", text, title, () => { toast(title + "…"); api("/api/power", { action }).catch(() => {}); });
 }
+function padOff() {
+  api("/api/padoff", {}).then(r => toast(r.off ? "Controller off" : "No wireless controller connected")).catch(() => {});
+}
 function sleepNow() { toast("Sleeping…"); api("/api/power", { action: "sleep" }).catch(() => {}); }
 function rebuildKeepFocus() { const r = pos.r, c = pos.c; build(); if (chosen) focus(r, c); }
 
@@ -1105,8 +1112,10 @@ async function windowAction(action) {
 function gameDetails() {
   const t = !modal && chosen && rows[pos.r][pos.c], g = t && t.game;
   if (!g) return Sound.bump();
+  const gb = n => `${(n / 1e9).toFixed(n > 1e10 ? 0 : 1)} GB`;
   const lines = [ago(g.lastPlayed), g.playtime ? playtime(g.playtime).replace(" in total", " played") : "",
-                 g.size ? `${(g.size / 1e9).toFixed(g.size > 1e10 ? 0 : 1)} GB on disk` : "", g.appid ? "Steam" : g.meta || ""].filter(Boolean);
+                 [g.size && `${gb(g.size)} on disk`, g.free && `${gb(g.free)} free`].filter(Boolean).join(", "),
+                 g.appid ? "Steam" : g.meta || ""].filter(Boolean);
   choose(g.name, "", [
     { label: "Play", icon: "resume", fn: () => t.onactivate() },
     { label: g.pinned ? "Unpin" : "Pin to front", icon: "pin", fn: () => setChoice(g.pinned ? "unpin" : "pin", g) },

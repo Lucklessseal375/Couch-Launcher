@@ -111,6 +111,13 @@
   </section>
 
   <section class="tab" id="t-power">
+    <div id="playing" hidden>
+      <h2 id="playing-name"></h2>
+      <div class="grid g2">
+        <button class="k" data-win="resume">Resume</button>
+        <button class="k danger" id="close-game">Close game</button>
+      </div>
+    </div>
     <h2>Windows</h2>
     <div class="grid g2">
       <button class="k" data-win="launcher">Show launcher</button>
@@ -160,6 +167,7 @@ const send = (path, body) => api(path, body).catch(() => {});
 document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
   document.querySelectorAll("nav button").forEach(x => x.classList.toggle("on", x === b));
   document.querySelectorAll(".tab").forEach(t => t.classList.toggle("on", t.id === "t-" + b.dataset.tab));
+  if (b.dataset.tab === "power") load();  // what's running may have changed since
 });
 
 // ---------- buttons (hold arrows to repeat)
@@ -178,6 +186,9 @@ document.querySelectorAll("[data-win]").forEach(b => b.onclick = () => { buzz();
 document.querySelectorAll("[data-confirm]").forEach(b => b.onclick = () => {
   if (confirm("Close the app that's in front on the PC (Alt+F4)?")) send("/api/window", { action: b.dataset.confirm });
 });
+$("#close-game").onclick = () => {
+  if (confirm("Close the game? Progress since your last save will be lost.")) send("/api/window", { action: "close-game" }).then(load);
+};
 document.querySelectorAll("[data-power]").forEach(b => b.onclick = () => {
   const a = b.dataset.power, label = b.textContent;
   if (confirm(`${label} the PC now?`)) send("/api/power", { action: a }).then(() => toast(label + "…"));
@@ -234,6 +245,8 @@ $("#text").addEventListener("keydown", e => { if (e.key === "Enter") { e.prevent
 // ---------- apps & games
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 function render(info) {
+  $("#playing").hidden = !info.running;
+  if (info.running) $("#playing-name").textContent = "Playing " + info.running.name;
   const apps = $("#apps"); apps.innerHTML = "";
   for (const a of info.apps) {
     const b = document.createElement("button"); b.className = "k tile";

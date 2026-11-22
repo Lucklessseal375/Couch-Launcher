@@ -12,6 +12,7 @@ import logging
 import logging.handlers
 import os
 import re
+import shutil
 import socket
 import subprocess
 import sys
@@ -79,7 +80,7 @@ def load_apps():
 
 
 def load_games():
-    """Non-Steam games from apps.json (e.g. Epic), shown first in the Games row."""
+    """Non-Steam games from apps.json (e.g. Epic); their last-played time is kept in choices.json."""
     return json.loads(APPS_FILE.read_text(encoding="utf-8")).get("games", [])
 
 
@@ -152,6 +153,10 @@ def steam_games():
         pass
     games, seen = [], set()
     for lib in libs:
+        try:
+            free = shutil.disk_usage(lib).free  # room left on that library's drive, for the details dialog
+        except OSError:
+            free = 0
         for acf in (lib / "steamapps").glob("appmanifest_*.acf"):
             try:
                 st = parse_vdf(acf.read_text(encoding="utf-8", errors="replace")).get("AppState", {})
@@ -168,7 +173,8 @@ def steam_games():
             seen.add(appid)
             games.append({"appid": appid, "name": name,
                           "lastPlayed": int(st.get("LastPlayed", "0") or 0),
-                          "size": int(st.get("SizeOnDisk", "0") or 0), **({"update": update} if update else {})})
+                          "size": int(st.get("SizeOnDisk", "0") or 0), "free": free,
+                          **({"update": update} if update else {})})
     games.sort(key=lambda g: (-g["lastPlayed"], g["name"].lower()))
     return games
 
@@ -185,7 +191,8 @@ def load_choices():
         d = json.loads(CHOICES_FILE.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         d = {}  # none yet, or unreadable: show everything
-    return {"hidden": list(d.get("hidden", [])), "pinned": list(d.get("pinned", [])), "audio": d.get("audio")}
+    return {"hidden": list(d.get("hidden", [])), "pinned": list(d.get("pinned", [])), "audio": d.get("audio"),
+            "played": dict(d.get("played", {}))}
 
 
 def save_choices(c):
@@ -220,6 +227,9 @@ def library():
         g["pinned"] = g["key"] in c["pinned"]
         if "appid" in g:
             g["playtime"] = played.get(g["appid"], 0)
+        else:  # Steam keeps its own LastPlayed; other stores' games get the time we launched them
+            g["lastPlayed"] = int(c["played"].get(g["key"], 0))
+    games.sort(key=lambda g: -g["lastPlayed"])  # most recently played first, across stores (stable: names stay sorted)
     shown = [g for g in games if g["key"] not in c["hidden"]]
     shown.sort(key=lambda g: c["pinned"].index(g["key"]) if g["pinned"] else len(c["pinned"]))  # stable: rest keep order
     return shown, [g["name"] for g in games if g["key"] in c["hidden"]]
@@ -906,6 +916,8 @@ def _controller_loop():
                     pass
             elif e.type == B.CONTROLLERDEVICEREMOVED:
                 pads.pop(e.instance_id, None)
+                dpad.clear()  # a direction held as it dropped would repeat forever
+                stick.update(x=0, y=0)
             elif e.type == B.CONTROLLERBUTTONDOWN and e.button in buttons:
                 a = buttons[e.button]
                 if a in ("up", "down", "left", "right"):
@@ -981,6 +993,11 @@ def launch_app(app_id):
     else:
         raise ValueError(f"unknown kind {kind!r}")
     log.info("launched app %s", app_id)
+    if app in load_games():
+        with CHOICES_LOCK:
+            c = load_choices()
+            c["played"][game_key(app)] = int(time.time())
+            save_choices(c)
     return app["name"]
 
 
@@ -1185,8 +1202,8 @@ class Handler(BaseHTTPRequestHandler):
                     log.exception("couldn't read the audio output")
                 if kind == "local":
                     info["urls"] = [f"http://{ip}:{CONFIG['port']}/remote" for ip in lan_ips()]
-                    if running_window():
-                        info["running"] = {"name": RUNNING["name"]}
+                if running_window():  # the launcher and the phone both offer Resume / Close game
+                    info["running"] = {"name": RUNNING["name"]}
                 return self.send_json(info)
             return self.send_json({"error": "not found"}, 404)
 
@@ -1264,6 +1281,10 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/light" and kind == "local":  # the controllers' light bar: {"rgb": [r, g, b]}
                 r, g, bl = (max(0, min(255, int(v))) for v in b["rgb"])
                 LIGHT[0] = (r, g, bl)
+            elif path == "/api/padoff" and kind == "local":  # turn wireless controllers off (menu, or idle)
+                if b.get("idle") and not launcher_in_front():
+                    return self.send_json({"ok": False, "off": 0})  # idle page behind a game: someone's playing
+                return self.send_json({"ok": True, "off": padspeaker.turn_off()})
             elif path == "/api/window":
                 act = b.get("action")
                 if act == "launcher":
