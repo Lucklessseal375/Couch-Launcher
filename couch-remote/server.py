@@ -941,6 +941,7 @@ def focus_what_opens(before):
         if hidden and not last and time.time() - t0 > 90:
             log.info("no game window after 90 s; showing %s", window_exe(hidden[-1]))
             focus_window(hidden[-1])
+            emit("opened")
             hidden = None  # stop hiding for this launch
         new = [h for h in visible_windows() if h not in seen]
         seen.update(new)
@@ -956,6 +957,7 @@ def focus_what_opens(before):
                 if find_launcher():
                     focus_window(find_launcher())
                 continue
+            emit("opened")  # the launcher's Starting screen can go now
             focus_window(new[0])
             if any(window_exe(h) not in LAUNCHER_EXES for h in new):
                 last = time.time()
