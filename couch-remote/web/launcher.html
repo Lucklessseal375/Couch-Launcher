@@ -17,7 +17,7 @@
   :root {
     --obsidian: #150f0b; --glass: rgba(38, 28, 21, .56); --glass-hi: rgba(42, 31, 23, .86); --line: rgba(255, 236, 205, .12);
     --ink: #f3e6cf; --dim: #bfae96; --faint: #8a7a66;
-    --ice: #8fe3ff; --pink: #e0306e; --johnny: #5ec8ef; --gyro: #6fae3e; --gold: #f2b844; --bib: #1fa5c2; --serif: "Aoboshi One", Georgia, serif;
+    --ice: #8fe3ff; --pink: #e0306e; --johnny: #5ec8ef; --gyro: #6fae3e; --gold: #f2b844; --bib: #13809a; --serif: "Aoboshi One", Georgia, serif;
     --ps-cross: #7ea6ff; --ps-circle: #ff6f7d; --ps-tri: #43d6b0; --ps-square: #f08bd8;
     --logo: "Lobster", "Segoe Script", cursive;
     --ui: "Archivo", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
@@ -92,7 +92,7 @@
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .cta { display: inline-flex; align-items: center; gap: 1.2vh; margin-top: 1.3vh; padding: 1vh 3.2vh 1vh 1.2vh; border-radius: 1vh;
          background: var(--bib); color: #fff; font: 400 2.6vh/1 var(--serif); transform: rotate(-1.5deg);
-         box-shadow: inset 0 0 0 .25vh rgba(255,255,255,.85), inset 0 0 0 .55vh var(--bib), .4vh .4vh 0 var(--obsidian); }
+         box-shadow: inset 0 0 0 .25vh rgba(255,255,255,.85), inset 0 0 0 .55vh var(--bib), 0 .8vh 2vh rgba(0,0,0,.45); }
   .cta .glyph { background: var(--obsidian); box-shadow: none; }
   body:not(.chosen) .cta { visibility: hidden; } /* ✕ does nothing until a tile is selected */
   .details.swap #d-title { animation: dash .5s var(--spring); }
@@ -113,7 +113,7 @@
   main { height: calc(100% - 11vh - 21vh - 8vh); overflow: hidden;
          -webkit-mask-image: linear-gradient(#000 calc(100% - 4vh), transparent); mask-image: linear-gradient(#000 calc(100% - 4vh), transparent); }
   #rows { transition: transform .6s var(--spring); }
-  section { padding: .2vh 0; opacity: .5; transition: opacity .45s ease; }
+  section { padding: .2vh 0; opacity: .62; transition: opacity .45s ease; }
   section.active, body:not(.chosen) section { opacity: 1; }
   section h2 { margin: 0 0 0 var(--pad); font: 400 2.6vh/1 var(--serif); color: var(--dim); }
   section.active h2 { color: var(--ink); }
@@ -1225,10 +1225,10 @@ const EGGS = [
   [/^(valentine|d4c|president)/, "D4C. Dojyaaan~"],
   [/^(lucy|steel$)/, "Lucy Steel: braver than everyone in the race."],
   [/^hot ?pants/, "Hot Pants. Cream Starter, sprayed on."],
-  [/^(pizza|mozzarella)/, "Gyro's cheese song is stuck in your head now. 🍕"],
+  [/^(pizza|mozzarella)/, "Gyro's cheese song is stuck in your head now."],
   [/^(corpse|saint)/, "A Saint's Corpse part! Keep it hidden."],
   [/^(sbr|steel ball)/, "6,000 km from San Diego to New York. Ready?", true],
-  [/^(horseshoe|wanted|cowboy)/, "Yeehaw. 🐎"],
+  [/^(horseshoe|wanted|cowboy)/, "Yeehaw."],
 ];
 function showEgg(q) {
   if (q.length < 3) return "";
