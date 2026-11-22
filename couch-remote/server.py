@@ -932,31 +932,15 @@ def focus_what_opens(before):
     """Windows won't give focus to a window our background process started (Steam, a game...), so the
     controller wouldn't reach it. Focus each new window as it appears. The windows are also remembered for
     Resume / Close game, so keep watching until the game's own window shows up: store launchers (Epic, then
-    Rockstar's) come first, and the game can take minutes. Stop 10 s after a game window, or after 3 minutes.
-    For a game, non-Steam store launchers are minimized behind the Couch launcher until the game shows up; if it
-    hasn't after 90 s, the newest one comes back (it may want a sign-in or an update)."""
-    seen, last, t0, name, hidden = set(before), 0.0, time.time(), RUNNING["name"], []
+    Rockstar's) come first, and the game can take minutes. Stop 10 s after a game window, or after 3 minutes."""
+    seen, last, t0, name = set(before), 0.0, time.time(), RUNNING["name"]
     while time.time() - t0 < 180 and RUNNING["name"] == name:  # a newer launch takes over
         time.sleep(0.5)
-        if hidden and not last and time.time() - t0 > 90:
-            log.info("no game window after 90 s; showing %s", window_exe(hidden[-1]))
-            focus_window(hidden[-1])
-            emit("opened")
-            hidden = None  # stop hiding for this launch
         new = [h for h in visible_windows() if h not in seen]
         seen.update(new)
         if new:
             RUNNING["windows"] += new
             time.sleep(0.3)  # let it finish appearing
-            store = [h for h in new if window_exe(h) in LAUNCHER_EXES - {"steam.exe", "steamwebhelper.exe"}
-                     and not re.search(r"sign.?in|log.?in", window_title(h), re.I)]  # a sign-in page must stay up
-            if hidden is not None and not last and RUNNING.get("is_game") and len(store) == len(new):
-                for h in store:
-                    user32.ShowWindow(h, 7)  # SW_SHOWMINNOACTIVE
-                hidden += store
-                if find_launcher():
-                    focus_window(find_launcher())
-                continue
             emit("opened")  # the launcher's Starting screen can go now
             focus_window(new[0])
             if any(window_exe(h) not in LAUNCHER_EXES for h in new):
