@@ -8,16 +8,16 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <meta name="color-scheme" content="dark">
-<link href="https://fonts.googleapis.com/css2?family=Lobster&family=Archivo:wdth,wght@62..125,400..900&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<link href="https://fonts.googleapis.com/css2?family=Lobster&family=Aoboshi+One&family=Archivo:wdth,wght@62..125,400..900&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <style>
-  /* OLED cinema x Steel Ball Run. Obsidian surfaces and frosted glass; the show's key art (and then the
-     focused game's art) fills the screen. The SBR identity is the signature: pink Couch script with a cyan
-     rim, the gold horseshoe, Gyro's steel ball on the focused tile, ゴゴゴ, and Johnny's cyan as the
-     ice-blue focus glow. Layout, buttons and prompts follow the PS5. */
+  /* Steel Ball Run, at night. Warm saddle-brown surfaces and parchment text from the official site's ink; the show's key
+     art (and then the focused game's art) fills the screen. One loud thing: the focused title in Aoboshi One (the site's
+     display serif) with a hard Johnny-cyan offset like the logo. Around it: the gold horseshoe as the focus ring, Gyro's
+     teal race bib as the action, the pink Couch script, ゴゴゴ. Layout, buttons and prompts follow the PS5. */
   :root {
-    --obsidian: #0b0d12; --glass: rgba(22, 26, 36, .56); --glass-hi: rgba(26, 30, 42, .84); --line: rgba(255, 255, 255, .11);
-    --ink: #f4f6fb; --dim: #aeb6c8; --faint: #7d859a;
-    --ice: #8fe3ff; --pink: #e0306e; --johnny: #5ec8ef; --gyro: #6fae3e; --gold: #f2b844;
+    --obsidian: #150f0b; --glass: rgba(38, 28, 21, .56); --glass-hi: rgba(42, 31, 23, .86); --line: rgba(255, 236, 205, .12);
+    --ink: #f3e6cf; --dim: #bfae96; --faint: #8a7a66;
+    --ice: #8fe3ff; --pink: #e0306e; --johnny: #5ec8ef; --gyro: #6fae3e; --gold: #f2b844; --bib: #1fa5c2; --serif: "Aoboshi One", Georgia, serif;
     --ps-cross: #7ea6ff; --ps-circle: #ff6f7d; --ps-tri: #43d6b0; --ps-square: #f08bd8;
     --logo: "Lobster", "Segoe Script", cursive;
     --ui: "Archivo", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
@@ -44,9 +44,9 @@
   .sky.on, .bg.on { opacity: 1; }
   .bg { background-size: cover; background-position: center 30%; background-color: var(--obsidian); filter: saturate(1.08) brightness(.66); }
   .shade { position: fixed; inset: 0; pointer-events: none; transition: opacity .6s ease; background:
-      linear-gradient(90deg, rgba(11,13,18,.97) 0%, rgba(11,13,18,.84) 30%, rgba(11,13,18,.32) 60%, rgba(11,13,18,.06) 100%),
-      linear-gradient(0deg, rgba(11,13,18,.98) 0%, rgba(11,13,18,.6) 36%, rgba(11,13,18,0) 62%),
-      linear-gradient(180deg, rgba(11,13,18,.72) 0%, rgba(11,13,18,0) 20%); }
+      linear-gradient(90deg, rgba(21,15,11,.97) 0%, rgba(21,15,11,.84) 30%, rgba(21,15,11,.32) 60%, rgba(21,15,11,.06) 100%),
+      linear-gradient(0deg, rgba(21,15,11,.98) 0%, rgba(21,15,11,.6) 36%, rgba(21,15,11,0) 62%),
+      linear-gradient(180deg, rgba(21,15,11,.72) 0%, rgba(21,15,11,0) 20%); }
   .spiral-mark { position: fixed; right: -14vh; bottom: -20vh; width: 78vh; height: 78vh; opacity: .05; color: var(--gold); pointer-events: none; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .app-shell { position: relative; height: 100%; animation: enter .7s var(--spring); transition: opacity .35s ease; }
@@ -86,13 +86,14 @@
 
   /* ---------- details of the focused tile (PS5 game hub) */
   .details { position: relative; height: 21vh; padding: .4vh var(--pad) 0; }
-  #d-title { margin: 0; font: 800 7.6vh/1.02 var(--ui); font-stretch: 75%; max-width: 64vw;
-             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 .4vh 2vh rgba(0,0,0,.65); }
+  #d-title { margin: 0; font: 400 7.4vh/1.08 var(--serif); letter-spacing: -.01em; max-width: 64vw; padding-bottom: .5vh;
+             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: .45vh .45vh 0 var(--johnny), 0 .6vh 2.4vh rgba(0,0,0,.7); }
   #d-meta { color: var(--dim); font-size: 2.6vh; margin-top: .7vh; min-height: 1.3em; max-width: 64vw;
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .cta { display: inline-flex; align-items: center; gap: 1.2vh; margin-top: 1.5vh; padding: 1.1vh 3.4vh 1.1vh 1.3vh; border-radius: 99vh;
-         background: #fff; color: var(--obsidian); font: 800 2.5vh/1 var(--ui); box-shadow: 0 1vh 3vh rgba(0,0,0,.45); }
-  .cta .glyph { background: var(--obsidian); }
+  .cta { display: inline-flex; align-items: center; gap: 1.2vh; margin-top: 1.3vh; padding: 1vh 3.2vh 1vh 1.2vh; border-radius: 1vh;
+         background: var(--bib); color: #fff; font: 400 2.6vh/1 var(--serif); transform: rotate(-1.5deg);
+         box-shadow: inset 0 0 0 .25vh rgba(255,255,255,.85), inset 0 0 0 .55vh var(--bib), .4vh .4vh 0 var(--obsidian); }
+  .cta .glyph { background: var(--obsidian); box-shadow: none; }
   body:not(.chosen) .cta { visibility: hidden; } /* ✕ does nothing until a tile is selected */
   .details.swap #d-title { animation: dash .5s var(--spring); }
   @keyframes dash { from { opacity: 0; transform: translateX(-3vw) skewX(-12deg); } to { opacity: 1; transform: none; } }
@@ -114,7 +115,7 @@
   #rows { transition: transform .6s var(--spring); }
   section { padding: .2vh 0; opacity: .5; transition: opacity .45s ease; }
   section.active, body:not(.chosen) section { opacity: 1; }
-  section h2 { margin: 0 0 0 var(--pad); font: 650 2.5vh/1 var(--ui); color: var(--dim); }
+  section h2 { margin: 0 0 0 var(--pad); font: 400 2.6vh/1 var(--serif); color: var(--dim); }
   section.active h2 { color: var(--ink); }
   .strip { padding: 3vh var(--pad) 2.2vh; overflow: hidden; }
   .track { position: relative; display: flex; gap: 1.5vw; transition: transform .6s var(--spring); }
@@ -125,7 +126,7 @@
   .item::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
                  box-shadow: inset 0 0 0 1px var(--line); }  /* the 1px inner light edge, drawn over art too */
   .item.focus { transform: scale(1.07); z-index: 3; filter: none;
-                box-shadow: 0 0 0 .32vh #fff, 0 0 0 .8vh rgba(143,227,255,.28), 0 0 6vh .6vh rgba(143,227,255,.32), 0 2.6vh 5vh rgba(0,0,0,.6); }
+                box-shadow: 0 0 0 .32vh var(--obsidian), 0 0 0 .75vh var(--gold), 0 0 6vh .4vh rgba(242,184,68,.3), 0 2.6vh 5vh rgba(0,0,0,.6); }
   .item .badge { position: absolute; top: -2vh; right: -2vh; width: 5.8vh; height: 5.8vh; opacity: 0; z-index: 2;
                  transform: scale(.4) rotate(-90deg); transition: opacity .2s, transform .5s var(--spring); pointer-events: none;
                  filter: drop-shadow(0 .3vh .6vh rgba(0,0,0,.7)); }
@@ -146,7 +147,7 @@
   .poster .art { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: inherit; opacity: 0; transition: opacity .5s ease; }
   .poster.loaded .art { opacity: 1; }
   .poster .name { position: absolute; inset: auto 0 0 0; padding: 4vh 1.3vh 1.3vh; font: 700 2vh/1.15 var(--ui);
-                  background: linear-gradient(transparent, rgba(11,13,18,.94)); border-radius: 0 0 1.4vh 1.4vh; }
+                  background: linear-gradient(transparent, rgba(21,15,11,.94)); border-radius: 0 0 1.4vh 1.4vh; }
   .poster.loaded .name { display: none; }  /* the name shows until the art arrives, or if there is none */
   .poster.noart .art { display: none; }
 
@@ -166,7 +167,7 @@
 
   /* ---------- context-aware prompt bar */
   footer { position: fixed; left: 0; right: 0; bottom: 0; height: 8vh; display: flex; align-items: center; gap: 3vw; padding: 0 var(--pad);
-           font: 600 2.4vh/1 var(--ui); color: var(--ink); background: rgba(11,13,18,.5); backdrop-filter: blur(22px) saturate(1.3);
+           font: 600 2.4vh/1 var(--ui); color: var(--ink); background: rgba(21,15,11,.5); backdrop-filter: blur(22px) saturate(1.3);
            box-shadow: inset 0 1px 0 var(--line); z-index: 12; }
   footer .p { display: inline-flex; align-items: center; gap: 1.1vh; white-space: nowrap; }
   footer .p .sh + .sh { margin-left: -.4vh; }
@@ -187,13 +188,13 @@
   .card::before { content: ""; position: absolute; left: 2.8vh; right: 2.8vh; top: 0; height: 1.3vh; border-radius: 0 0 1vh 1vh; pointer-events: none;
     background: radial-gradient(circle, #ffe3b0 .22vh, transparent .3vh) 0 .62vh / 1.4vh 1.4vh repeat-x,
       linear-gradient(#21a7c4 0 22%, var(--pink) 22% 44%, #fe5000 44%); }
-  .card h3 { margin: 0 0 1vh; font: 800 4vh/1.1 var(--ui); }
+  .card h3 { margin: 0 0 1vh; font: 400 4.2vh/1.15 var(--serif); }
   .card p { margin: .8vh 0; color: var(--dim); font-size: 2.3vh; }
   .card .choices { display: flex; gap: 1.4vw; justify-content: center; margin-top: 3.2vh; }
   .card .choice { display: inline-flex; align-items: center; gap: 1.2vh; padding: 1.7vh 4.2vh; border-radius: 99vh; font: 700 2.4vh/1 var(--ui);
                   background: rgba(255,255,255,.1); color: #fff; filter: none; box-shadow: inset 0 0 0 1px var(--line); }
   .card .choice::after { display: none; }
-  .card .choice.focus { background: #fff; color: var(--obsidian); transform: scale(1.06); box-shadow: 0 0 0 .3vh #fff, 0 0 4vh rgba(143,227,255,.4); }
+  .card .choice.focus { background: var(--ink); color: var(--obsidian); transform: scale(1.06); box-shadow: 0 0 0 .3vh var(--gold), 0 0 4vh rgba(242,184,68,.35); }
   .card .choice.danger.focus { color: #c0203a; }
   .card .choice .dev { width: 2.8vh; height: 2.8vh; flex: none; color: var(--dim); }
   .card .choice.focus .dev { color: var(--obsidian); }
@@ -203,10 +204,10 @@
   .card .choices.vertical .choice.focus { transform: scale(1.03); }
   .card .choices.vertical .dev { width: 3.4vh; height: 3.4vh; }
   .card .choice small { display: block; margin-top: .5vh; font: 500 1.8vh/1.2 var(--ui); color: var(--dim); }
-  .card .choice.focus small { color: #4d5568; }
+  .card .choice.focus small { color: #6b5a48; }
   .card .choice .bar { margin-left: auto; width: 14vh; height: .8vh; border-radius: 99vh; background: rgba(255,255,255,.14); overflow: hidden; flex: none; }
   .card .choice .bar i { display: block; height: 100%; background: var(--ice); border-radius: inherit; transition: width .3s var(--spring); }
-  .card .choice.focus .bar { background: rgba(11,13,18,.15); }
+  .card .choice.focus .bar { background: rgba(21,15,11,.15); }
   .card .choice.focus .bar i { background: var(--obsidian); }
   .card .choice .check { width: 2.8vh; height: 2.8vh; margin-left: auto; flex: none; color: var(--ice); }
   .card .choice.focus .check { color: var(--obsidian); }
@@ -214,7 +215,7 @@
   #dlg-art { display: none; }
   .card.art { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4.4vh; align-items: center; text-align: left; max-width: 76vw; }
   .card.art #dlg-art { display: block; width: 27vh; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 1.6vh; box-shadow: 0 2vh 4vh rgba(0,0,0,.5); }
-  .card.art h3 { font: 800 6vh/1.02 var(--ui); font-stretch: 75%; }
+  .card.art h3 { font: 400 5.6vh/1.1 var(--serif); }
   .card.art .choices { justify-content: flex-start; }
   #dlg-lines { list-style: none; padding: 0; margin: 1.4vh 0 0; display: grid; gap: .9vh; font-size: 2.5vh; color: var(--dim); }
   #dlg-lines[hidden], #dlg-text[hidden] { display: none; }
@@ -232,13 +233,13 @@
   .key { height: 7.4vh; display: grid; place-items: center; border-radius: 1.3vh; background: rgba(255,255,255,.07);
          box-shadow: inset 0 0 0 1px var(--line); font: 700 3vh/1 var(--ui); transition: transform .4s var(--spring), background .2s, color .2s; }
   .key .kicon { width: 3.4vh; height: 3.4vh; }
-  .key.focus { background: #fff; color: var(--obsidian); transform: scale(1.08); box-shadow: 0 0 0 .3vh #fff, 0 0 4vh rgba(143,227,255,.45); }
+  .key.focus { background: var(--ink); color: var(--obsidian); transform: scale(1.08); box-shadow: 0 0 0 .3vh var(--gold), 0 0 4vh rgba(242,184,68,.4); }
   .results-wrap h2 { margin: 0; font: 650 2.5vh/1 var(--ui); color: var(--dim); min-height: 2.5vh; }
   .results-wrap .strip { padding: 3vh 1.6vh 2vh; margin: 0 -1.6vh; }  /* room for the focus glow */
   #results { --poster-h: 24vh; --tile: 15vh; }
 
   /* ---------- starting a game: the steel ball spins over the game's own art until its window takes over */
-  #starting { background: radial-gradient(60vw 60vh at 50% 50%, rgba(11,13,18,.6), rgba(11,13,18,.12)); backdrop-filter: none; }
+  #starting { background: radial-gradient(60vw 60vh at 50% 50%, rgba(21,15,11,.6), rgba(21,15,11,.12)); backdrop-filter: none; }
   body.starting .app-shell { opacity: 0; }
   body.starting .shade { opacity: .55; }
   body.starting .bg { filter: saturate(1.1) brightness(.8); transition: opacity .7s ease, filter .6s ease; }
