@@ -143,6 +143,28 @@ class AudioNamesPermissionTest(unittest.TestCase):
                              ["http://127.0.0.1:8765,*"], {"setting": 1})
 
 
+class SteamUpdateTest(unittest.TestCase):
+    def test_tile_text_from_steams_update_flags(self):
+        s = server.update_status
+        self.assertIsNone(s({"StateFlags": "4"}))
+        self.assertEqual(s({"StateFlags": "6"}), "Update waiting in Steam")
+        self.assertEqual(s({"StateFlags": "1026", "BytesToDownload": "200", "BytesDownloaded": "90",
+                            "BytesToStage": "200", "BytesStaged": "0"}), "Updating 22%")
+        self.assertEqual(s({"StateFlags": "1538"}), "Update paused in Steam")
+
+    def test_an_updating_game_stays_listed_but_a_first_install_doesnt(self):
+        acf = '"AppState"\n{\n\t"appid"\t"%s"\n\t"name"\t"%s"\n\t"StateFlags"\t"%s"\n%s}\n'
+        depots = '\t"InstalledDepots"\n\t{\n\t\t"11"\n\t\t{\n\t\t\t"manifest"\t"1"\n\t\t}\n\t}\n'
+        with tempfile.TemporaryDirectory() as d:
+            apps = Path(d) / "steamapps"
+            apps.mkdir()
+            for appid, name, flags, extra in ((10, "Alpha", 1026, depots), (20, "Beta", 1026, ""), (30, "Gamma", 4, depots)):
+                (apps / f"appmanifest_{appid}.acf").write_text(acf % (appid, name, flags, extra), encoding="utf-8")
+            with mock.patch.object(server, "steam_path", lambda: Path(d)):
+                got = {g["name"]: g.get("update") for g in server.steam_games()}
+        self.assertEqual(got, {"Alpha": "Updating", "Gamma": None})
+
+
 class PadSpeakerTest(unittest.TestCase):
     def test_reports_carry_the_bluetooth_crc_and_layout(self):
         import zlib

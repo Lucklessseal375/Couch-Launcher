@@ -124,6 +124,21 @@ def parse_vdf(text):
 TOOL_NAME = re.compile(r"redistributable|proton|steamvr|steamworks|steam linux runtime|dedicated server", re.I)
 
 
+UPDATING = 256 | 1024 | 1048576 | 2097152 | 4194304  # Steam StateFlags: update running/started, downloading, staging, committing
+
+
+def update_status(st):
+    """What a tile says about a Steam update, from the appmanifest's AppState; None when there isn't one."""
+    flags = int(st.get("StateFlags", "0") or 0)
+    if flags & 512:
+        return "Update paused in Steam"
+    if flags & UPDATING:
+        done = sum(int(st.get(k, "0") or 0) for k in ("BytesDownloaded", "BytesStaged"))
+        total = sum(int(st.get(k, "0") or 0) for k in ("BytesToDownload", "BytesToStage"))
+        return f"Updating {done * 100 // total}%" if total else "Updating"
+    return "Update waiting in Steam" if flags & 2 else None
+
+
 def steam_games():
     _, hidden = load_apps()
     root = steam_path()
@@ -146,12 +161,14 @@ def steam_games():
             name = st.get("name", "")
             if not appid or appid in seen or appid in hidden or TOOL_NAME.search(name):
                 continue
-            if not int(st.get("StateFlags", "0") or 0) & 4:  # not fully installed
+            update = update_status(st)
+            # Steam drops "fully installed" (4) while an update runs; installed depots say it was installed before
+            if not (int(st.get("StateFlags", "0") or 0) & 4 or update and st.get("InstalledDepots")):
                 continue
             seen.add(appid)
             games.append({"appid": appid, "name": name,
                           "lastPlayed": int(st.get("LastPlayed", "0") or 0),
-                          "size": int(st.get("SizeOnDisk", "0") or 0)})
+                          "size": int(st.get("SizeOnDisk", "0") or 0), **({"update": update} if update else {})})
     games.sort(key=lambda g: (-g["lastPlayed"], g["name"].lower()))
     return games
 
@@ -758,6 +775,7 @@ PAD_STATUS = "pad:none"  # last controller/battery state sent to the launcher; n
 PAD_READER = False  # True once the server reads the controller; otherwise the page uses the Gamepad API
 RUMBLES = []  # (when, low, high, ms): haptic pulses waiting for the controller loop
 RUMBLE_LOCK = threading.Lock()
+LIGHT = [None]  # (r, g, b) the launcher wants on the controllers' light bar; the controller loop applies it
 PAD_SPEAKER = padspeaker.Speaker()  # launcher sounds on a wireless DualSense's speaker (the page posts them)
 # Haptic cues, felt in the hands while the sounds play on the controller or the TV.
 PATTERNS = {"launch": [(0, .45, .25, 110), (.22, .9, .55, 240)],          # the race starts
@@ -836,6 +854,11 @@ def _controller_loop():
     pygame.display.init()  # needed for SDL's event queue; no window is opened
     pygame.joystick.init()
     gc.init()
+    # pygame has no light-bar call; SDL's own works on the controllers pygame opened (USB and Bluetooth alike)
+    sdl = ctypes.CDLL(os.path.join(os.path.dirname(pygame.__file__), "SDL2.dll"))
+    sdl.SDL_GameControllerFromInstanceID.argtypes, sdl.SDL_GameControllerFromInstanceID.restype = (ctypes.c_int,), ctypes.c_void_p
+    sdl.SDL_GameControllerSetLED.argtypes = (ctypes.c_void_p, ctypes.c_uint8, ctypes.c_uint8, ctypes.c_uint8)
+    lit = None  # the colour last put on the light bars
     pads = {}
     for i in range(pygame.joystick.get_count()):  # already plugged in (matters after a restart)
         if gc.is_controller(i):
@@ -877,6 +900,7 @@ def _controller_loop():
                 try:
                     c = gc.Controller(e.device_index)
                     pads[c.as_joystick().get_instance_id()] = c
+                    lit = None  # give it the current colour too
                     log.info("controller connected: %s", c.name)
                 except pygame.error:
                     pass
@@ -904,6 +928,12 @@ def _controller_loop():
                     rumble("low")
                 PAD_STATUS = s
                 emit(s)
+        if LIGHT[0] and LIGHT[0] != lit:  # the light bar colour the launcher asked for, on every controller
+            lit = LIGHT[0]
+            for iid in pads:
+                ptr = sdl.SDL_GameControllerFromInstanceID(iid)
+                if ptr:
+                    sdl.SDL_GameControllerSetLED(ptr, *lit)
         if RUMBLES:  # haptic pulses that are due, on every connected controller
             with RUMBLE_LOCK:
                 due = [r for r in RUMBLES if r[0] <= now]
@@ -1231,6 +1261,9 @@ class Handler(BaseHTTPRequestHandler):
                 set_choice(str(b.get("action")), str(b.get("key", "")))
             elif path == "/api/audio":
                 return self.send_json({"ok": True, "name": set_audio(str(b.get("id", "")))})
+            elif path == "/api/light" and kind == "local":  # the controllers' light bar: {"rgb": [r, g, b]}
+                r, g, bl = (max(0, min(255, int(v))) for v in b["rgb"])
+                LIGHT[0] = (r, g, bl)
             elif path == "/api/window":
                 act = b.get("action")
                 if act == "launcher":
@@ -1254,7 +1287,7 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 return self.send_json({"error": "not found"}, 404)
             return self.send_json({"ok": True})
-        except (KeyError, ValueError) as e:
+        except (KeyError, ValueError, TypeError) as e:
             return self.send_json({"error": f"bad request: {e}"}, 400)
         except Exception as e:  # noqa: BLE001
             log.exception("request failed")

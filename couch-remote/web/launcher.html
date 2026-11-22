@@ -788,6 +788,7 @@ function pcItems() {
   ];
 }
 
+let updateTimer;
 function build() {
   // what's running (launched from here, window still open): Resume / Close, like the PS5's first tile
   const now = $("#now"); now.innerHTML = "";
@@ -795,7 +796,7 @@ function build() {
   if (info.running) {
     const name = info.running.name, g = info.games.find(g => g.name === name);
     for (const [ic, label, cta, cls, fn] of [
-      ["resume", "Resume", "Resume", "", () => windowAction("resume")],
+      ["resume", "Resume", "Resume", "", () => { padLight(gameLight); windowAction("resume"); }],
       ["close", "Close", "Close game", "danger", () => confirmAction(`Close ${name}?`, "Progress since your last save will be lost.", "Close game", async () => {
         toast(`Closing ${name}…`);
         await windowAction("close-game");
@@ -818,7 +819,7 @@ function build() {
     t.style.setProperty("--c", a.color || "#555");
     t.dataset.title = a.name;
     t.dataset.meta = a.meta || (a.kind === "web" ? "Opens full screen" : "");
-    t.onactivate = () => launch({ id: a.id }, a.name);
+    t.onactivate = () => launch({ id: a.id }, a.name, a.color && hexColor(a.color));
     apps.append(t);
   }
 
@@ -834,13 +835,15 @@ function build() {
     };
     img.src = g.art || `/art/${g.appid}`;
     t.dataset.title = g.name;
-    t.dataset.meta = g.meta || [ago(g.lastPlayed), playtime(g.playtime)].filter(Boolean).join(", ");
+    t.dataset.meta = g.update || g.meta || [ago(g.lastPlayed), playtime(g.playtime)].filter(Boolean).join(", ");
     t.dataset.hero = g.hero || `/art/${g.appid}/hero`;
-    t.dataset.cta = "Play";
+    t.dataset.cta = g.update ? "Open Steam" : "Play";  // mid-update, Steam opens its download page, not the game
     t.game = g;  // for □ Details
-    t.onactivate = () => launch(g.id ? { id: g.id } : { game: g.appid }, g.name);
+    t.onactivate = () => launch(g.id ? { id: g.id } : { game: g.appid }, g.name, artColor(img));
     games.append(t);
   }
+  clearTimeout(updateTimer);
+  if (info.games.some(g => g.update)) updateTimer = setTimeout(refresh, 20000);  // keep an update's % moving
 
   const sys = $("#system"); sys.innerHTML = "";
   for (const p of pcItems()) {
@@ -933,11 +936,35 @@ function activate() {
 }
 function back() { if (modal) { Sound.back(); modal.onBack(); } }
 
+// ---------- the controllers' light bar (the server sets it): Steel Ball Run gold in the menu, and while a game
+// starts and plays, its own colour: the most vivid part of its cover, or a store app's brand colour
+const GOLD = [242, 184, 68];  // --gold
+let gameLight = null;
+const padLight = rgb => { if (!PREVIEW) api("/api/light", { rgb: rgb || GOLD }).catch(() => {}); };
+// LED-ready: part of the grey taken out, then full brightness (a pastel would just light up white)
+const ledColor = rgb => { const lo = Math.min(...rgb) * 0.6, c = rgb.map(v => v - lo), m = Math.max(...c); return m ? c.map(v => Math.round(v * 255 / m)) : null; };
+const hexColor = h => ledColor([1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)));
+function artColor(img) {
+  try {
+    const c = document.createElement("canvas"); c.width = c.height = 16;
+    const x = c.getContext("2d"); x.drawImage(img, 0, 0, 16, 16);
+    const d = x.getImageData(0, 0, 16, 16).data, sum = [0, 0, 0]; let w = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      const hi = Math.max(d[i], d[i + 1], d[i + 2]), lo = Math.min(d[i], d[i + 1], d[i + 2]);
+      const k = hi ? ((hi - lo) / hi) ** 2 * hi / 255 : 0;  // saturated, bright pixels count most
+      for (let j = 0; j < 3; j++) sum[j] += d[i + j] * k;
+      w += k;
+    }
+    return w > 4 ? ledColor(sum) : null;  // a grey cover, or art from another site (unreadable): gold
+  } catch { return null; }
+}
+
 // ---------- actions
 let launching = false;
-async function launch(body, name) {
+async function launch(body, name, rgb) {
   if (launching) return;
   launching = true; setTimeout(() => launching = false, 3000);
+  gameLight = rgb; padLight(rgb);
   Sound.launch();
   Intro.play("launch");
   showStarting(name);
@@ -1294,6 +1321,7 @@ async function load() {
     build();
     if (!info.padReader) gamepadLoop();
     const clipsReady = Sound.loadClips(info.sounds || []);  // decoded in the background; nothing waits on it
+    padLight();  // gold while you're in the menu
     if (!PREVIEW) {
       await Out.detect(); await clipsReady;
       if (Sound.has("bgm") && Sound.musicOn) Sound.startBgm(); else Intro.play("startup");
@@ -1314,7 +1342,7 @@ async function refresh(toResume) {
   build();
   if (toResume && info.running) focus(0, 0);  // back from the game: Resume is where you'd want to be
 }
-addEventListener("focus", () => { wake(); refresh(true); Out.detect(); if (!PREVIEW) Sound.startBgm(); });
+addEventListener("focus", () => { wake(); refresh(true); Out.detect(); padLight(); if (!PREVIEW) Sound.startBgm(); });
 </script>
 </body>
 </html>
