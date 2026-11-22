@@ -1,10 +1,10 @@
 {
-  "_help": "Tiles on the launcher and the phone's Apps tab. kind: 'url' opens a link/protocol, 'exe' runs a program, 'web' opens a site full screen in Edge (own sign-in profile). Restart the server after editing. meta: the line under the title. games: non-Steam games for the Games row (same fields as apps, plus art/hero image URLs and a meta line).",
+  "_help": "Tiles on the launcher and the phone's Apps tab. kind: 'url' opens a link/protocol, 'exe' runs a program, 'web' opens a site full screen in Edge (own sign-in profile; tv: true opens it as a smart TV, driven by the controller). Restart the server after editing. meta: the line under the title. games: non-Steam games for the Games row (same fields as apps, plus art/hero image URLs and a meta line).",
   "apps": [
     {"id": "bigpicture", "meta": "Your whole Steam library in TV mode", "name": "Steam Big Picture", "kind": "url", "target": "steam://open/bigpicture", "color": "#1a6dd1"},
     {"id": "epic", "meta": "Your Epic Games library and store", "name": "Epic Games", "kind": "exe", "target": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe", "color": "#3a3a3a"},
     {"id": "ea", "meta": "Your EA library and store", "name": "EA app", "kind": "exe", "target": "C:\\Program Files\\Electronic Arts\\EA Desktop\\EA Desktop\\EALauncher.exe", "color": "#ff4747"},
-    {"id": "youtube", "meta": "Music and videos, in YouTube's TV layout for the controller", "name": "YouTube Music", "kind": "web", "target": "https://www.youtube.com/tv", "tv": true, "color": "#e62117"},
+    {"id": "youtube", "meta": "Videos and music, in YouTube's TV app", "name": "YouTube", "kind": "web", "target": "https://www.youtube.com/tv", "tv": true, "color": "#e62117"},
     {"id": "ubisoft", "meta": "Your Ubisoft library and store", "name": "Ubisoft Connect", "kind": "exe", "target": "C:\\Program Files (x86)\\Ubisoft\\Ubisoft Game Launcher\\UbisoftConnect.exe", "color": "#0070ff"}
   ],
   "games": [

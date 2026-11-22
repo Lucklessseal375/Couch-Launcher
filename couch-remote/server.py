@@ -386,7 +386,7 @@ def _key(vk, up=False, ext=False):
 
 
 # The controller as a TV remote, only while a TV site (YouTube's TV app) is in front: ✕ select, ○ back,
-# □ play/pause, L1/R1 previous/next track.
+# □ play/pause, L1/R1 previous/next.
 TV_KEYS = {"up": "up", "down": "down", "left": "left", "right": "right", "a": "enter", "b": "escape",
            "x": "playpause", "l1": "prev", "r1": "next"}
 
@@ -596,7 +596,18 @@ def edge_tv(url, profile):
         focus_window(h)
         return
     port_file = PROFILES / profile / "DevToolsActivePort"
-    port_file.unlink(missing_ok=True)  # stale from a crash; a live one is refused (in use) and kept
+    # Edge can linger on the profile with no window; a launch would hand off to it and show a blank new-tab page
+    # with no DevTools port. Nothing of ours is open on this profile (checked above), so end any such leftover.
+    stale = subprocess.run(["powershell", "-NoProfile", "-Command",
+                            "Get-CimInstance Win32_Process -Filter \"Name='msedge.exe'\" | Where-Object { $_.CommandLine -like "
+                            f"'*{PROFILES / profile}*' }} | ForEach-Object {{ $_.ProcessId }}"],
+                           capture_output=True, text=True, creationflags=0x08000000).stdout.split()
+    for pid in stale:
+        subprocess.run(["taskkill", "/PID", pid, "/T", "/F"], capture_output=True, creationflags=0x08000000)
+    if stale:
+        log.info("TV mode: ended a leftover Edge on %s (%s)", profile, ", ".join(stale))
+        time.sleep(1)
+    port_file.unlink(missing_ok=True)
     edge_kiosk("about:blank", profile, TV_USER_AGENT, extra=["--remote-debugging-port=0"])  # 0: Edge picks a free port
     for _ in range(100):
         try:
@@ -607,7 +618,7 @@ def edge_tv(url, profile):
         except (OSError, ValueError, IndexError, StopIteration):
             time.sleep(0.15)
     else:
-        log.warning("TV mode: Edge's DevTools port never came up; opening %s as a plain TV user agent", url)
+        log.warning("TV mode: Edge's DevTools port never came up; %s may open as the desktop site", url)
         return
     pid = None
     try:
