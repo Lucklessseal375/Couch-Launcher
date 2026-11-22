@@ -1258,6 +1258,7 @@ addEventListener("keydown", e => {
   const k = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" }[e.key];
   const padKey = k || ["Enter", " ", "Escape", "Backspace"].includes(e.key);
   if (padKey) e.preventDefault();
+  if (e.repeat && !k) return;  // a held key repeats ~30 ms apart: once fired Sleep 63 times; only arrows repeat
   if (wake()) return;
   if (padSeen && padKey) return;
   if (k) move(k);
