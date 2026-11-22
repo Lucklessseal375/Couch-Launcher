@@ -509,7 +509,7 @@ const Sound = (() => {
 
 // ---------- where launcher sounds play: the DualSense speaker when Windows has it (controller on a USB
 // cable; over Bluetooth Windows doesn't offer it), otherwise the TV. Device names need a media permission;
-// the server starts this page with Edge's fake-ui flag, which grants it without a prompt.
+// the server pre-grants it in this page's own Edge profile (allow_audio_names), so there is no prompt.
 const Out = {
   id: "", where: "TV",
   async detect() {

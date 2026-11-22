@@ -483,6 +483,20 @@ def edge_kiosk(url, profile, user_agent=None, extra=()):
     subprocess.Popen(args, creationflags=0x00000008 | 0x00000200)  # DETACHED | NEW_PROCESS_GROUP
 
 
+def allow_audio_names(profile, origin):
+    """Grants our own page the media permission in its Edge profile, so it can see audio device names (to play
+    sounds on the DualSense speaker) with no prompt and no unsupported command-line flag (which shows a warning
+    banner). Edge must not be running on the profile; before its first run there is no file yet and Edge asks once."""
+    prefs = PROFILES / profile / "Default" / "Preferences"
+    try:
+        data = json.loads(prefs.read_text(encoding="utf-8"))
+        ex = data.setdefault("profile", {}).setdefault("content_settings", {}).setdefault("exceptions", {})
+        ex.setdefault("media_stream_mic", {})[f"{origin},*"] = {"setting": 1}
+        prefs.write_text(json.dumps(data), encoding="utf-8")
+    except (OSError, ValueError):
+        pass
+
+
 _launcher_spawned = [0.0]
 STARTED = time.time()  # when this server process started (sign-in, or a manual restart)
 
@@ -493,9 +507,8 @@ def open_launcher():
         focus_window(h)
     elif time.time() - _launcher_spawned[0] > 15:  # its title isn't set until the page loads
         _launcher_spawned[0] = time.time()
-        # fake-ui flag: lets the launcher page see audio device names without a prompt, so it can play
-        # its sounds on the DualSense speaker (only our own local page runs in this profile)
-        edge_kiosk(f"http://127.0.0.1:{CONFIG['port']}/launcher", "launcher", extra=("--use-fake-ui-for-media-stream",))
+        allow_audio_names("launcher", f"http://127.0.0.1:{CONFIG['port']}")
+        edge_kiosk(f"http://127.0.0.1:{CONFIG['port']}/launcher", "launcher")
 
         def bring_forward():  # Windows won't let a window started from the background take focus
             for _ in range(120):  # up to 30 s
