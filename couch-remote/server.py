@@ -385,6 +385,12 @@ def _key(vk, up=False, ext=False):
     return i
 
 
+# The controller as a TV remote, only while a TV site (YouTube's TV app) is in front: ✕ select, ○ back,
+# □ play/pause, L1/R1 previous/next track.
+TV_KEYS = {"up": "up", "down": "down", "left": "left", "right": "right", "a": "enter", "b": "escape",
+           "x": "playpause", "l1": "prev", "r1": "next"}
+
+
 def press(name):
     vk, ext = KEYS[name]
     _send([_key(vk, False, ext), _key(vk, True, ext)])
@@ -509,6 +515,143 @@ def edge_kiosk(url, profile, user_agent=None, extra=()):
         args.append(f"--user-agent={user_agent}")
     args += list(extra)
     subprocess.Popen(args, creationflags=0x00000008 | 0x00000200)  # DETACHED | NEW_PROCESS_GROUP
+
+
+# ---------------------------------------------------------------- TV sites (YouTube's TV app)
+# The --user-agent flag alone no longer gets YouTube's TV app: Edge still tells the site it is desktop Edge on Windows
+# (Sec-CH-UA client hints, which an extension can't strip either), so youtube.com/tv redirects to the desktop site. A
+# DevTools session on the window sets the whole identity to a Samsung TV; it only holds while it stays attached.
+TV_HINTS = {"brands": [], "fullVersion": "", "platform": "Tizen", "platformVersion": "6.0", "architecture": "arm",
+            "model": "SMART-TV", "mobile": False}
+TV_PIDS = set()  # Edge browser processes showing a TV site: the controller drives them with TV-remote keys
+TV_OPEN = {}  # profile -> its Edge browser pid while its TV window is open
+
+
+class Cdp:
+    """Just enough websocket client for one DevTools target (text frames, masked sends, no Origin header, so only
+    local programs can connect; web pages can't)."""
+
+    def __init__(self, ws_url):
+        import base64
+        host, rest = ws_url[len("ws://"):].split("/", 1)
+        h, port = host.split(":")
+        self.s = socket.create_connection((h, int(port)), timeout=15)
+        key = base64.b64encode(os.urandom(16)).decode()
+        self.s.sendall((f"GET /{rest} HTTP/1.1\r\nHost: {host}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                        f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n").encode())
+        resp = b""
+        while b"\r\n\r\n" not in resp:
+            chunk = self.s.recv(1)
+            if not chunk:
+                raise ConnectionError("devtools closed the handshake")
+            resp += chunk
+        if b" 101 " not in resp.split(b"\r\n")[0]:
+            raise ConnectionError(resp[:80])
+        self.n = 0
+
+    def _read(self, n):
+        buf = b""
+        while len(buf) < n:
+            chunk = self.s.recv(n - len(buf))
+            if not chunk:
+                raise ConnectionError("devtools closed")
+            buf += chunk
+        return buf
+
+    def recv(self):
+        out = b""
+        while True:
+            b1, b2 = self._read(2)
+            n = b2 & 0x7F
+            if n == 126:
+                n = int.from_bytes(self._read(2), "big")
+            elif n == 127:
+                n = int.from_bytes(self._read(8), "big")
+            out += self._read(n)
+            if b1 & 0x0F == 0x8:
+                raise ConnectionError("devtools closed")
+            if b1 & 0x80:
+                return json.loads(out.decode() or "{}")
+
+    def send(self, method, **params):
+        self.n += 1
+        data = json.dumps({"id": self.n, "method": method, "params": params}).encode()
+        mask = os.urandom(4)
+        n = len(data)
+        hdr = bytes([0x81]) + (bytes([0x80 | n]) if n < 126 else bytes([0x80 | 126]) + n.to_bytes(2, "big"))
+        self.s.sendall(hdr + mask + bytes(b ^ mask[i % 4] for i, b in enumerate(data)))
+        while True:
+            msg = self.recv()
+            if msg.get("id") == self.n:
+                if "error" in msg:
+                    raise RuntimeError(msg["error"])
+                return msg.get("result", {})
+
+
+def edge_tv(url, profile):
+    """Opens a TV site in Edge as a Samsung TV and keeps the DevTools session open until the window closes."""
+    import urllib.request
+    h = TV_OPEN.get(profile) and pid_window(TV_OPEN[profile])
+    if h:  # already open: a second Edge launch on the profile would only add a blank window
+        focus_window(h)
+        return
+    port_file = PROFILES / profile / "DevToolsActivePort"
+    port_file.unlink(missing_ok=True)  # stale from a crash; a live one is refused (in use) and kept
+    edge_kiosk("about:blank", profile, TV_USER_AGENT, extra=["--remote-debugging-port=0"])  # 0: Edge picks a free port
+    for _ in range(100):
+        try:
+            port = int(port_file.read_text().split()[0])
+            pages = json.load(urllib.request.urlopen(f"http://127.0.0.1:{port}/json/list", timeout=2))
+            page = next(p for p in pages if p.get("type") == "page")
+            break
+        except (OSError, ValueError, IndexError, StopIteration):
+            time.sleep(0.15)
+    else:
+        log.warning("TV mode: Edge's DevTools port never came up; opening %s as a plain TV user agent", url)
+        return
+    pid = None
+    try:
+        browser = Cdp(json.load(urllib.request.urlopen(f"http://127.0.0.1:{port}/json/version", timeout=2))["webSocketDebuggerUrl"])
+        pid = next((p["id"] for p in browser.send("SystemInfo.getProcessInfo").get("processInfo", []) if p.get("type") == "browser"), None)
+        browser.s.close()
+    except (OSError, ValueError, RuntimeError, KeyError):
+        pass
+    try:
+        cdp = Cdp(page["webSocketDebuggerUrl"])
+        cdp.send("Emulation.setUserAgentOverride", userAgent=TV_USER_AGENT, userAgentMetadata=TV_HINTS)
+        cdp.send("Page.navigate", url=url)
+        if pid:
+            TV_PIDS.add(pid)
+            TV_OPEN[profile] = pid
+        log.info("TV mode: %s open as a TV (edge pid %s)", url, pid)
+        cdp.s.settimeout(None)
+        while True:  # stay attached: the TV identity lasts only as long as this session
+            cdp.recv()
+    except (OSError, ValueError, RuntimeError, ConnectionError) as e:
+        log.info("TV mode: %s closed (%s)", url, e)
+    finally:
+        TV_PIDS.discard(pid)
+        TV_OPEN.pop(profile, None)
+
+
+def window_pid(h):
+    pid = wintypes.DWORD()
+    user32.GetWindowThreadProcessId(h, ctypes.byref(pid))
+    return pid.value
+
+
+def pid_window(pid):
+    """A visible, titled top-level window of process pid, or None."""
+    found = []
+
+    def cb(h, _):
+        if user32.IsWindowVisible(h) and window_pid(h) == pid and window_title(h):
+            found.append(h)
+            return False
+        return True
+
+    user32.EnumWindows(WNDENUMPROC(cb), 0)
+    return found[0] if found else None
 
 
 def allow_audio_names(profile, origin):
@@ -918,6 +1061,8 @@ def _controller_loop():
                 open_launcher()
         elif launcher_in_front():
             emit(action)
+        elif TV_PIDS and window_pid(user32.GetForegroundWindow()) in TV_PIDS and action in TV_KEYS:
+            press(TV_KEYS[action])  # a TV site reads remote keys, not the controller
 
     while True:
         for e in pygame.event.get():
@@ -1004,7 +1149,10 @@ def launch_app(app_id):
         subprocess.Popen([target] + list(app.get("args", [])), cwd=str(Path(target).parent),
                          creationflags=0x00000008 | 0x00000200)
     elif kind == "web":
-        edge_kiosk(target, f"web-{app['id']}", TV_USER_AGENT if app.get("tv") else None)
+        if app.get("tv"):
+            threading.Thread(target=edge_tv, args=(target, f"web-{app['id']}"), daemon=True).start()
+        else:
+            edge_kiosk(target, f"web-{app['id']}")
     else:
         raise ValueError(f"unknown kind {kind!r}")
     log.info("launched app %s", app_id)
