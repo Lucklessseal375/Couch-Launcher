@@ -46,6 +46,7 @@ A PS5-style, controller-driven TV launcher ("Couch") for a Windows PC: a Python 
 - Older gotchas (YouTube CDP, Edge lingering, Steam elevation, heredoc escapes, hooks opening file:// tabs): see `PICKUP.md` §6 and the morning SESSION.md.
 
 ## 5. Immediate Next Steps
+0. **GTA work is parked** (user, 16:15): see `.scratch/couch-launcher/issues/10-gta-launch-speed-and-vanishing.md` for the full state, the open "GTA vanished at 16:12:28" question, and what to try next. Windows now uses all 32 threads (msconfig limit removed). Since then: Starting screen survives brief focus loss (`02d4513`), shows "Last time it took about N s" (`9841626`), and game launches ignore windows of already-running apps (`3d5c181`).
 1. **Watch the first GTA press after the next login/reboot**: Epic silent + Rockstar warm-started behind Couch → should take the fast path (~14 s to game start) with only Couch's screen, then GTA. `warm_rockstar` hasn't run for real yet (Rockstar was already open when the server restarted at 15:47). If anything hangs, revert `79a4443`, then `121f64e`/`1873803` (covering), in that order.
 2. Covering during a launch (`121f64e`, `1873803`) is unit-tested; the user saw Rockstar once before `1873803` (an already-open window). Confirm it stays hidden now.
 3. Ask the user to keep **Auto Sign In** ticked in Rockstar's launcher; it asked for a password again at 15:30.
