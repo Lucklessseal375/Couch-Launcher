@@ -66,6 +66,12 @@
   #pad { display: flex; align-items: center; gap: 1vh; color: var(--dim); font-size: 2.1vh; }
   #pad svg { width: 5.2vh; height: 2.8vh; color: var(--ink); }
   #pad.low, #pad.low svg { color: var(--ps-circle); }
+  /* weather, after iOS's widget: icon, temperature, then the day in one quiet line */
+  #weather { display: flex; align-items: center; gap: 1.2vh; }
+  #weather[hidden] { display: none; }
+  #weather svg { width: 4.6vh; height: 4.6vh; color: var(--gold); flex: none; }
+  #weather b { display: block; font: 650 3.4vh/1 var(--ui); font-variant-numeric: tabular-nums; }
+  #weather small { display: block; margin-top: .6vh; font-size: 1.8vh; color: var(--dim); white-space: nowrap; }
   #bell { display: flex; align-items: center; gap: .6vh; font: 700 2.1vh/1 var(--ui); color: var(--ink); }
   #bell[hidden] { display: none; }
   #bell svg { width: 3vh; height: 3vh; color: var(--gold); }
@@ -101,6 +107,12 @@
   body:not(.chosen) .cta { visibility: hidden; } /* ✕ does nothing until a tile is selected */
   #d-title.long { font-size: 5.2vh; padding-top: 1.6vh; }
   .details.swap #d-title { animation: dash .5s var(--spring); }
+  /* the line and the pill follow the title in, a beat apart, so a focus change reads as one motion */
+  .details.swap #d-meta { animation: rise .5s var(--spring) .06s both; }
+  .details.swap .cta { animation: rise-cta .5s var(--spring) .12s both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(1.2vh); } }
+  @keyframes rise-cta { from { opacity: 0; transform: translateY(1.2vh) rotate(-1.5deg); } }
+  section h2 { transition: color .35s ease; }
   @keyframes dash { from { opacity: 0; transform: translateX(-3vw) skewX(-12deg); } to { opacity: 1; transform: none; } }
   #sfx { position: absolute; right: 7vw; top: 0; font: 900 6vh/1 "Yu Gothic UI", "Meiryo", "MS Gothic", sans-serif; color: var(--pink);
          -webkit-text-stroke: .22vh #fff; letter-spacing: -.05em; opacity: 0; transform: skewX(-14deg); pointer-events: none;
@@ -175,6 +187,10 @@
   .sys .ring { width: 5.6vh; height: 5.6vh; border-radius: 50%; flex: none;
     background: conic-gradient(var(--rc, var(--gold)) calc(var(--v) * 100%), rgba(255,255,255,.16) 0);
     -webkit-mask: radial-gradient(circle, transparent 56%, #000 58%); mask: radial-gradient(circle, transparent 56%, #000 58%); }
+  @property --v { syntax: "<number>"; inherits: true; initial-value: 0; }
+  .sys .ring { animation: fill 1.1s var(--spring) .15s both; }  /* rings fill up when they appear */
+  @keyframes fill { from { --v: 0; } }
+  footer .p.new { animation: rise .35s var(--spring) both; }
   .sys .glance .ring:not(:only-child) { width: 4.4vh; height: 4.4vh; }
   .sys small { display: block; margin-top: -.6vh; font: 500 1.7vh/1 var(--ui); color: var(--dim); white-space: nowrap; }
   .sys.focus small { color: var(--ink); }
@@ -290,7 +306,8 @@
 
   /* Windows "Animation effects" off: ゴゴゴ becomes a fade; nothing spins, shakes, slides or zooms */
   @media (prefers-reduced-motion: reduce) {
-    .sky::after, #idle-art, #idle-ball, #golden-spin, .app-shell, .details.swap #d-title, .details.swap #sfx span, .item.focus .badge img, .card, .overlay.show, .launch .ball { animation: none !important; }
+    .sky::after, #idle-art, #idle-ball, #golden-spin, .app-shell, .details.swap #d-title, .details.swap #sfx span, .item.focus .badge img, .card, .overlay.show, .launch .ball,
+    .details.swap #d-meta, .details.swap .cta, .sys .ring, footer .p.new { animation: none !important; }
     .details.swap #sfx { animation: fade-sfx 1.6s ease-out; }
     #rows, .track, .item, .item .badge, .key { transition: opacity .2s, box-shadow .2s, filter .2s; }
     .item.focus, .card .choice.focus, .key.focus { transform: none; }
@@ -335,6 +352,11 @@
     <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17.5l5-4.5 4 3.5 2.5-2 4.5 4"/></symbol>
     <symbol id="i-tasks" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M6.5 13h2.5l1.6-3.5 2.8 6 1.6-2.5h2.5"/></symbol>
     <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .9-1 1.6v.4M12 17h.01"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+    <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.7-9h1.8a4.5 4.5 0 0 1 0 9z"/></symbol>
+    <symbol id="i-rain" viewBox="0 0 24 24"><path d="M16 13h1.5a4 4 0 0 0 0-8h-1.3A6 6 0 1 0 7 13"/><path d="M8 17l-1 3M12 17l-1 3M16 17l-1 3"/></symbol>
+    <symbol id="i-snow" viewBox="0 0 24 24"><path d="M16 13h1.5a4 4 0 0 0 0-8h-1.3A6 6 0 1 0 7 13"/><path d="M8 18h.01M12 18h.01M16 18h.01M10 21h.01M14 21h.01"/></symbol>
+    <symbol id="i-storm" viewBox="0 0 24 24"><path d="M16 13h1.5a4 4 0 0 0 0-8h-1.3A6 6 0 1 0 7 13"/><path d="M13 12l-3 5h4l-3 5"/></symbol>
     <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></symbol>
     <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
     <symbol id="i-restart" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/></symbol>
@@ -348,7 +370,7 @@
 <div class="app-shell">
   <header>
     <div class="brand"><svg class="mark" viewBox="0 0 2 2"><use href="#horseshoe"/></svg><h1>Couch</h1></div>
-    <div class="status"><div id="bell" hidden></div><div id="pad"></div><div class="time"><div id="clock">--:--</div><div id="date"></div></div></div>
+    <div class="status"><div id="weather" hidden></div><div id="bell" hidden></div><div id="pad"></div><div class="time"><div id="clock">--:--</div><div id="date"></div></div></div>
   </header>
   <div class="details" id="details">
     <h2 id="d-title">Pick something to play</h2>
@@ -871,6 +893,20 @@ function greet() {
 }
 setInterval(greet, 60000); greet();
 
+// weather in the header (set "weather": {"city": ...} in config.json; nothing shows or is fetched without it)
+const WX = c => c === 0 ? ["sun", "Clear"] : c <= 2 ? ["sun", "Partly cloudy"] : c === 3 ? ["cloud", "Cloudy"] : c <= 48 ? ["cloud", "Fog"]
+  : c <= 57 ? ["rain", "Drizzle"] : c <= 67 ? ["rain", "Rain"] : c <= 77 ? ["snow", "Snow"] : c <= 82 ? ["rain", "Showers"]
+  : c <= 86 ? ["snow", "Snow showers"] : ["storm", "Thunderstorms"];
+function renderWeather(w) {
+  const b = $("#weather"); b.hidden = !w;
+  if (!w) return;
+  const [ic, label] = WX(w.code);
+  b.innerHTML = `${icon(!w.day && ic === "sun" ? "moon" : ic)}<div><b>${w.temp}°</b><small>${label} · H ${w.hi}° L ${w.lo}°</small></div>`;
+  b.title = w.city;
+}
+const showWeather = () => api("/api/weather").then(r => renderWeather(r.weather)).catch(() => {});
+showWeather(); setInterval(showWeather, 15 * 60000);
+
 function ago(sec) {
   if (!sec) return "Not played yet";
   const days = Math.floor((Date.now() / 1000 - sec) / 86400);
@@ -894,8 +930,13 @@ function showDetails(e) {
 }
 
 // ---------- context-aware prompt bar (PS5 style)
+let promptsWere = "";
 function setPrompts(items) {
-  $("#prompts").innerHTML = items.map(([g, label]) => `<span class="p">${[].concat(g).map(x => GLYPH[x]).join("")}<span>${esc(label)}</span></span>`).join("")
+  const key = JSON.stringify(items) + Sound.on + Out.where;
+  if (key === promptsWere) return;  // unchanged: leave it still, so only real changes move
+  const fresh = promptsWere !== "";
+  promptsWere = key;
+  $("#prompts").innerHTML = items.map(([g, label]) => `<span class="p${fresh ? " new" : ""}">${[].concat(g).map(x => GLYPH[x]).join("")}<span>${esc(label)}</span></span>`).join("")
     + `<span class="p sound">${icon(Sound.on ? "sound" : "mute")}<span>${Sound.on ? `Menu sounds on the ${Out.where}` : "Menu sounds off"}</span></span>`;
 }
 function updatePrompts() {

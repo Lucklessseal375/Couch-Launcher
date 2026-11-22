@@ -1199,6 +1199,40 @@ def toggle_mic():
     log.info("microphone %s (mute button)", "on" if muted else "muted")
 
 
+WEATHER = {"at": 0.0, "place": None, "now": None}
+WEATHER_LOCK = threading.Lock()
+
+
+def weather():
+    """Current weather for config.json's "weather": {"city": ..., "unit": "fahrenheit" | "celsius"}, from Open-Meteo
+    (free, no account), refreshed at most every 30 min. None when no city is set (then nothing is sent anywhere) or
+    it can't be reached; the last good reading stays meanwhile."""
+    cfg = CONFIG.get("weather") or {}
+    if not cfg.get("city"):
+        return None
+    with WEATHER_LOCK:
+        if time.time() - WEATHER["at"] < 1800:
+            return WEATHER["now"]
+        WEATHER["at"] = time.time()
+        import urllib.request
+        from urllib.parse import quote
+        get = lambda url: json.load(urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "Couch"}), timeout=6))
+        try:
+            if not WEATHER["place"]:
+                WEATHER["place"] = get(f"https://geocoding-api.open-meteo.com/v1/search?count=1&name={quote(cfg['city'])}")["results"][0]
+            pl, unit = WEATHER["place"], "celsius" if cfg.get("unit") == "celsius" else "fahrenheit"
+            w = get(f"https://api.open-meteo.com/v1/forecast?latitude={pl['latitude']}&longitude={pl['longitude']}"
+                    f"&current=temperature_2m,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min"
+                    f"&temperature_unit={unit}&timezone=auto&forecast_days=1")
+            c, d = w["current"], w["daily"]
+            WEATHER["now"] = {"city": pl["name"], "temp": round(c["temperature_2m"]), "code": int(c["weather_code"]),
+                              "day": bool(c["is_day"]), "hi": round(d["temperature_2m_max"][0]),
+                              "lo": round(d["temperature_2m_min"][0])}
+        except (OSError, ValueError, KeyError, IndexError, TypeError) as e:
+            log.info("weather unavailable: %s", e)
+        return WEATHER["now"]
+
+
 def fixed_drives():
     """Each local hard drive: [{"name": "C:", "total", "free"}]."""
     out, mask = [], kernel32.GetLogicalDrives()
@@ -1717,6 +1751,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(task_list())
             if path == "/api/volume":
                 return self.send_json(audio.volume_state())
+            if path == "/api/weather":
+                return self.send_json({"weather": weather()})
             if path == "/api/storage":
                 return self.send_json({"drives": fixed_drives()})
             if path == "/api/media":
