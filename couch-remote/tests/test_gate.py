@@ -152,8 +152,10 @@ class PadSpeakerTest(unittest.TestCase):
             self.assertEqual(int.from_bytes(r[-4:], "little"), zlib.crc32(b"\xa2" + r[:-4]))
         a = ps.audio_report(17, bytes(range(200)) * 2)
         self.assertEqual((a[1], a[9], a[10], a[11], a[140], a[141], a[142:144]), (0x10, 34, 0xD2, 64, 0xD3, 200, b"\x00\x01"))
+        self.assertEqual(ps.audio_report(1, bytes(400), bytes(range(128)))[12:140], bytes(range(128)))  # the grips
+        self.assertEqual(ps.BLOCK_BYTES, 2048)  # what the launcher page posts per report
         c = ps.control_report(70, 2)
-        self.assertEqual((c[3], c[4], c[8], c[10], c[40]), (0xA0, 0x80, 70, 0x30, 0x02))
+        self.assertEqual((c[3], c[4], c[8], c[10], c[39], c[40], c[42]), (0xA0, 0xE0, 70, 0x30, 0, 0x02, 0))
 
     def test_only_bluetooth_dualsenses(self):
         tail = "#{4d1e55b2-f16f-11cf-88cb-001111000030}"

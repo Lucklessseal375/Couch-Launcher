@@ -1,8 +1,8 @@
-"""Launcher sounds on a DualSense's own speaker over Bluetooth.
+"""Launcher sounds on a DualSense's own speaker, and felt in its grips, over Bluetooth.
 
 Windows offers the controller's speaker as a sound device only over USB. Over Bluetooth a PS5 sends it Opus audio
-inside HID output report 0x39, so this does the same: the launcher page posts what it plays (16-bit mono PCM at
-45 kHz, see feed) and a thread paces it out to every DualSense connected over Bluetooth, then lets the link rest.
+and haptic samples inside HID output report 0x39, so this does the same: the launcher page posts what it plays
+(see feed) and a thread paces it out to every DualSense connected over Bluetooth, then lets the link rest.
 Report layout and rates follow dualsense_BT_audio (src/ds5.h), which documents KytyPS5 and DS5Dongle (MIT).
 """
 import ctypes
@@ -19,6 +19,8 @@ RATE = 45000          # the controller plays its "48 kHz" Opus stream at 45 kHz
 BLOCK = 960           # samples per report: two 480-sample Opus frames, 21.333 ms
 PERIOD = BLOCK / RATE
 FRAME = 200           # bytes per Opus frame: CBR 160 kbit/s
+FEEL = 128            # haptic bytes per report: 64 frames x 2 grips, signed 8-bit at 3 kHz
+BLOCK_BYTES = BLOCK * 2 + FEEL  # one posted block: 960 16-bit mono samples at 45 kHz, then the grips' samples
 MAX_BLOCKS = 10       # buffered sound cap (~210 ms), so the delay stays short if the page runs ahead
 VOLUME = 100          # the controller's speaker volume: 100 is its top (the launcher's own sliders set the levels)
 PREAMP = 7            # its speaker preamp, 0..7: 2 = +6 dB (what Linux uses), 7 = as loud as it goes
@@ -34,18 +36,21 @@ def _sealed(r):
 
 
 def control_report(volume=VOLUME, preamp=PREAMP):
-    """0x31: sound to the speaker (headphone jack muted), the speaker volume and its preamp gain."""
+    """0x31: sound to the speaker (headphone jack muted), the speaker volume and its preamp gain, and the grips at
+    full strength: no motor power reduction, no built-in haptic low-pass (their bytes, r[39] and r[42], stay 0)."""
     r = bytearray(78)
     r[0:3] = b"\x31\x00\x10"
-    r[3], r[4] = 0xA0, 0x80            # valid: audio control + speaker volume; audio control 2
+    r[3] = 0xA0                        # valid: audio control + speaker volume
+    r[4] = 0x80 | 0x40 | 0x20          # valid: audio control 2, motor power level, haptic low-pass filter
     r[8], r[10], r[40] = volume, 0x30, preamp & 7
     return _sealed(r)
 
 
-def audio_report(i, opus):
-    """0x39 number i: one 21.333 ms block (two Opus frames). Its haptic samples stay zero."""
+def audio_report(i, opus, feel=bytes(FEEL)):
+    """0x39 number i: one 21.333 ms block: haptic samples for the grips, then two Opus frames for the speaker."""
     r = bytearray(547)
     r[0:12] = bytes((0x39, (i & 15) << 4, 0x91, 6, 0x7E, 48, 48, 48, 48, i * 2 & 255, 0xD2, 64))
+    r[12:12 + FEEL] = feel
     r[140:142] = bytes((0xD3, FRAME))
     r[142:142 + 2 * FRAME] = opus
     return _sealed(r)
@@ -149,13 +154,13 @@ class Speaker:
     def available(self):
         return bool(self.opus) and time.monotonic() > self.dead_until and bool(pad_paths())
 
-    def feed(self, pcm):
-        """Queue whole blocks of 16-bit mono PCM at 45 kHz. False: there's no wireless controller to play it on."""
+    def feed(self, blocks):
+        """Queue whole blocks (BLOCK_BYTES each). False: there's no wireless controller to play them on."""
         if not (self.streaming or self.available()):
             return False
         with self.lock:
-            self.buf += pcm
-            del self.buf[:max(0, len(self.buf) - MAX_BLOCKS * BLOCK * 2)]
+            self.buf += blocks
+            del self.buf[:max(0, len(self.buf) - MAX_BLOCKS * BLOCK_BYTES)]
         self.wake.set()
         return True
 
@@ -176,18 +181,19 @@ class Speaker:
                 continue
             self.streaming = True
             ready = time.monotonic() + 0.1
-            while len(self.buf) < 3 * BLOCK * 2 and time.monotonic() < ready:  # a head start absorbs posting jitter
+            while len(self.buf) < 3 * BLOCK_BYTES and time.monotonic() < ready:  # a head start absorbs posting jitter
                 time.sleep(0.005)
             start, i, quiet = time.perf_counter() - 2 * PERIOD, 0, 0  # the first three go at once to fill its buffer
             while pads and quiet < 50:  # about a second with nothing new: let the link rest
                 with self.lock:
-                    chunk = bytes(self.buf[:BLOCK * 2])
-                    del self.buf[:BLOCK * 2]
+                    chunk = bytes(self.buf[:BLOCK_BYTES])
+                    del self.buf[:BLOCK_BYTES]
                 quiet = 0 if chunk else quiet + 1
-                mono = array("h", chunk or bytes(BLOCK * 2))
+                chunk = chunk or bytes(BLOCK_BYTES)
+                mono = array("h", chunk[:BLOCK * 2])
                 stereo[0::2] = mono
                 stereo[1::2] = mono
-                pads = keep(pads, audio_report(i, enc.encode(stereo)))
+                pads = keep(pads, audio_report(i, enc.encode(stereo), chunk[BLOCK * 2:]))
                 i += 1
                 wait = start + i * PERIOD - time.perf_counter()
                 if wait > 0:
@@ -199,13 +205,15 @@ class Speaker:
             self.streaming = False
 
 
-if __name__ == "__main__":  # python padspeaker.py: a short test tone on every wireless DualSense
+if __name__ == "__main__":  # python padspeaker.py: a two-note chime on every wireless DualSense, with a tap you feel
     import math
     s = Speaker()
     print("wireless DualSenses:", pad_paths() or "none", "| opus:", bool(s.opus))
-    for n in range(47):  # one second: a soft two-note chime
-        f = 660 if n < 23 else 990
-        s.feed(array("h", (int(9000 * math.sin(2 * math.pi * f * (n * BLOCK + k) / RATE) * (1 - (n % 23) / 23))
-                           for k in range(BLOCK))).tobytes())
+    for n in range(46):  # about a second: two notes, each starting with a short 150 Hz thump in the grips
+        f, age = (660, n) if n < 23 else (990, n - 23)
+        sound = array("h", (int(9000 * (1 - age / 23) * math.sin(2 * math.pi * f * (n * BLOCK + k) / RATE)) for k in range(BLOCK)))
+        thump = array("b", (int(110 * max(0.0, 1 - age / 4) * math.sin(2 * math.pi * 150 * (n * 64 + k // 2) / 3000))
+                            for k in range(FEEL)))
+        s.feed(sound.tobytes() + thump.tobytes())
         time.sleep(PERIOD)
     time.sleep(1.5)

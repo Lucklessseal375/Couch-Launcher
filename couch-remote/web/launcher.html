@@ -364,27 +364,43 @@ const GLYPH = {
   options: '<span class="sh"><svg viewBox="0 0 44 26"><use href="#g-options"/></svg></span>',
 };
 
-// ---------- a wireless DualSense's speaker: Windows can't play to it, so the server sends it what this page plays
-// (padspeaker.py). This runs in the audio thread: it mixes the launcher's sound down to mono, resamples it to the
-// controller's 45 kHz and hands it over in 960-sample blocks (one Bluetooth report each), resting after 0.5 s of quiet.
+// ---------- a wireless DualSense's speaker and grips: Windows can't play to them, so the server sends them what
+// this page plays (padspeaker.py). This runs in the audio thread. Input 0 (everything) becomes the speaker: mono,
+// resampled to the controller's 45 kHz. Input 1 (the menu sounds, not music) becomes what the grips feel: how loud
+// its low end (below ~400 Hz) is sets a 150 Hz buzz, full strength at once and fading in ~25 ms, so each sound
+// lands as a crisp tap the way the PS5 menu's do. Each report's worth (2048 bytes: 960 16-bit samples, then
+// 64 x 2 grips of 8-bit at 3 kHz) is handed over in one block; after 0.5 s of quiet it rests.
 function padTapWorklet() {
+  const A = 1 - Math.exp(-2 * Math.PI * 400 / 45000), R = Math.exp(-1 / (0.025 * 45000)), W = 2 * Math.PI * 150 / 3000;
+  const clamp = x => Math.max(-1, Math.min(1, x));
   registerProcessor("pad-tap", class extends AudioWorkletProcessor {
-    constructor() { super(); this.step = sampleRate / 45000; this.t = 0; this.prev = 0; this.block = new Int16Array(960); this.n = 0; this.loud = false; this.quiet = 99; }
-    process([input]) {
-      const [l, r = l] = input, len = l ? l.length : 128;
+    constructor() {
+      super(); this.step = sampleRate / 45000; this.t = 0; this.prev = 0; this.prevH = 0; this.lp1 = 0; this.lp2 = 0; this.env = 0; this.ph = 0;
+      this.buf = new ArrayBuffer(2048); this.block = new Int16Array(this.buf, 0, 960); this.feel = new Int8Array(this.buf, 1920, 128);
+      this.n = 0; this.loud = false; this.quiet = 99;
+    }
+    process([a, f]) {
+      const [l, r = l] = a, [fl, fr = fl] = f, len = (l || fl)?.length || 128;
       for (let i = 0; i < len; i++) {
-        const s = l ? (l[i] + r[i]) / 2 : 0;
-        for (; this.t < 1; this.t += this.step) this.push(this.prev + (s - this.prev) * this.t);
-        this.t -= 1; this.prev = s;
+        const s = l ? (l[i] + r[i]) / 2 : 0, h = fl ? (fl[i] + fr[i]) / 2 : 0;
+        for (; this.t < 1; this.t += this.step) this.push(this.prev + (s - this.prev) * this.t, this.prevH + (h - this.prevH) * this.t);
+        this.t -= 1; this.prev = s; this.prevH = h;
       }
       return true;
     }
-    push(v) {
-      if (v > 1e-4 || v < -1e-4) this.loud = true;
-      this.block[this.n++] = Math.max(-1, Math.min(1, v)) * 32767;
-      if (this.n < 960) return;
+    push(v, h) {
+      if (v > 1e-4 || v < -1e-4 || h > 1e-4 || h < -1e-4) this.loud = true;
+      this.block[this.n] = clamp(v) * 32767;
+      this.lp1 += (h - this.lp1) * A; this.lp2 += (this.lp1 - this.lp2) * A;  // two gentle low-pass stages
+      this.env = Math.max(Math.abs(this.lp2) * 120, this.env * R);            // instant attack, ~25 ms fade
+      if (this.n % 15 === 14) {  // every 15th sample (45 kHz -> 3 kHz): the buzz, the same in both grips
+        const k = (this.n - 14) / 15 * 2;
+        this.ph = (this.ph + W) % (2 * Math.PI);
+        this.feel[k] = this.feel[k + 1] = Math.min(1, this.env) * Math.sin(this.ph) * 127;
+      }
+      if (++this.n < 960) return;
       this.quiet = this.loud ? 0 : this.quiet + 1;
-      if (this.quiet < 24) this.port.postMessage(this.block.slice());
+      if (this.quiet < 24) this.port.postMessage(this.buf.slice(0));
       this.n = 0; this.loud = false;
     }
   });
@@ -397,8 +413,8 @@ const PadLink = {
     if (this.busy) return;
     this.busy = true;
     while (this.q.length) {
-      const blocks = this.q.splice(0, 50), body = new Int16Array(blocks.length * 960);
-      blocks.forEach((b, i) => body.set(b, i * 960));
+      const blocks = this.q.splice(0, 50), body = new Uint8Array(blocks.length * 2048);
+      blocks.forEach((b, i) => body.set(new Uint8Array(b), i * 2048));
       const ok = await fetch("/api/padaudio", { method: "POST", headers: { "X-Couch": "1" }, body }).then(r => r.ok, () => false);
       if (!ok) { this.q.length = 0; Out.detect(); break; }  // that controller's gone: back to the TV
     }
@@ -408,7 +424,7 @@ const PadLink = {
 
 // ---------- sound: synthesized menu sounds, plus your intro music if there's a file for it
 const Sound = (() => {
-  let ctx, out, bus, padIn, padReady, music = null, bgm = null, on = store.get("couchSound") !== "off", foot = 0;
+  let ctx, out, bus, sfx, padIn, padReady, music = null, bgm = null, on = store.get("couchSound") !== "off", foot = 0;
   let sfxVol = +(store.get("couchSfxVol") ?? 0.8), musicOn = store.get("couchMusic") !== "off";
   let musicVol = +(store.get("couchMusicVol") ?? 0.35), voiceOn = store.get("couchVoice") !== "off";
   // Your clips from web/audio/sbr, decoded once at load: slot -> [{ buf, voice, name }]. Variants
@@ -420,9 +436,10 @@ const Sound = (() => {
     if (!ctx) {
       ctx = new AudioContext();
       bus = ctx.createGain(); bus.connect(ctx.destination);  // every sound meets here; route() points it
+      sfx = ctx.createGain(); sfx.connect(bus);              // the menu sounds (not music), which the grips feel too
       out = ctx.createGain(); out.gain.value = 0.55 * sfxVol;
       const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 9000;
-      out.connect(lp).connect(bus);
+      out.connect(lp).connect(sfx);
     }
     if (ctx.state === "suspended") ctx.resume();
     return ctx;
@@ -456,7 +473,7 @@ const Sound = (() => {
     if (!list.length) return false;
     const c = ac(), s = c.createBufferSource(), g = c.createGain();
     s.buffer = list[Math.floor(Math.random() * list.length)].buf; g.gain.value = gain;
-    s.connect(g).connect(bus); s.start();
+    s.connect(g).connect(sfx); s.start();
     return true;
   }
   // Built-in sounds, used for any slot you haven't added a clip for
@@ -525,17 +542,18 @@ const Sound = (() => {
       const c = ac();
       if (id === "bt") padReady ||= c.audioWorklet.addModule(URL.createObjectURL(new Blob([`(${padTapWorklet})()`], { type: "text/javascript" })))
         .then(() => {
-          const tap = new AudioWorkletNode(c, "pad-tap", { numberOfOutputs: 0 }), lift = c.createGain(), limit = c.createDynamicsCompressor();
+          const tap = new AudioWorkletNode(c, "pad-tap", { numberOfInputs: 2, numberOfOutputs: 0 }), lift = c.createGain(), limit = c.createDynamicsCompressor();
           tap.port.onmessage = e => PadLink.send(e.data);
           // its speaker is small: 4x (+12 dB), with the peaks limited so loud bits don't crackle
           lift.gain.value = 4;
           limit.threshold.value = -9; limit.knee.value = 3; limit.ratio.value = 20; limit.attack.value = 0.002; limit.release.value = 0.15;
-          lift.connect(limit).connect(tap);
-          return lift;
+          lift.connect(limit).connect(tap, 0, 0);
+          return { lift, tap };
         });
       padIn = id === "bt" ? await padReady.catch(() => null) : null;
       bus.disconnect(); bus.connect(c.destination);
-      if (padIn) bus.connect(padIn);
+      sfx.disconnect(); sfx.connect(bus);
+      if (padIn) { bus.connect(padIn.lift); sfx.connect(padIn.tap, 0, 1); }  // speaker: everything; grips: menu sounds
       if (c.setSinkId) c.setSinkId(id === "bt" ? "" : id).catch(() => {});
     },
     decode: data => ac().decodeAudioData(data),
@@ -546,7 +564,7 @@ const Sound = (() => {
       s.buffer = buf;
       g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + 1.2);
       g.gain.setValueAtTime(gain, t + Math.max(1.3, end - 3)); g.gain.exponentialRampToValueAtTime(0.0001, t + end);
-      s.connect(g).connect(padOnly && padIn || bus); s.start(t); s.stop(t + end + 0.05);
+      s.connect(g).connect(padOnly && padIn?.lift || bus); s.start(t); s.stop(t + end + 0.05);
       music = { s, g };
     },
     stopMusic,

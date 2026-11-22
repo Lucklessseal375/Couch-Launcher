@@ -1199,7 +1199,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if urlparse(self.path).path == "/api/padaudio" and kind == "local":  # launcher sound for the controller
             n = int(self.headers.get("Content-Length") or 0)
-            if not 0 < n <= 50 * padspeaker.BLOCK * 2 or n % (padspeaker.BLOCK * 2):  # whole 21 ms blocks only
+            if not 0 < n <= 50 * padspeaker.BLOCK_BYTES or n % padspeaker.BLOCK_BYTES:  # whole 21 ms blocks only
                 return self.send_json({"error": "bad audio"}, 400)
             ok = PAD_SPEAKER.feed(self.rfile.read(n))
             return self.send_json({"ok": ok}, 200 if ok else 409)
