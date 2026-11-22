@@ -685,10 +685,8 @@ class ReturnWatcher(threading.Thread):
                     self.armed_at = 0
                 elif self.saw_app and cls in self.DESKTOP:
                     self.armed_at = 0
-                    h = find_launcher()
-                    if h:
-                        log.info("back on the desktop; restoring launcher")
-                        focus_window(h)
+                    log.info("back on the desktop; restoring launcher")
+                    open_launcher()  # focuses it, or opens it again if its window is gone (closed or crashed)
 
 
 WATCHER = ReturnWatcher()
