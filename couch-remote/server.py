@@ -596,19 +596,11 @@ def edge_tv(url, profile):
         focus_window(h)
         return
     port_file = PROFILES / profile / "DevToolsActivePort"
-    # Edge can linger on the profile with no window; a launch would hand off to it and show a blank new-tab page
-    # with no DevTools port. Nothing of ours is open on this profile (checked above), so end any such leftover.
-    stale = subprocess.run(["powershell", "-NoProfile", "-Command",
-                            "Get-CimInstance Win32_Process -Filter \"Name='msedge.exe'\" | Where-Object { $_.CommandLine -like "
-                            f"'*{PROFILES / profile}*' }} | ForEach-Object {{ $_.ProcessId }}"],
-                           capture_output=True, text=True, creationflags=0x08000000).stdout.split()
-    for pid in stale:
-        subprocess.run(["taskkill", "/PID", pid, "/T", "/F"], capture_output=True, creationflags=0x08000000)
-    if stale:
-        log.info("TV mode: ended a leftover Edge on %s (%s)", profile, ", ".join(stale))
-        time.sleep(1)
+    end_profile_edge(profile)  # nothing of ours is open on it (checked above): a leftover would take the launch
     port_file.unlink(missing_ok=True)
-    edge_kiosk("about:blank", profile, TV_USER_AGENT, extra=["--remote-debugging-port=0"])  # 0: Edge picks a free port
+    # a black page until YouTube loads (about:blank is white); port 0: Edge picks a free one
+    edge_kiosk("data:text/html,<title>YouTube</title><body bgcolor=black>", profile, TV_USER_AGENT,
+               extra=["--remote-debugging-port=0"])
     for _ in range(100):
         try:
             port = int(port_file.read_text().split()[0])
@@ -643,12 +635,28 @@ def edge_tv(url, profile):
     finally:
         TV_PIDS.discard(pid)
         TV_OPEN.pop(profile, None)
+        if not (pid and pid_window(pid)):  # its window is gone: don't leave Edge running behind it
+            end_profile_edge(profile)
 
 
 def window_pid(h):
     pid = wintypes.DWORD()
     user32.GetWindowThreadProcessId(h, ctypes.byref(pid))
     return pid.value
+
+
+def end_profile_edge(profile):
+    """Ends any Edge still running on this profile. Edge can linger with no window after its window closes, and a
+    later launch on the profile is handed to it, which shows a blank new-tab page instead of the site."""
+    stale = subprocess.run(["powershell", "-NoProfile", "-Command",
+                            "Get-CimInstance Win32_Process -Filter \"Name='msedge.exe'\" | Where-Object { $_.CommandLine -like "
+                            f"'*{PROFILES / profile}*' }} | ForEach-Object {{ $_.ProcessId }}"],
+                           capture_output=True, text=True, creationflags=0x08000000).stdout.split()
+    for pid in stale:
+        subprocess.run(["taskkill", "/PID", pid, "/T", "/F"], capture_output=True, creationflags=0x08000000)
+    if stale:
+        log.info("TV mode: ended Edge left running on %s (%s)", profile, ", ".join(stale))
+        time.sleep(1)
 
 
 def pid_window(pid):
