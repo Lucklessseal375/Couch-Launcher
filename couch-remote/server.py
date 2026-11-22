@@ -808,6 +808,105 @@ def pick_running(cands):
     return (games or [h for h, _ in cands] or [None])[-1]
 
 
+# ---------------------------------------------------------------- task manager (launcher PC row / Menu)
+class _FILETIME(ctypes.Structure):
+    _fields_ = [("lo", wintypes.DWORD), ("hi", wintypes.DWORD)]
+
+
+class _MEMSTATUS(ctypes.Structure):
+    _fields_ = [("dwLength", wintypes.DWORD), ("dwMemoryLoad", wintypes.DWORD)] +                [(n, ctypes.c_ulonglong) for n in ("total", "avail", "pageTotal", "pageAvail", "virtTotal", "virtAvail", "ext")]
+
+
+class _PROCENTRY(ctypes.Structure):
+    _fields_ = [("dwSize", wintypes.DWORD), ("cntUsage", wintypes.DWORD), ("pid", wintypes.DWORD),
+                ("heap", ctypes.c_size_t), ("module", wintypes.DWORD), ("threads", wintypes.DWORD),
+                ("parent", wintypes.DWORD), ("prio", ctypes.c_long), ("flags", wintypes.DWORD), ("exe", ctypes.c_wchar * 260)]
+
+
+class _MEMCOUNTERS(ctypes.Structure):
+    _fields_ = [("cb", wintypes.DWORD), ("faults", wintypes.DWORD)] +                [(n, ctypes.c_size_t) for n in ("peakWs", "ws", "a", "b", "c", "d", "page", "peakPage")]
+
+
+kernel32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+kernel32.Process32FirstW.argtypes = kernel32.Process32NextW.argtypes = (wintypes.HANDLE, ctypes.POINTER(_PROCENTRY))
+kernel32.K32GetProcessMemoryInfo.argtypes = (wintypes.HANDLE, ctypes.POINTER(_MEMCOUNTERS), wintypes.DWORD)
+user32.IsHungAppWindow.argtypes = (wintypes.HWND,)
+_cpu_last = [None]
+
+
+def cpu_percent():
+    """Whole-PC processor use since the last call (the task manager polls every 2 s); None on the first call."""
+    idle, kern, user = _FILETIME(), _FILETIME(), _FILETIME()
+    kernel32.GetSystemTimes(ctypes.byref(idle), ctypes.byref(kern), ctypes.byref(user))
+    val = lambda f: f.hi << 32 | f.lo
+    now = (val(idle), val(kern) + val(user))  # kernel time includes idle time
+    prev, _cpu_last[0] = _cpu_last[0], now
+    if not prev or now[1] <= prev[1]:
+        return None
+    return max(0, min(100, round(100 * (1 - (now[0] - prev[0]) / (now[1] - prev[1])))))
+
+
+def process_children():
+    """pid -> child pids, from one snapshot of every process."""
+    kids, snap = {}, kernel32.CreateToolhelp32Snapshot(0x2, 0)  # TH32CS_SNAPPROCESS
+    e = _PROCENTRY(dwSize=ctypes.sizeof(_PROCENTRY))
+    ok = kernel32.Process32FirstW(snap, ctypes.byref(e))
+    while ok:
+        if e.pid != e.parent:
+            kids.setdefault(e.parent, []).append(e.pid)
+        ok = kernel32.Process32NextW(snap, ctypes.byref(e))
+    kernel32.CloseHandle(snap)
+    return kids
+
+
+def tree_memory(pid, kids):
+    """Bytes in use by a program and the processes it started (a browser's tabs, a game's helpers)."""
+    total, todo, seen = 0, [pid], set()
+    while todo:
+        p = todo.pop()
+        if p in seen:
+            continue
+        seen.add(p)
+        todo += kids.get(p, [])
+        ph = kernel32.OpenProcess(0x1000 | 0x0010, False, p)  # query limited info, read memory counters
+        if ph:
+            m = _MEMCOUNTERS(cb=ctypes.sizeof(_MEMCOUNTERS))
+            if kernel32.K32GetProcessMemoryInfo(ph, ctypes.byref(m), m.cb):
+                total += m.ws
+            kernel32.CloseHandle(ph)
+    return total
+
+
+def task_list():
+    mem = _MEMSTATUS(dwLength=ctypes.sizeof(_MEMSTATUS))
+    kernel32.GlobalMemoryStatusEx(ctypes.byref(mem))
+    kids, apps, seen = process_children(), [], set()
+    for h in visible_windows():
+        pid = window_pid(h)
+        if window_class(h) in ReturnWatcher.DESKTOP or pid in seen or pid == os.getpid():
+            continue
+        seen.add(pid)  # one row per program, its front-most window
+        name = re.sub(r"\s+-\s+(Profile \d+\s+-\s+)?Microsoft\W*Edge$", "", window_title(h)).strip()
+        apps.append({"id": h, "name": name or window_exe(h), "exe": window_exe(h),
+                     "bytes": tree_memory(pid, kids), "hung": bool(user32.IsHungAppWindow(h))})
+    return {"cpu": cpu_percent(), "memUsed": mem.total - mem.avail, "memTotal": mem.total, "apps": apps}
+
+
+def task_action(h, action):
+    """Switch to, close (as its own close button does) or force-close one of task_list()'s windows."""
+    if h not in visible_windows():  # only windows the task manager lists, never an arbitrary handle
+        raise ValueError("That app isn't open any more")
+    log.info("task manager: %s %s (%s)", action, window_title(h), window_exe(h))
+    if action == "switch":
+        focus_window(h)
+    elif action == "close":
+        user32.PostMessageW(h, 0x0010, 0, 0)  # WM_CLOSE: it can still ask to save
+    elif action == "force":
+        subprocess.run(["taskkill", "/PID", str(window_pid(h)), "/T", "/F"], capture_output=True, creationflags=0x08000000)
+    else:
+        raise ValueError(f"unknown action {action!r}")
+
+
 def running_window():
     """The launched game/app's window while it's still open, else None."""
     alive = [(h, window_exe(h)) for h in RUNNING["windows"] if user32.IsWindow(h) and user32.IsWindowVisible(h)]
@@ -1394,6 +1493,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(audio_state())
             if path == "/api/padspeaker" and kind == "local":  # can the launcher play on a wireless controller?
                 return self.send_json({"ok": PAD_SPEAKER.available()})
+            if path == "/api/tasks":
+                return self.send_json(task_list())
             if path == "/api/info":
                 apps, _ = load_apps()
                 games, hidden = library()
@@ -1493,6 +1594,11 @@ class Handler(BaseHTTPRequestHandler):
                 if b.get("idle") and not launcher_in_front():
                     return self.send_json({"ok": False, "off": 0})  # idle page behind a game: someone's playing
                 return self.send_json({"ok": True, "off": padspeaker.turn_off()})
+            elif path == "/api/tasks":
+                try:
+                    task_action(int(b["id"]), str(b.get("action", "")))
+                except ValueError as e:
+                    return self.send_json({"error": str(e)}, 409)
             elif path == "/api/window":
                 act = b.get("action")
                 log.info("window: %s (from %s)", act, self.client_address[0])
