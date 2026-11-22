@@ -942,7 +942,9 @@ def focus_what_opens(before):
     Store launchers stay behind Couch (keep_behind); one still asking to sign in after 15 s comes forward, and if no
     game window shows within 90 s the newest one does (it may want an update or a click)."""
     seen, last, t0, name = set(before), 0.0, time.time(), RUNNING["name"]
-    behind = {}  # store-launcher window -> when it appeared; None once Couch stops covering for this launch
+    # store-launcher window -> since when Couch covers it (already-open ones too: Rockstar's comes forward when the
+    # game starts); None once Couch stops covering for this launch
+    behind = {h: t0 for h in before if keep_behind(window_exe(h), RUNNING.get("is_game"), False)}
     while time.time() - t0 < 180 and RUNNING["name"] == name:  # a newer launch takes over
         time.sleep(0.5)
         if behind:
