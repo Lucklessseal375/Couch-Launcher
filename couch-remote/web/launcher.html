@@ -307,6 +307,7 @@
     <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
     <symbol id="i-phone" viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></symbol>
     <symbol id="i-pad" viewBox="0 0 24 24"><path d="M7.5 7h9a4.5 4.5 0 0 1 4.3 3.2l1 3.6a2.6 2.6 0 0 1-4.4 2.5L15.6 15H8.4l-1.8 1.3a2.6 2.6 0 0 1-4.4-2.5l1-3.6A4.5 4.5 0 0 1 7.5 7z"/><path d="M7.5 10v3M6 11.5h3M15.5 11h.01M17.5 12.5h.01"/></symbol>
+    <symbol id="i-storage" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="6" rx="2"/><rect x="3" y="13" width="18" height="6" rx="2"/><path d="M7 8h.01M7 16h.01"/></symbol>
     <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17.5l5-4.5 4 3.5 2.5-2 4.5 4"/></symbol>
     <symbol id="i-tasks" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M6.5 13h2.5l1.6-3.5 2.8 6 1.6-2.5h2.5"/></symbol>
     <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .9-1 1.6v.4M12 17h.01"/></symbol>
@@ -735,18 +736,26 @@ addEventListener("mousemove", wake);
 
 // ---------- controller battery (sent by the server as pad:<level>): a DualSense-style battery icon
 let padLevel = null;
-function showPad(level) {
-  const low = level === "empty" || level === "low", p = $("#pad");
-  if (low && padLevel && padLevel !== "low" && padLevel !== "empty") { Sound.battery(); toast("Controller battery low. Charge it soon."); }
-  padLevel = level;
-  p.classList.toggle("low", low);
-  if (level === "none") { p.innerHTML = "<span>No controller</span>"; p.title = ""; return; }
+const PAD_ORDER = ["empty", "low", "medium", "full", "max", "wired"];
+const padSvg = level => {
   const fill = { empty: .08, low: .25, medium: .6 }[level] ?? 1;
-  const label = { empty: "Battery empty", low: "Battery low", wired: "Charging" }[level] || "";
-  p.innerHTML = `<svg viewBox="0 0 34 18" aria-hidden="true"><rect x="1" y="1" width="28" height="16" rx="3.5" fill="none" stroke="currentColor" stroke-width="2"/>`
+  return `<svg viewBox="0 0 34 18" aria-hidden="true"><rect x="1" y="1" width="28" height="16" rx="3.5" fill="none" stroke="currentColor" stroke-width="2"/>`
     + `<rect x="30" y="6" width="3" height="6" rx="1" fill="currentColor"/><rect x="4" y="4" width="${(22 * fill).toFixed(1)}" height="10" rx="1.5" fill="currentColor"/>`
-    + (level === "wired" ? '<path d="M16.5 3l-5 7h4l-2 5 6-8h-4z" fill="#0b0d12"/>' : "") + `</svg><span>${label}</span>`;
-  p.title = `Controller: ${label || level}`;
+    + (level === "wired" ? '<path d="M16.5 3l-5 7h4l-2 5 6-8h-4z" fill="#0b0d12"/>' : "") + `</svg>`;
+};
+function showPad(levels) {  // "none", or one level per controller: "full,low"
+  const list = levels === "none" ? [] : levels.split(",");
+  const weakest = list.reduce((a, b) => PAD_ORDER.indexOf(b) < PAD_ORDER.indexOf(a) ? b : a, list[0]) || "none";
+  const low = weakest === "empty" || weakest === "low", p = $("#pad");
+  if (low && padLevel && padLevel !== "low" && padLevel !== "empty") {
+    Sound.battery(); toast(list.length > 1 ? "A controller's battery is low. Charge it soon." : "Controller battery low. Charge it soon.");
+  }
+  padLevel = weakest;
+  p.classList.toggle("low", low);
+  if (!list.length) { p.innerHTML = "<span>No controller</span>"; p.title = ""; return; }
+  const label = { empty: "Battery empty", low: "Battery low", wired: "Charging" }[weakest] || (list.length > 1 ? `${list.length} controllers` : "");
+  p.innerHTML = list.map(padSvg).join("") + `<span>${label}</span>`;
+  p.title = list.map((lv, i) => `Controller ${i + 1}: ${lv}`).join(", ");
 }
 
 // ---------- toast
@@ -848,6 +857,8 @@ function pcItems() {
     ...(info.hidden?.length ? [{ icon: "eye", label: "Hidden games", meta: info.hidden.join(", "), cta: "Show all", fn: () => setChoice("unhide-all") }] : []),
     { icon: "pad", label: "Turn off controller", meta: "Press the PS button to turn it back on", cta: "Turn off", fn: padOff },
     { icon: "power", label: "Power", meta: "Sleep, restart or shut down the PC", cta: "Choose", fn: powerMenu },
+    { icon: "sound", label: "Volume", meta: "PC volume and the microphone", cta: "Open", fn: () => volumeMenu() },
+    { icon: "storage", label: "Storage", meta: "Space left on each drive and how big your games are", cta: "Open", fn: storageMenu },
     { icon: "image", label: "Media gallery", meta: "Your screenshots. Press Create on the controller to take one", cta: "Open", fn: mediaGallery },
     { icon: "tasks", label: "Task manager", meta: "See what's running and close apps", cta: "Open", fn: () => taskManager() },
     { icon: "help", label: "Controls", meta: "What each button does", cta: "Show", fn: showControls },
@@ -1214,9 +1225,10 @@ function powerMenu() {
 // ---------- task manager: what's running on the PC, processor and memory use, and closing apps
 const GiB = 2 ** 30, mem = b => b >= GiB ? `${(b / GiB).toFixed(1)} GB` : `${Math.round(b / 2 ** 20)} MB`;
 const closing = new Map();  // window id -> when Close was asked, to offer Force close if it stays open
+const gauge = (label, value, frac) => `<div class="gauge${frac > .85 ? " high" : ""}"><div class="g-top"><span>${label}</span><b>${value}</b></div>`
+  + `<div class="g-bar"><i style="width:${Math.round(frac * 100)}%"></i></div></div>`;
 function taskGauges(t) {
-  const g = (label, value, frac) => `<div class="gauge${frac > .85 ? " high" : ""}"><div class="g-top"><span>${label}</span><b>${value}</b></div>`
-    + `<div class="g-bar"><i style="width:${Math.round(frac * 100)}%"></i></div></div>`;
+  const g = gauge;
   return g("Processor", t.cpu == null ? "…" : `${t.cpu}% busy`, (t.cpu || 0) / 100)
        + g("Memory", `${(t.memUsed / GiB).toFixed(1)} of ${(t.memTotal / GiB).toFixed(1)} GB`, t.memUsed / t.memTotal);
 }
@@ -1257,6 +1269,44 @@ function taskActions(a) {
                      : `${a.name} closes right away without saving.`, "Force close", () => act("force")) }] : []),
   ], { vertical: true });
 }
+// ---------- volume: the PC's sound and microphone (the Control Center's sound card)
+async function volumeMenu(start = 0) {
+  let v;
+  try { v = await api("/api/volume"); } catch { return toast("Couch isn't responding. Try again in a moment; if it keeps happening, restart the PC."); }
+  if (v.level == null) return choose("Volume", "No speakers or screens are on. Turn one on, then try again.", [{ label: "Done" }]);
+  const sub = () => `${v.level}%${v.muted ? ", muted" : ""}. Left and right change it`;
+  choose("Volume", "", [
+    { label: "PC volume", icon: v.muted ? "mute" : "sound", sub: sub(), bar: v.level / 100, stay: true,
+      adjust(step, b) {
+        v.level = Math.max(0, Math.min(100, v.level + step * 5));
+        b.querySelector(".bar i").style.width = v.level + "%"; b.querySelector("small").textContent = sub();
+        api("/api/volume", { level: v.level }).catch(() => {});
+      } },
+    { label: v.muted ? "Unmute" : "Mute", icon: v.muted ? "sound" : "mute",
+      fn: () => api("/api/volume", { muted: !v.muted }).then(() => volumeMenu(1)) },
+    ...(v.micMuted == null ? [] : [{ label: v.micMuted ? "Turn microphone on" : "Mute microphone", icon: "voice",
+      sub: `${v.micMuted ? "Muted" : "On"}. The mute button on the controller does this too`,
+      fn: () => api("/api/volume", { mic: !v.micMuted }).then(() => volumeMenu(2)) }]),
+  ], { vertical: true, start });
+}
+
+// ---------- storage: space on each drive, and the games taking it
+async function storageMenu() {
+  let r;
+  try { r = await api("/api/storage"); } catch { return toast("Couch isn't responding. Try again in a moment; if it keeps happening, restart the PC."); }
+  const gbs = n => `${Math.round(n / 1e9)} GB`;
+  const games = (info.games || []).filter(g => g.size).sort((a, b) => b.size - a.size);
+  const openGame = g => {
+    for (let rr = 0; rr < rows.length; rr++) {
+      const c = rows[rr].findIndex(t => t.game?.key === g.key);
+      if (c >= 0) { focus(rr, c); return gameDetails(); }
+    }
+  };
+  choose("Storage", games.length ? "" : "Steam games show their size here once they're installed.",
+    games.length ? games.map(g => ({ label: g.name.replace(/[™®©]/g, ""), sub: gbs(g.size), fn: () => openGame(g) })) : [{ label: "Done" }],
+    { vertical: true, gauges: r.drives.map(d => gauge(`Drive ${d.name[0]}, ${gbs(d.total)}`, `${gbs(d.free)} free`, 1 - d.free / d.total)).join("") });
+}
+
 // ---------- media gallery: screenshots from the Create button (Windows' Screenshots folder), one at a time
 async function mediaGallery() {
   let r;
@@ -1293,6 +1343,7 @@ function showControls() {
     "L1 and R1 jump between rows",
     "Options opens the menu",
     "Create takes a screenshot, in a game too",
+    "The mute button mutes the PC's microphone",
     "The PS button on the launcher goes back to your game",
     "The PS button turns a sleeping controller back on",
     "On a keyboard: arrows, Enter, Esc, and / to search",
@@ -1463,6 +1514,7 @@ let lastPadAt = -1e9;
 function onPad(a) {
   if (a.startsWith("pad:")) { Out.detect(); return showPad(a.slice(4)); }  // a controller came or went
   if (a === "shot") return toast("Screenshot saved. See it in Media gallery");
+  if (a.startsWith("mic:")) return toast({ on: "Microphone on", off: "Microphone muted", none: "No microphone found" }[a.slice(4)]);
   padSeen = true; lastPadAt = performance.now(); Sound.unlock();
   if (wake()) return;
   if (a === "a") activate();

@@ -1140,6 +1140,34 @@ def take_screenshot():
 SHOT_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
 
 
+def toggle_mic():
+    try:
+        muted = audio.volume_state()["micMuted"]
+        if muted is None:
+            return emit("mic:none")
+        audio.set_mic_muted(not muted)
+    except OSError:
+        log.exception("couldn't switch the microphone")
+        return
+    rumble("shot")
+    emit("mic:" + ("on" if muted else "off"))
+    log.info("microphone %s (mute button)", "on" if muted else "muted")
+
+
+def fixed_drives():
+    """Each local hard drive: [{"name": "C:", "total", "free"}]."""
+    out, mask = [], kernel32.GetLogicalDrives()
+    for i in range(26):
+        root = f"{chr(65 + i)}:\\"
+        if mask >> i & 1 and kernel32.GetDriveTypeW(root) == 3:  # DRIVE_FIXED
+            try:
+                u = shutil.disk_usage(root)
+                out.append({"name": root[:2], "total": u.total, "free": u.free})
+            except OSError:
+                pass
+    return out
+
+
 def media_list():
     """Newest screenshots first, for the launcher's media gallery."""
     d = screenshots_dir()
@@ -1182,10 +1210,10 @@ def emit(action):
 
 
 def pad_status_for(levels):
-    """pad:none, or the weakest battery among SDL power levels (wired counts as charged)."""
+    """pad:none, or each controller's battery from SDL power levels, comma-separated (the launcher shows one each)."""
     order = ["empty", "low", "medium", "full", "max", "wired"]
     levels = [lv if lv in order else "max" for lv in levels]  # "unknown": don't alarm anyone
-    return "pad:" + (min(levels, key=order.index) if levels else "none")
+    return "pad:" + (",".join(levels) if levels else "none")
 
 
 def launcher_in_front():
@@ -1240,7 +1268,8 @@ def _controller_loop():
                B.CONTROLLER_BUTTON_DPAD_LEFT: "left", B.CONTROLLER_BUTTON_DPAD_RIGHT: "right",
                B.CONTROLLER_BUTTON_X: "x", B.CONTROLLER_BUTTON_GUIDE: "guide",  # SDL's X is the west button: □
                B.CONTROLLER_BUTTON_LEFTSHOULDER: "l1", B.CONTROLLER_BUTTON_RIGHTSHOULDER: "r1",
-               B.CONTROLLER_BUTTON_START: "options", B.CONTROLLER_BUTTON_BACK: "create"}  # DualSense Options, Create
+               B.CONTROLLER_BUTTON_START: "options", B.CONTROLLER_BUTTON_BACK: "create",  # DualSense Options, Create
+               15: "mic"}  # DualSense mute button (SDL's MISC1)
     held = {}  # direction -> time of next repeat
     stick = {"x": 0, "y": 0}
     dpad = set()
@@ -1260,12 +1289,14 @@ def _controller_loop():
     def act(action):
         if action == "create":  # anywhere, in games too
             take_screenshot()
-        elif action == "guide":  # PS / Xbox button: bring up the launcher (Steam uses it when running)
+        elif action == "mic":  # anywhere: the PC's microphone, like a PS5's mute button
+            toggle_mic()
+        elif action == "guide":  # PS button: home, or from home back to the game, like a PS5
             h = launcher_in_front() and running_window()
-            if h:  # already home: back to the game, like a PS5
+            if h:
                 focus_window(h)
-            elif not launcher_in_front() and not steam_running():
-                open_launcher()
+            elif not launcher_in_front():
+                open_launcher()  # Steam's own PS-button action should be off (Steam: Settings > Controller)
         elif launcher_in_front():
             emit(action)
         elif TV_PIDS and window_pid(user32.GetForegroundWindow()) in TV_PIDS and action in TV_KEYS:
@@ -1303,7 +1334,7 @@ def _controller_loop():
         if now >= next_status:  # battery changes slowly; check every 5 s, tell the page only on change
             next_status, s = now + 5, pad_status()
             if s != PAD_STATUS:
-                if s in ("pad:low", "pad:empty"):
+                if any(lv in ("low", "empty") for lv in s[4:].split(",")):
                     rumble("low")
                 PAD_STATUS = s
                 emit(s)
@@ -1582,6 +1613,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"ok": PAD_SPEAKER.available()})
             if path == "/api/tasks":
                 return self.send_json(task_list())
+            if path == "/api/volume":
+                return self.send_json(audio.volume_state())
+            if path == "/api/storage":
+                return self.send_json({"drives": fixed_drives()})
             if path == "/api/media":
                 return self.send_json({"shots": media_list()})
             if path == "/api/running":  # cheap: the launcher polls it to keep Now playing current
@@ -1690,6 +1725,14 @@ class Handler(BaseHTTPRequestHandler):
                 if b.get("idle") and not launcher_in_front():
                     return self.send_json({"ok": False, "off": 0})  # idle page behind a game: someone's playing
                 return self.send_json({"ok": True, "off": padspeaker.turn_off()})
+            elif path == "/api/volume":  # {"level": 0-100} / {"muted": bool} / {"mic": bool (muted)}
+                if "level" in b:
+                    audio.set_volume(level=int(b["level"]))
+                if "muted" in b:
+                    audio.set_volume(muted=bool(b["muted"]))
+                if "mic" in b:
+                    audio.set_mic_muted(bool(b["mic"]))
+                return self.send_json(audio.volume_state())
             elif path == "/api/tasks":
                 try:
                     task_action(int(b["id"]), str(b.get("action", "")))

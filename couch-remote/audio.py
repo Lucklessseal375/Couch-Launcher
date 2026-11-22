@@ -176,3 +176,66 @@ if __name__ == "__main__":
         devices = outputs()
     for d in devices:
         print("*" if d["default"] else " ", d["name"])
+
+
+# ---------------------------------------------------------------- volume and microphone (IAudioEndpointVolume)
+IID_ENDPOINT_VOLUME = "{5CDF2C82-841E-4546-9722-0CF74078229A}"
+CAPTURE = 1
+
+
+def _with_volume(flow, role, fn):
+    """fn(volume interface) on the default device for flow (RENDER or CAPTURE) and role; None if there's no device."""
+    with _Com():
+        enum = _create(CLSID_ENUMERATOR, IID_ENUMERATOR)
+        try:
+            dev = c_void_p()
+            try:
+                _method(enum, 4, c_int, c_int, POINTER(c_void_p))(enum, flow, role, byref(dev))
+            except OSError:
+                return None
+            try:
+                vol = c_void_p()
+                _method(dev.value, 3, POINTER(GUID), wintypes.DWORD, c_void_p, POINTER(c_void_p))(  # IMMDevice::Activate
+                    dev.value, byref(GUID(IID_ENDPOINT_VOLUME)), CLSCTX_ALL, None, byref(vol))
+                try:
+                    return fn(vol.value)
+                finally:
+                    _release(vol.value)
+            finally:
+                _release(dev.value)
+        finally:
+            _release(enum)
+
+
+def _level(v):
+    f = ctypes.c_float()
+    _method(v, 9, POINTER(ctypes.c_float))(v, byref(f))  # GetMasterVolumeLevelScalar
+    return f.value
+
+
+def _muted(v):
+    b = wintypes.BOOL()
+    _method(v, 15, POINTER(wintypes.BOOL))(v, byref(b))  # GetMute
+    return bool(b.value)
+
+
+def volume_state():
+    """{"level": 0-100, "muted", "mic": True/False/None (no microphone)} for the default devices."""
+    out = _with_volume(RENDER, 0, lambda v: {"level": round(_level(v) * 100), "muted": _muted(v)}) or {"level": None, "muted": False}
+    out["micMuted"] = _with_volume(CAPTURE, 0, _muted)
+    return out
+
+
+def set_volume(level=None, muted=None):
+    def apply(v):
+        if level is not None:
+            _method(v, 7, ctypes.c_float, c_void_p)(v, max(0, min(100, level)) / 100, None)  # SetMasterVolumeLevelScalar
+        if muted is not None:
+            _method(v, 14, wintypes.BOOL, c_void_p)(v, bool(muted), None)  # SetMute
+    _with_volume(RENDER, 0, apply)
+
+
+def set_mic_muted(muted):
+    """Mutes or unmutes the default microphone, for games and for calls (Discord uses the communications one)."""
+    for role in (0, 2):
+        _with_volume(CAPTURE, role, lambda v: _method(v, 14, wintypes.BOOL, c_void_p)(v, bool(muted), None))

@@ -61,10 +61,10 @@ class VdfTest(unittest.TestCase):
 
 
 class PadStatusTest(unittest.TestCase):
-    def test_weakest_battery_wins(self):
+    def test_one_battery_per_controller(self):
         self.assertEqual(server.pad_status_for([]), "pad:none")
-        self.assertEqual(server.pad_status_for(["full", "low"]), "pad:low")
-        self.assertEqual(server.pad_status_for(["wired", "medium"]), "pad:medium")
+        self.assertEqual(server.pad_status_for(["full", "low"]), "pad:full,low")
+        self.assertEqual(server.pad_status_for(["wired", "medium"]), "pad:wired,medium")
         self.assertEqual(server.pad_status_for(["unknown"]), "pad:max")
 
 
