@@ -30,7 +30,17 @@
 
   /* ---------- full-bleed hero: the show's key art at home, the focused game's art over it, crossfaded */
   .sky, .bg { position: fixed; inset: 0; opacity: 0; transition: opacity 1.2s ease; }
-  .sky { background: right center / auto 100% no-repeat; }
+  /* the art (set as --art) twice: blurred and dim across the whole screen, then sharp on the right, its left edge
+     faded into the blur so there's no seam, drifting slowly while it's up */
+  .sky { overflow: hidden; }
+  .sky::before, .sky::after { content: ""; position: absolute; inset: 0; background: var(--art) no-repeat; }
+  .sky::before { background-size: cover; background-position: center; filter: blur(48px) saturate(1.25) brightness(.42); transform: scale(1.15); }
+  .sky::after { background-size: auto 100%; background-position: right center; transform-origin: 80% 40%;
+    --fade: linear-gradient(90deg, transparent var(--f0, 22%), #000 var(--f1, 52%));
+    -webkit-mask-image: var(--fade); mask-image: var(--fade); }
+  .sky.on::after { animation: sky-drift 22s ease-out both; }
+  .sky:not(.on)::after { transform: scale(1.06); }  /* fading out: hold where the drift ended, no snap back */
+  @keyframes sky-drift { from { transform: scale(1.0); } to { transform: scale(1.06); } }
   .sky.on, .bg.on { opacity: 1; }
   .bg { background-size: cover; background-position: center 30%; background-color: var(--obsidian); filter: saturate(1.08) brightness(.66); }
   .shade { position: fixed; inset: 0; pointer-events: none; transition: opacity .6s ease; background:
@@ -225,7 +235,7 @@
 
   /* Windows "Animation effects" off: ゴゴゴ becomes a fade; nothing spins, shakes, slides or zooms */
   @media (prefers-reduced-motion: reduce) {
-    .app-shell, .details.swap #d-title, .details.swap #sfx span, .item.focus .badge img, .card, .overlay.show, .launch .ball { animation: none !important; }
+    .sky::after, .app-shell, .details.swap #d-title, .details.swap #sfx span, .item.focus .badge img, .card, .overlay.show, .launch .ball { animation: none !important; }
     .details.swap #sfx { animation: fade-sfx 1.6s ease-out; }
     #rows, .track, .item, .item .badge, .key { transition: opacity .2s, box-shadow .2s, filter .2s; }
     .item.focus, .card .choice.focus, .key.focus { transform: none; }
@@ -706,7 +716,11 @@ let skyFront = $("#skyA"), skyBack = $("#skyB"), skyN = 0;
 function nextSky() {
   const url = SKIES[skyN++ % SKIES.length], img = new Image();
   img.onload = () => {
-    skyBack.style.backgroundImage = `url("${url}")`;
+    skyBack.style.setProperty("--art", `url("${url}")`);
+    // fade from where the picture starts: a tall poster begins well right of a wide one
+    const left = Math.max(0, 100 - 100 * innerHeight * img.naturalWidth / img.naturalHeight / innerWidth);
+    skyBack.style.setProperty("--f0", Math.max(22, left) + "%");
+    skyBack.style.setProperty("--f1", Math.max(52, left + 14) + "%");
     skyBack.classList.add("on"); skyFront.classList.remove("on");
     [skyFront, skyBack] = [skyBack, skyFront];
   };
