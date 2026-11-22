@@ -902,7 +902,7 @@ def task_action(h, action):
     if action == "switch":
         focus_window(h)
     elif action == "close" and steam and "Big Picture" in title:
-        os.startfile("steam://close/bigpicture")  # it ignores close messages; leaving it opens Steam's desktop window
+        open_url("steam://close/bigpicture")  # it ignores close messages; leaving it opens Steam's desktop window
         threading.Thread(target=_tuck_steam_away, args=(set(visible_windows()),), daemon=True).start()
     elif action == "close":
         close_window(h)
@@ -1299,6 +1299,25 @@ def _controller_loop():
 
 # ---------------------------------------------------------------- launching & power
 
+def open_url(url):
+    """Opens a store link (com.epicgames.launcher://..., steam://...) by running the program Windows has registered for
+    it. os.startfile alone (ShellExecute from a server thread) once did nothing at all for Epic links, three times."""
+    scheme = url.split(":", 1)[0]
+    try:
+        with winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, rf"{scheme}\shell\open\command") as k:
+            cmd = winreg.QueryValueEx(k, "")[0]
+    except OSError:
+        return os.startfile(url)
+    m = re.match(r'\s*"([^"]+)"\s*(.*)$', cmd) or re.match(r"\s*(\S+)\s*(.*)$", cmd)
+    exe, rest = m.group(1), m.group(2)
+    args = [a.replace("%1", url) for a in (re.findall(r'"[^"]*"|\S+', rest) or ["%1"])]
+    args = [a.strip('"') for a in args]
+    if "%1" not in rest:
+        args.append(url)
+    subprocess.Popen([exe] + args, cwd=str(Path(exe).parent), creationflags=0x00000008 | 0x00000200)
+    log.info("opened %s link with %s", scheme, Path(exe).name)
+
+
 def launch_app(app_id):
     apps, _ = load_apps()
     app = next((a for a in apps + load_games() if a.get("id") == app_id), None)
@@ -1306,7 +1325,7 @@ def launch_app(app_id):
         raise KeyError(app_id)
     kind, target = app.get("kind"), os.path.expandvars(app.get("target", ""))
     if kind == "url":
-        os.startfile(target)
+        open_url(target)
     elif kind == "exe":
         subprocess.Popen([target] + list(app.get("args", [])), cwd=str(Path(target).parent),
                          creationflags=0x00000008 | 0x00000200)
@@ -1331,7 +1350,7 @@ def launch_game(appid):
     game = next((g for g in steam_games() if g["appid"] == appid), None)
     if not game:
         raise KeyError(appid)
-    os.startfile(f"steam://rungameid/{appid}")
+    open_url(f"steam://rungameid/{appid}")
     log.info("launched game %s", appid)
     return game["name"]
 
