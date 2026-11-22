@@ -22,7 +22,7 @@ import winreg
 from ctypes import wintypes
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # audio.py and padspeaker.py sit next to this file
 import audio  # noqa: E402
@@ -1112,7 +1112,43 @@ LIGHT = [None]  # (r, g, b) the launcher wants on the controllers' light bar; th
 PAD_SPEAKER = padspeaker.Speaker()  # launcher sounds on a wireless DualSense's speaker (the page posts them)
 # Haptic cues, felt in the hands while the sounds play on the controller or the TV.
 PATTERNS = {"launch": [(0, .45, .25, 110), (.22, .9, .55, 240)],          # the race starts
-            "low": [(0, .7, .7, 90), (.2, .7, .7, 90), (.4, .7, .7, 90)]}  # battery low
+            "low": [(0, .7, .7, 90), (.2, .7, .7, 90), (.4, .7, .7, 90)],  # battery low
+            "shot": [(0, .35, .6, 70)]}  # a screenshot was taken: one short click
+
+
+def screenshots_dir():
+    """Where Windows saves Win+PrtScn screenshots (the Screenshots folder in Pictures, wherever that lives)."""
+    import uuid
+
+    class GUID(ctypes.Structure):
+        _fields_ = [("d1", ctypes.c_ulong), ("d2", ctypes.c_ushort), ("d3", ctypes.c_ushort), ("d4", ctypes.c_ubyte * 8)]
+    u = uuid.UUID("b7bede81-df94-4682-a7d8-57a52620b86f")  # FOLDERID_Screenshots
+    g, out = GUID(u.fields[0], u.fields[1], u.fields[2], (ctypes.c_ubyte * 8)(*u.bytes[8:])), ctypes.c_wchar_p()
+    if ctypes.windll.shell32.SHGetKnownFolderPath(ctypes.byref(g), 0, None, ctypes.byref(out)) == 0 and out.value:
+        return Path(out.value)
+    return Path.home() / "Pictures" / "Screenshots"
+
+
+def take_screenshot():
+    """The Create button, like a PS5's: Windows' own Win+PrtScn, which works over games and saves a PNG."""
+    _send([_key(0x5B, False, True), _key(0x2C, False, True), _key(0x2C, True, True), _key(0x5B, True, True)])
+    rumble("shot")
+    emit("shot")  # the launcher, if it's up, says where it went
+    log.info("screenshot (Create button)")
+
+
+SHOT_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
+
+
+def media_list():
+    """Newest screenshots first, for the launcher's media gallery."""
+    d = screenshots_dir()
+    try:
+        files = [f for f in d.iterdir() if f.suffix.lower() in SHOT_TYPES and f.is_file()]
+    except OSError:
+        return []
+    files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+    return [{"name": f.name, "time": int(f.stat().st_mtime)} for f in files[:200]]
 
 
 def rumble(pattern):
@@ -1204,7 +1240,7 @@ def _controller_loop():
                B.CONTROLLER_BUTTON_DPAD_LEFT: "left", B.CONTROLLER_BUTTON_DPAD_RIGHT: "right",
                B.CONTROLLER_BUTTON_X: "x", B.CONTROLLER_BUTTON_GUIDE: "guide",  # SDL's X is the west button: □
                B.CONTROLLER_BUTTON_LEFTSHOULDER: "l1", B.CONTROLLER_BUTTON_RIGHTSHOULDER: "r1",
-               B.CONTROLLER_BUTTON_START: "options"}  # DualSense Options
+               B.CONTROLLER_BUTTON_START: "options", B.CONTROLLER_BUTTON_BACK: "create"}  # DualSense Options, Create
     held = {}  # direction -> time of next repeat
     stick = {"x": 0, "y": 0}
     dpad = set()
@@ -1222,8 +1258,13 @@ def _controller_loop():
         return pad_status_for(levels)
 
     def act(action):
-        if action == "guide":  # PS / Xbox button: bring up the launcher (Steam uses it when running)
-            if not launcher_in_front() and not steam_running():
+        if action == "create":  # anywhere, in games too
+            take_screenshot()
+        elif action == "guide":  # PS / Xbox button: bring up the launcher (Steam uses it when running)
+            h = launcher_in_front() and running_window()
+            if h:  # already home: back to the game, like a PS5
+                focus_window(h)
+            elif not launcher_in_front() and not steam_running():
                 open_launcher()
         elif launcher_in_front():
             emit(action)
@@ -1541,6 +1582,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"ok": PAD_SPEAKER.available()})
             if path == "/api/tasks":
                 return self.send_json(task_list())
+            if path == "/api/media":
+                return self.send_json({"shots": media_list()})
             if path == "/api/running":  # cheap: the launcher polls it to keep Now playing current
                 return self.send_json({"running": {"name": RUNNING["name"]} if running_window() else None})
             if path == "/api/info":
@@ -1585,6 +1628,10 @@ class Handler(BaseHTTPRequestHandler):
             f = app_icon(m.group(1))
             if f:
                 return self.send_file(f, "image/png")
+        m = re.fullmatch(r"/media/([\w .()-]+\.(?:png|jpe?g))", unquote(path), re.I)  # a screenshot; no folders
+        if m and (screenshots_dir() / m.group(1)).is_file():
+            f = screenshots_dir() / m.group(1)
+            return self.send_file(f, SHOT_TYPES[f.suffix.lower()])
         m = re.fullmatch(r"/img/([\w-]+)\.(jpg|png|webp)", path)  # pictures kept in web/img (e.g. GTA's art)
         if m and (WEB / "img" / f"{m.group(1)}.{m.group(2)}").is_file():
             return self.send_file(WEB / "img" / f"{m.group(1)}.{m.group(2)}",
