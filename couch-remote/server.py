@@ -1129,7 +1129,7 @@ def app_icon(app_id):
         return None
     target = os.path.expandvars(app.get("target", ""))
     exe = Path(target) if app.get("kind") == "exe" else steam_path() / "steam.exe" if target.startswith("steam:") else None
-    if not exe or not exe.exists():
+    if not exe or not exe.exists() or exe.name.lower() == "explorer.exe":  # a Store app opened through explorer: its icon is a folder
         return None
     out = ICON_CACHE / f"{app_id}.png"
     with ICON_LOCK:

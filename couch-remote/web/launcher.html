@@ -86,7 +86,7 @@
   @keyframes idle-pan { from { transform: scale(1.04) translate(-1.5%, -1%); } to { transform: scale(1.1) translate(1.5%, 1%); } }
 
   /* ---------- details of the focused tile (PS5 game hub) */
-  .details { position: relative; height: 21vh; padding: .4vh var(--pad) 0; }
+  .details { position: relative; height: 23vh; padding: .4vh var(--pad) 0; }  /* room under the Play pill before the row title */
   #d-title { margin: 0; font: 400 7.4vh/1.08 var(--serif); letter-spacing: -.01em; max-width: 64vw; padding-bottom: .5vh;
              white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: .45vh .45vh 0 var(--johnny), 0 .6vh 2.4vh rgba(0,0,0,.7); }
   #d-meta { color: var(--dim); font-size: 2.6vh; margin-top: .7vh; min-height: 1.3em; max-width: 64vw;
@@ -112,7 +112,7 @@
   @keyframes shake { 0%,100% { transform: translate(0,0); } 25% { transform: translate(.25vh,-.2vh); } 75% { transform: translate(-.25vh,.2vh); } }
 
   /* ---------- rows: carousels that glide on a spring */
-  main { height: calc(100% - 11vh - 21vh - 8vh); overflow: hidden;
+  main { height: calc(100% - 11vh - 23vh - 8vh); overflow: hidden;
          -webkit-mask-image: linear-gradient(#000 calc(100% - 4vh), transparent); mask-image: linear-gradient(#000 calc(100% - 4vh), transparent); }
   #rows { transition: transform .6s var(--spring); }
   section { padding: .2vh 0; opacity: .62; transition: opacity .45s ease; }
@@ -129,6 +129,14 @@
                  box-shadow: inset 0 0 0 1px var(--line); }  /* the 1px inner light edge, drawn over art too */
   .item.focus { transform: scale(1.07); z-index: 3; filter: none;
                 box-shadow: 0 0 0 .32vh var(--obsidian), 0 0 0 .75vh var(--gold), 0 0 6vh .4vh rgba(242,184,68,.3), 0 2.6vh 5vh rgba(0,0,0,.6); }
+  /* focus, after tvOS: the tile lifts and a gold glint crosses it once, like light on the steel ball (motion allowed only) */
+  @media (prefers-reduced-motion: no-preference) {
+    .item.focus { transform: translateY(-1.2vh) scale(1.07); }
+    .item::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 1; opacity: 0;
+      background: linear-gradient(115deg, transparent 38%, rgba(255,236,190,.34) 50%, transparent 62%) 160% 0 / 260% 100% no-repeat; }
+    .item.focus::before { animation: glint .9s var(--spring) .08s both; }
+    @keyframes glint { from { opacity: 1; background-position: 160% 0; } to { opacity: 1; background-position: -60% 0; } }
+  }
   .item .badge { position: absolute; top: -2vh; right: -2vh; width: 5.8vh; height: 5.8vh; opacity: 0; z-index: 2;
                  transform: scale(.4) rotate(-90deg); transition: opacity .2s, transform .5s var(--spring); pointer-events: none;
                  filter: drop-shadow(0 .3vh .6vh rgba(0,0,0,.7)); }
@@ -157,6 +165,17 @@
          font: 700 2.1vh/1.1 var(--ui); text-align: center; background: var(--glass); backdrop-filter: blur(18px) saturate(1.2); }
   .sys svg.icon { width: 5vh; height: 5vh; color: #fff; }
   .sys.danger svg.icon { color: var(--ps-circle); }
+  /* live tiles, after the PS5's control-center cards and iOS widgets: status at a glance, the label still says what it is */
+  .sys .glance { display: flex; gap: .8vh; align-items: center; justify-content: center; min-height: 5.6vh; }
+  .sys .ring { width: 5.6vh; height: 5.6vh; border-radius: 50%; flex: none;
+    background: conic-gradient(var(--rc, var(--gold)) calc(var(--v) * 100%), rgba(255,255,255,.16) 0);
+    -webkit-mask: radial-gradient(circle, transparent 56%, #000 58%); mask: radial-gradient(circle, transparent 56%, #000 58%); }
+  .sys .glance .ring:not(:only-child) { width: 4.4vh; height: 4.4vh; }
+  .sys small { display: block; margin-top: -.6vh; font: 500 1.7vh/1 var(--ui); color: var(--dim); white-space: nowrap; }
+  .sys.focus small { color: var(--ink); }
+  .sys.shot { justify-content: flex-end; padding-bottom: 1.4vh; background: center / cover no-repeat; }
+  .sys.shot .glance { display: none; }
+  .sys.shot > span { padding: .5vh 1.1vh; border-radius: .8vh; background: rgba(21,15,11,.72); backdrop-filter: blur(8px); }
   .empty { color: var(--dim); padding: 2vh 0; font-size: 2.4vh; }
 
   /* ---------- PlayStation button glyphs (SVG) */
@@ -743,8 +762,29 @@ const padSvg = level => {
     + `<rect x="30" y="6" width="3" height="6" rx="1" fill="currentColor"/><rect x="4" y="4" width="${(22 * fill).toFixed(1)}" height="10" rx="1.5" fill="currentColor"/>`
     + (level === "wired" ? '<path d="M16.5 3l-5 7h4l-2 5 6-8h-4z" fill="#0b0d12"/>' : "") + `</svg>`;
 };
+// live PC tiles: a battery ring per controller, the fullest drive's space, the newest screenshot
+const ring = (v, color) => `<span class="ring" style="--v:${Math.max(.04, Math.min(1, v)).toFixed(2)}${color ? `;--rc:${color}` : ""}"></span>`;
+const PAD_FILL = { empty: .05, low: .2, medium: .55, full: .85, max: 1, wired: 1 };
+let padList = [];
+function padTile() {
+  const g = $("#system .pads .glance");
+  if (g) g.innerHTML = padList.length ? padList.map(lv => ring(PAD_FILL[lv] ?? 1,
+    lv === "wired" ? "var(--ice)" : lv === "low" || lv === "empty" ? "var(--ps-circle)" : null)).join("") : icon("pad");
+}
+async function liveTiles() {
+  const [s, m] = await Promise.all([api("/api/storage").catch(() => null), api("/api/media").catch(() => null)]);
+  const st = $("#system .storage"), me = $("#system .media");
+  if (st && s?.drives?.length) {
+    const d = s.drives.reduce((a, b) => b.free / b.total < a.free / a.total ? b : a), used = 1 - d.free / d.total;
+    st.querySelector(".glance").innerHTML = ring(used, used > .9 ? "var(--ps-circle)" : null);
+    st.querySelector("small").textContent = `${d.name} ${Math.round(d.free / 1e9)} GB free`;
+  }
+  if (me && m?.shots?.length) { me.classList.add("shot"); me.style.backgroundImage = `url("/media/${encodeURIComponent(m.shots[0].name)}")`; }
+}
+
 function showPad(levels) {  // "none", or one level per controller: "full,low"
   const list = levels === "none" ? [] : levels.split(",");
+  padList = list; padTile();
   const weakest = list.reduce((a, b) => PAD_ORDER.indexOf(b) < PAD_ORDER.indexOf(a) ? b : a, list[0]) || "none";
   const low = weakest === "empty" || weakest === "low", p = $("#pad");
   if (low && padLevel && padLevel !== "low" && padLevel !== "empty") {
@@ -855,11 +895,11 @@ function pcItems() {
     { icon: deviceIcon(info.audio?.name || ""), label: "Audio output", meta: info.audio ? `Playing on ${deviceName(info.audio.name)[0]}` : "Choose where games and videos play", cta: "Change", fn: pickAudio },
     { icon: Sound.on ? "sound" : "mute", label: "Sound", meta: Sound.on ? `Effects on, playing on the ${Out.where}` : "Effects off", cta: "Settings", fn: () => soundSettings() },
     ...(info.hidden?.length ? [{ icon: "eye", label: "Hidden games", meta: info.hidden.join(", "), cta: "Show all", fn: () => setChoice("unhide-all") }] : []),
-    { icon: "pad", label: "Turn off controller", meta: "Press the PS button to turn it back on", cta: "Turn off", fn: padOff },
+    { icon: "pad", label: "Turn off controller", meta: "Press the PS button to turn it back on", cta: "Turn off", fn: padOff, live: "pads" },
     { icon: "power", label: "Power", meta: "Sleep, restart or shut down the PC", cta: "Choose", fn: powerMenu },
     { icon: "sound", label: "Volume", meta: "PC volume and the microphone", cta: "Open", fn: () => volumeMenu() },
-    { icon: "storage", label: "Storage", meta: "Space left on each drive and how big your games are", cta: "Open", fn: storageMenu },
-    { icon: "image", label: "Media gallery", meta: "Your screenshots. Press Create on the controller to take one", cta: "Open", fn: mediaGallery },
+    { icon: "storage", label: "Storage", meta: "Space left on each drive and how big your games are", cta: "Open", fn: storageMenu, live: "storage" },
+    { icon: "image", label: "Media gallery", meta: "Your screenshots. Press Create on the controller to take one", cta: "Open", fn: mediaGallery, live: "media" },
     { icon: "tasks", label: "Task manager", meta: "See what's running and close apps", cta: "Open", fn: () => taskManager() },
     { icon: "help", label: "Controls", meta: "What each button does", cta: "Show", fn: showControls },
     { icon: "exit", label: "Desktop", meta: "Closes the launcher and shows the desktop", cta: "Go to desktop", fn: () => api("/api/window", { action: "close-launcher" }) },
@@ -925,10 +965,12 @@ function build() {
 
   const sys = $("#system"); sys.innerHTML = "";
   for (const p of pcItems()) {
-    const t = el("div", "item sys " + (p.cls || ""), `${icon(p.icon)}<span>${esc(p.label)}</span>${badge()}`);
+    const t = el("div", "item sys " + (p.cls || "") + (p.live ? " " + p.live : ""),
+      `<span class="glance">${icon(p.icon)}</span><span>${esc(p.label)}</span>${p.live === "storage" ? "<small></small>" : ""}${badge()}`);
     t.dataset.title = p.label; t.dataset.meta = p.meta; t.dataset.cta = p.cta;
     t.onactivate = p.fn; sys.append(t);
   }
+  padTile(); liveTiles();
 
   for (const tr of document.querySelectorAll("#rows .track")) { tr.dataset.x = 0; tr.style.transform = ""; }
   rows = [...document.querySelectorAll("#rows .track")].map(s => [...s.querySelectorAll(".item")]).filter(r => r.length);
