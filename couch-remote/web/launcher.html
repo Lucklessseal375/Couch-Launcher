@@ -662,8 +662,8 @@ const Out = {
 };
 navigator.mediaDevices?.addEventListener?.("devicechange", () => Out.detect());
 
-// Intro music: the first file in web/audio (e.g. the SBR opening, from your own copy). At startup it plays where
-// the menu sounds do; when a game starts, only on the controller, so it never plays over the game on the TV.
+// Intro music: the first file in web/audio (e.g. the SBR opening, from your own copy). It plays at startup, and on the
+// TV while a game is starting, fading out as soon as the game's window takes over. No file: the race-start fanfare.
 const Intro = {
   buf: null,
   async get() {
@@ -672,10 +672,11 @@ const Intro = {
     return this.buf;
   },
   async play(when) {
-    if (!Sound.on || (when === "launch" && !Out.id)) return;
+    if (!Sound.on) return;
     const buf = await this.get();
-    if (buf) Sound.music(buf, when === "launch" ? 25 : 45, Out.id ? 0.6 : 0.35, false, when === "launch");
-    else if (when === "startup") Sound.fanfare();
+    if (when === "launch" && !document.body.classList.contains("starting")) return;  // the game was up before the file decoded
+    if (buf) Sound.music(buf, when === "launch" ? 60 : 45, Out.id ? 0.6 : 0.35);
+    else Sound.fanfare();
   },
 };
 
@@ -1033,6 +1034,7 @@ function showStarting(name) {
   updatePrompts();
 }
 function hideStarting() {
+  if (document.body.classList.contains("starting")) Sound.stopMusic(1.5);  // the game is up (or it was cancelled): fade the launch music
   clearTimeout(startTimer); clearTimeout(slowTimer);
   document.body.classList.remove("starting");
   if (modal?.onBack === hideStarting) closeModal($("#starting"));
