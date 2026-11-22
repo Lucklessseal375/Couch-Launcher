@@ -845,6 +845,14 @@ function setBackdrop(url) {
 }
 
 // ---------- details line for the focused tile
+// home title, like iOS's Today view and the PS5's "Welcome back": a greeting for the time of day until you pick something
+function greet() {
+  if (chosen) return;
+  const h = new Date().getHours();
+  $("#d-title").textContent = h < 5 ? "Still up?" : h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : h < 22 ? "Good evening" : "Late one tonight";
+}
+setInterval(greet, 60000); greet();
+
 function ago(sec) {
   if (!sec) return "Not played yet";
   const days = Math.floor((Date.now() / 1000 - sec) / 86400);
@@ -953,7 +961,7 @@ function build() {
     };
     img.src = g.art || `/art/${g.appid}`;
     t.dataset.title = g.name;
-    t.dataset.meta = g.update || g.meta || [ago(g.lastPlayed), playtime(g.playtime)].filter(Boolean).join(", ");
+    t.dataset.meta = g.update || [g.meta, ago(g.lastPlayed), playtime(g.playtime), g.took && `Starts in about ${g.took} s`].filter(Boolean).join(" · ");
     t.dataset.hero = g.hero || `/art/${g.appid}/hero`;
     t.dataset.cta = g.update ? "Open Steam" : "Play";  // mid-update, Steam opens its download page, not the game
     t.game = g;  // for □ Details

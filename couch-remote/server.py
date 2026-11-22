@@ -225,6 +225,7 @@ def library():
     for g in games:
         g["key"] = game_key(g)
         g["pinned"] = g["key"] in c["pinned"]
+        g["took"] = c["took"].get(g["name"])  # seconds its window took to appear last time (the details line says it)
         if "appid" in g:
             g["playtime"] = played.get(g["appid"], 0)
         else:  # Steam keeps its own LastPlayed; other stores' games get the time we launched them
