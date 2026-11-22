@@ -56,10 +56,12 @@ A PS5-style, controller-driven TV launcher ("Couch") for a Windows PC: a Python 
 - Hooks open launcher/remote HTML as file:// tabs in the browser pane; close them.
 - The launcher vanished once at 12:05:43 (clean close, cause unknown). Now logged via `window:` lines.
 - The stray 63× sleep was a held Enter key (fixed).
+- **Don't minimize Epic/Rockstar windows during a launch** (tried 2026-11-22, commits 6b4eadc, d9867c4; reverted). While it was in, every GTA launch hung: Rockstar sign-in stuck loading, then "Game launch validation timed out" (`Documents\Rockstar Games\Launcher\launcher.log`). Rockstar's UI is embedded Chromium. If hiding launchers is wanted again, cover them instead (e.g. keep Couch on top), never minimize.
+- Rockstar sign-in window can draw black while its log says "Finished loading Social Club UI" (`Documents\Rockstar Games\Social Club\socialclub_launcher.log`). Tried: deleting `%LOCALAPPDATA%\Rockstar Games\Social Club\Launcher\Renderer` (cache, with the user's OK).
 
 ## 5. Immediate Next Steps
 1. Done 2026-11-22: the user tested Create screenshot, mute, PS back to game, Volume, Storage and two-controller batteries on the TV; all work.
-2. Done: PS returns to the game without Steam taking over (implied by the PS test passing).
+2. PS returned to the game in the user's test, so Steam didn't take over then. The user hasn't confirmed that Steam's guide-button action is off.
 3. Test a cold GTA V launch from the launcher with Epic closed (the original failure case for `open_url`), and check that Now playing tracks GTA and clears on quit.
 4. Optional, offered: Game clips (hold Create → Game Bar "record that"; the user must enable background recording), Downloads row, in-game quick menu. All deferred as riskier.
 5. Leftovers: `couch-remote/profiles/web-youtube` holds the YouTube sign-in (issue 03); `Screenshot (2).png` was a test capture; the "UI UX Pro Max" plugin wasn't in the catalog (closest: "UI Design Review", "Design").

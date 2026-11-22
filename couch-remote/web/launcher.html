@@ -1052,8 +1052,8 @@ async function launch(body, name, rgb) {
   } catch { hideStarting(); toast("Couch isn't responding. Try again in a moment; if it keeps happening, restart the PC."); }
 }
 
-// The starting screen stays until the server says a window opened (store launchers it hides don't count),
-// ○ hides it, or 3 minutes pass. Hiding it never stops the game from starting.
+// The starting screen stays until the game's window takes the screen (the launcher loses focus),
+// ○ hides it, or a minute passes. Hiding it never stops the game from starting.
 let startTimer, slowTimer;
 function showStarting(name) {
   $("#starting-title").textContent = name;
@@ -1061,7 +1061,7 @@ function showStarting(name) {
   clearTimeout(slowTimer); slowTimer = setTimeout(() => $("#starting-note").textContent = "Still starting. Big games can take a minute.", 10000);
   $("#starting").classList.add("show"); document.body.classList.add("modal", "starting");
   modal = { els: [], i: 0, onBack: hideStarting };
-  clearTimeout(startTimer); startTimer = setTimeout(hideStarting, 180000);
+  clearTimeout(startTimer); startTimer = setTimeout(hideStarting, 60000);
   updatePrompts();
 }
 function hideStarting() {
@@ -1071,6 +1071,7 @@ function hideStarting() {
   if (modal?.onBack === hideStarting) closeModal($("#starting"));
   updatePrompts();
 }
+addEventListener("blur", hideStarting);
 
 function openModal(overlay, els, onBack, start = 0, sound = "open") {
   overlay.classList.add("show"); document.body.classList.add("modal"); if (sound) Sound[sound]();
@@ -1512,7 +1513,6 @@ addEventListener("keydown", e => {
 let lastPadAt = -1e9;
 function onPad(a) {
   if (a.startsWith("pad:")) { Out.detect(); return showPad(a.slice(4)); }  // a controller came or went
-  if (a === "opened") return hideStarting();
   if (a === "shot") return toast("Screenshot saved. See it in Media gallery");
   if (a.startsWith("mic:")) return toast({ on: "Microphone on", off: "Microphone muted", none: "No microphone found" }[a.slice(4)]);
   padSeen = true; lastPadAt = performance.now(); Sound.unlock();

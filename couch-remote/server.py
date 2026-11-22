@@ -941,7 +941,6 @@ def focus_what_opens(before):
         if new:
             RUNNING["windows"] += new
             time.sleep(0.3)  # let it finish appearing
-            emit("opened")  # the launcher's Starting screen can go now
             focus_window(new[0])
             if any(window_exe(h) not in LAUNCHER_EXES for h in new):
                 last = time.time()
