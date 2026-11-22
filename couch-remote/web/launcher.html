@@ -66,6 +66,9 @@
   #pad { display: flex; align-items: center; gap: 1vh; color: var(--dim); font-size: 2.1vh; }
   #pad svg { width: 5.2vh; height: 2.8vh; color: var(--ink); }
   #pad.low, #pad.low svg { color: var(--ps-circle); }
+  #bell { display: flex; align-items: center; gap: .6vh; font: 700 2.1vh/1 var(--ui); color: var(--ink); }
+  #bell[hidden] { display: none; }
+  #bell svg { width: 3vh; height: 3vh; color: var(--gold); }
   /* idle: nothing still and bright on the TV, just a dim clock that moves every minute */
   #idle { position: fixed; inset: 0; background: #05060a; opacity: 0; pointer-events: none; transition: opacity 1.2s; z-index: 30; }
   body.idle #idle { opacity: 1; }
@@ -127,13 +130,15 @@
           transition: transform .5s var(--spring), box-shadow .35s ease, filter .35s ease; filter: brightness(.8) saturate(.92); }
   .item::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
                  box-shadow: inset 0 0 0 1px var(--line); }  /* the 1px inner light edge, drawn over art too */
-  .item.focus { transform: scale(1.07); z-index: 3; filter: none;
-                box-shadow: 0 0 0 .32vh var(--obsidian), 0 0 0 .75vh var(--gold), 0 0 6vh .4vh rgba(242,184,68,.3), 0 2.6vh 5vh rgba(0,0,0,.6); }
+  .item.focus { transform: scale(1.07); z-index: 3; filter: none;  /* --focus: the focused game's or app's own colour, else gold */
+                box-shadow: 0 0 0 .32vh var(--obsidian), 0 0 0 .75vh var(--focus, var(--gold)),
+                            0 0 6vh .4vh color-mix(in srgb, var(--focus, var(--gold)) 30%, transparent), 0 2.6vh 5vh rgba(0,0,0,.6); }
   /* focus, after tvOS: the tile lifts and a gold glint crosses it once, like light on the steel ball (motion allowed only) */
   @media (prefers-reduced-motion: no-preference) {
     .item.focus { transform: translateY(-1.2vh) scale(1.07); }
     .item::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 1; opacity: 0;
-      background: linear-gradient(115deg, transparent 38%, rgba(255,236,190,.34) 50%, transparent 62%) 160% 0 / 260% 100% no-repeat; }
+      background: linear-gradient(115deg, transparent 38%, color-mix(in srgb, var(--focus, #ffecbe) 45%, rgba(255,255,255,.28)) 50%, transparent 62%)
+                  160% 0 / 260% 100% no-repeat; }
     .item.focus::before { animation: glint .9s var(--spring) .08s both; }
     @keyframes glint { from { opacity: 1; background-position: 160% 0; } to { opacity: 1; background-position: -60% 0; } }
   }
@@ -330,6 +335,7 @@
     <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17.5l5-4.5 4 3.5 2.5-2 4.5 4"/></symbol>
     <symbol id="i-tasks" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M6.5 13h2.5l1.6-3.5 2.8 6 1.6-2.5h2.5"/></symbol>
     <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .9-1 1.6v.4M12 17h.01"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></symbol>
     <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
     <symbol id="i-restart" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/></symbol>
     <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 2v10M18.4 6.6a9 9 0 1 1-12.8 0"/></symbol>
@@ -342,7 +348,7 @@
 <div class="app-shell">
   <header>
     <div class="brand"><svg class="mark" viewBox="0 0 2 2"><use href="#horseshoe"/></svg><h1>Couch</h1></div>
-    <div class="status"><div id="pad"></div><div class="time"><div id="clock">--:--</div><div id="date"></div></div></div>
+    <div class="status"><div id="bell" hidden></div><div id="pad"></div><div class="time"><div id="clock">--:--</div><div id="date"></div></div></div>
   </header>
   <div class="details" id="details">
     <h2 id="d-title">Pick something to play</h2>
@@ -800,7 +806,19 @@ function showPad(levels) {  // "none", or one level per controller: "full,low"
 
 // ---------- toast
 let toastTimer;
+const notes = []; let unseen = 0;  // what toasts said, newest first, so a missed one can be read later
+function bell() {
+  const b = $("#bell"); b.hidden = !unseen; b.innerHTML = `${icon("bell")}<span>${unseen}</span>`;
+  const t = $("#system .notes"); if (t) t.dataset.meta = notes[0] ? `Latest: ${notes[0].msg}` : "Nothing yet";
+}
+function showNotes() {
+  unseen = 0; bell();
+  const at = t => new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  choose("Notifications", notes.length ? "" : "Nothing yet. Messages like \"Screenshot saved\" show up here.",
+    notes.length ? notes.map(n => ({ label: n.msg, sub: at(n.t) })) : [{ label: "Done" }], { vertical: true });
+}
 function toast(msg) {
+  notes.unshift({ msg, t: Date.now() }); notes.length = Math.min(notes.length, 20); unseen++; bell();
   const t = $("#toast"); t.textContent = msg; t.classList.add("show");
   clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), Math.max(2800, msg.length * 65));  // long enough to read
 }
@@ -899,6 +917,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;",
 // The PC row and the Options menu share these
 function pcItems() {
   return [
+    { icon: "bell", label: "Notifications", meta: notes[0] ? `Latest: ${notes[0].msg}` : "Nothing yet", cta: "Show", fn: showNotes, live: "notes" },
     { icon: "phone", label: "Phone remote", meta: "Scan a code to control the PC from your phone", cta: "Show code", fn: showPhone },
     { icon: deviceIcon(info.audio?.name || ""), label: "Audio output", meta: info.audio ? `Playing on ${deviceName(info.audio.name)[0]}` : "Choose where games and videos play", cta: "Change", fn: pickAudio },
     { icon: Sound.on ? "sound" : "mute", label: "Sound", meta: Sound.on ? `Effects on, playing on the ${Out.where}` : "Effects off", cta: "Settings", fn: () => soundSettings() },
@@ -928,6 +947,8 @@ function build() {
         await windowAction("close-game");
         setTimeout(refresh, 2500); setTimeout(refresh, 6000);
       })],
+      ["sound", "Volume", "Volume", "", () => volumeMenu()],
+      ["voice", "Microphone", "Mute or unmute", "", toggleMic],
     ]) {
       const t = el("div", "item sys " + cls, `${icon(ic)}<span>${label}</span>${badge()}`);
       t.dataset.title = name; t.dataset.meta = "Running now"; t.dataset.cta = cta;
@@ -942,7 +963,7 @@ function build() {
     const logo = new Image(); logo.alt = ""; logo.className = "appicon";  // the app's own icon, taken from its program by the server
     logo.onload = () => { t.classList.add("logo"); t.prepend(logo); };
     logo.src = `/appicon/${encodeURIComponent(a.id)}`;
-    t.style.setProperty("--c", a.color || "#555");
+    t.style.setProperty("--c", a.color || "#555"); t.tint = a.color && hexColor(a.color);
     t.dataset.title = a.name;
     t.dataset.meta = a.meta || (a.kind === "web" ? "Opens full screen" : "");
     t.onactivate = () => launch({ id: a.id }, a.name, a.color && hexColor(a.color));
@@ -1008,6 +1029,9 @@ function focus(r, c) {
   c = Math.max(0, Math.min(rows[r].length - 1, c));
   pos = { r, c }; lastCol[r] = c; chosen = true;
   const e = rows[r][c]; e.classList.add("focus");
+  // tint the focus by what's focused, after iOS's tinted icons: a game's cover colour, an app's brand colour, else gold
+  if (e.tint === undefined && e.classList.contains("loaded")) e.tint = artColor(e.querySelector(".art"));
+  document.body.style.setProperty("--focus", e.tint ? `rgb(${e.tint})` : "");
   document.querySelectorAll("#rows section").forEach(sec => sec.classList.toggle("active", sec.contains(e)));
   document.body.classList.add("chosen");
   showDetails(e);
@@ -1323,6 +1347,12 @@ function taskActions(a) {
   ], { vertical: true });
 }
 // ---------- volume: the PC's sound and microphone (the Control Center's sound card)
+async function toggleMic() {
+  try {
+    const v = await api("/api/volume"), r = await api("/api/volume", { mic: !v.micMuted });
+    toast(r.micMuted ? "Microphone muted" : "Microphone on");
+  } catch { toast("Couch isn't responding. Try again in a moment; if it keeps happening, restart the PC."); }
+}
 async function volumeMenu(start = 0) {
   let v;
   try { v = await api("/api/volume"); } catch { return toast("Couch isn't responding. Try again in a moment; if it keeps happening, restart the PC."); }
