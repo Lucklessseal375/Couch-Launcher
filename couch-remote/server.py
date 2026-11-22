@@ -1390,7 +1390,11 @@ def open_url(url):
     args = [a.strip('"') for a in args]
     if "%1" not in rest:
         args.append(url)
-    subprocess.Popen([exe] + args, cwd=str(Path(exe).parent), creationflags=0x00000008 | 0x00000200)
+    try:
+        subprocess.Popen([exe] + args, cwd=str(Path(exe).parent), creationflags=0x00000008 | 0x00000200)
+    except OSError as e:  # e.g. Steam set to run as administrator (WinError 740): Windows' own way handles that
+        log.info("opening %s link directly failed (%s); using Windows' handler", scheme, e)
+        return os.startfile(url)
     log.info("opened %s link with %s", scheme, Path(exe).name)
 
 
