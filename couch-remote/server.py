@@ -1271,7 +1271,7 @@ class Handler(BaseHTTPRequestHandler):
                 # who asks (a game once started by itself at logon; this tells the TV page, phone or else apart)
                 log.info("launch %s asked by %s (%s)", b, self.client_address[0], self.headers.get("User-Agent"))
                 if time.time() - STARTED < 10:  # nobody picks a game this fast: a stray request, refuse it
-                    return self.send_json({"error": "still starting"}, 409)
+                    return self.send_json({"error": "Couch is still starting. Try again in a few seconds."}, 409)
                 before = visible_windows()
                 name = launch_game(b["game"]) if "game" in b else launch_app(str(b.get("id")))
                 RUNNING.update(name=name, windows=[])

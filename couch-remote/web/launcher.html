@@ -37,7 +37,8 @@
   .sky::before { background-size: cover; background-position: center; filter: blur(48px) saturate(1.25) brightness(.42); transform: scale(1.15); }
   .sky::after { background-size: auto 100%; background-position: right center; transform-origin: 80% 40%;
     --fade: linear-gradient(90deg, transparent var(--f0, 22%), #000 var(--f1, 52%));
-    -webkit-mask-image: var(--fade); mask-image: var(--fade); }
+    --low: linear-gradient(#000 52%, transparent 88%);  /* fade out behind the lower rows, where the poster's printed logo sat */
+    -webkit-mask-image: var(--fade), var(--low); -webkit-mask-composite: source-in; mask-image: var(--fade), var(--low); mask-composite: intersect; }
   .sky.on::after { animation: sky-drift 22s ease-out both; }
   .sky:not(.on)::after { transform: scale(1.06); }  /* fading out: hold where the drift ended, no snap back */
   @keyframes sky-drift { from { transform: scale(1.0); } to { transform: scale(1.06); } }
@@ -218,7 +219,7 @@
   .card.art #dlg-art { display: block; width: 27vh; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 1.6vh; box-shadow: 0 2vh 4vh rgba(0,0,0,.5); }
   .card.art h3 { font: 400 5.6vh/1.1 var(--serif); }
   .card.art .choices { justify-content: flex-start; }
-  #dlg-lines { list-style: none; padding: 0; margin: 1.4vh 0 0; display: grid; gap: .9vh; font-size: 2.5vh; color: var(--dim); }
+  #dlg-lines { list-style: none; padding: 0; margin: 1.4vh auto 0; width: fit-content; text-align: left; display: grid; gap: .9vh; font-size: 2.5vh; color: var(--dim); }
   #dlg-lines[hidden], #dlg-text[hidden] { display: none; }
   #dlg-lines li::before { content: ""; display: inline-block; width: .9vh; height: .9vh; margin: 0 1.4vh .25vh 0; border-radius: 50%; background: var(--gold); }
 
@@ -294,6 +295,8 @@
     <symbol id="i-resume" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z"/></symbol>
     <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
     <symbol id="i-phone" viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></symbol>
+    <symbol id="i-pad" viewBox="0 0 24 24"><path d="M7.5 7h9a4.5 4.5 0 0 1 4.3 3.2l1 3.6a2.6 2.6 0 0 1-4.4 2.5L15.6 15H8.4l-1.8 1.3a2.6 2.6 0 0 1-4.4-2.5l1-3.6A4.5 4.5 0 0 1 7.5 7z"/><path d="M7.5 10v3M6 11.5h3M15.5 11h.01M17.5 12.5h.01"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .9-1 1.6v.4M12 17h.01"/></symbol>
     <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
     <symbol id="i-restart" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/></symbol>
     <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 2v10M18.4 6.6a9 9 0 1 1-12.8 0"/></symbol>
@@ -732,7 +735,7 @@ function showPad(level) {
 let toastTimer;
 function toast(msg) {
   const t = $("#toast"); t.textContent = msg; t.classList.add("show");
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 2800);
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), Math.max(2800, msg.length * 65));  // long enough to read
 }
 
 // ---------- home backdrop: the show's official key art, crossfading slowly; a focused game's art covers it
@@ -824,12 +827,9 @@ function pcItems() {
     { icon: deviceIcon(info.audio?.name || ""), label: "Audio output", meta: info.audio ? `Playing on ${deviceName(info.audio.name)[0]}` : "Choose where games and videos play", cta: "Change", fn: pickAudio },
     { icon: Sound.on ? "sound" : "mute", label: "Sound", meta: Sound.on ? `Effects on, playing on the ${Out.where}` : "Effects off", cta: "Settings", fn: () => soundSettings() },
     ...(info.hidden?.length ? [{ icon: "eye", label: "Hidden games", meta: info.hidden.join(", "), cta: "Show all", fn: () => setChoice("unhide-all") }] : []),
-    { icon: "power", label: "Turn off controller", meta: "Press the PS button to turn it back on", cta: "Turn off", fn: padOff },
-    { icon: "moon", label: "Sleep", meta: "Wake it with the PC's power button", cta: "Sleep", fn: sleepNow },  // waking undoes it, so no dialog
-    { icon: "restart", label: "Restart", meta: "Closes all apps and restarts the PC", cta: "Restart", cls: "danger",
-      fn: () => confirmPower("restart", "Restart", "Restart the PC now? Unsaved work in other apps will be lost.") },
-    { icon: "power", label: "Shut down", meta: "Closes all apps and turns the PC off", cta: "Shut down", cls: "danger",
-      fn: () => confirmPower("shutdown", "Shut down", "Shut down the PC now? Unsaved work in other apps will be lost.") },
+    { icon: "pad", label: "Turn off controller", meta: "Press the PS button to turn it back on", cta: "Turn off", fn: padOff },
+    { icon: "power", label: "Power", meta: "Sleep, restart or shut down the PC", cta: "Choose", fn: powerMenu },
+    { icon: "help", label: "Controls", meta: "What each button does", cta: "Show", fn: showControls },
     { icon: "exit", label: "Desktop", meta: "Closes the launcher and shows the desktop", cta: "Go to desktop", fn: () => api("/api/window", { action: "close-launcher" }) },
   ];
 }
@@ -1016,8 +1016,8 @@ async function launch(body, name, rgb) {
   showStarting(name);
   try {
     const r = await api("/api/launch", body);
-    if (!r.ok) { hideStarting(); toast(r.error || "Couldn't start it"); }
-  } catch { hideStarting(); toast("Couch server isn't responding"); }
+    if (!r.ok) { hideStarting(); toast(r.error || `Couldn't start ${name}. Try again in a moment.`); }
+  } catch { hideStarting(); toast("Couch isn't responding. Try again in a moment; if it keeps happening, restart the PC."); }
 }
 
 // The starting screen stays until the game's window takes the screen (the launcher loses focus),
@@ -1085,9 +1085,9 @@ const deviceIcon = full => /headphone|headset|earbud|arctis|airpods|buds/i.test(
   : /nvidia|amd|intel.*display|hdmi|displayport|samsung|lg|sony|tv/i.test(full) ? "tv" : "speaker";
 async function pickAudio() {
   const a = await api("/api/audio").catch(() => null);
-  if (!a) return toast("Couch server isn't responding");
+  if (!a) return toast("Couch isn't responding. Try again in a moment; if it keeps happening, restart the PC.");
   const list = a.devices.length ? a.devices : a.current ? [a.current] : [];
-  if (!list.length) return toast("No audio outputs are on");
+  if (!list.length) return toast("No speakers or screens are on. Turn one on, then try again.");
   choose("Audio output", "Games, videos and the PC play here, and it stays that way until you change it.",
     list.map(d => {
       const [label, sub] = deviceName(d.name);
@@ -1179,6 +1179,27 @@ async function setChoice(action, g) {
 }
 
 // Options button: the quick menu (everything in the PC row, from anywhere)
+function powerMenu() {
+  choose("Power", "", [
+    { icon: "moon", label: "Sleep", sub: "Wake it with the PC's power button", fn: sleepNow },  // waking undoes it, so no dialog
+    { icon: "restart", label: "Restart", sub: "Closes all apps and restarts the PC", cls: "danger",
+      fn: () => confirmPower("restart", "Restart", "Restart the PC now? Unsaved work in other apps will be lost.") },
+    { icon: "power", label: "Shut down", sub: "Closes all apps and turns the PC off", cls: "danger",
+      fn: () => confirmPower("shutdown", "Shut down", "Shut down the PC now? Unsaved work in other apps will be lost.") },
+  ], { vertical: true, sound: "menu" });
+}
+function showControls() {
+  choose("Controls", "", [{ label: "Done" }], { lines: [
+    "Cross plays or opens what's selected",
+    "Circle goes back",
+    "Triangle searches your games and apps",
+    "Square shows a game's details",
+    "L1 and R1 jump between rows",
+    "Options opens the menu",
+    "The PS button turns a sleeping controller back on",
+    "On a keyboard: arrows, Enter, Esc, and / to search",
+  ] });
+}
 function quickMenu() {
   if (modal || !info) return Sound.bump();
   choose("Menu", "", pcItems().map(p => ({ label: p.label, sub: p.meta, icon: p.icon, fn: p.fn, cls: p.cls })), { vertical: true, sound: "menu" });
