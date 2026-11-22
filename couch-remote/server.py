@@ -192,7 +192,7 @@ def load_choices():
     except (OSError, ValueError):
         d = {}  # none yet, or unreadable: show everything
     return {"hidden": list(d.get("hidden", [])), "pinned": list(d.get("pinned", [])), "audio": d.get("audio"),
-            "played": dict(d.get("played", {}))}
+            "played": dict(d.get("played", {})), "took": dict(d.get("took", {}))}
 
 
 def save_choices(c):
@@ -974,9 +974,14 @@ def focus_what_opens(before):
             elif find_launcher():
                 focus_window(find_launcher())
             if any(window_exe(h) not in LAUNCHER_EXES for h in new):
-                if not last:  # how long a launch takes from the press, to tell Couch's part from the game's
-                    log.info("%s window after %.0f s (%s)", name, time.time() - t0,
+                if not last:  # how long a launch takes from the press; the Starting screen shows it next time
+                    took = time.time() - t0
+                    log.info("%s window after %.0f s (%s)", name, took,
                              next(window_exe(h) for h in new if window_exe(h) not in LAUNCHER_EXES))
+                    with CHOICES_LOCK:
+                        c = load_choices()
+                        c["took"][name] = int(round(took / 5) * 5) or 5  # "about": to the nearest 5 s
+                        save_choices(c)
                 last = time.time()
                 RUNNING["game_seen"] = RUNNING.get("is_game", False)  # an app tile (Big Picture) stays "running" itself
         elif last and time.time() - last > 10:
@@ -1778,7 +1783,7 @@ class Handler(BaseHTTPRequestHandler):
                 rumble("launch")
                 threading.Thread(target=focus_what_opens, args=(before,), daemon=True).start()
                 WATCHER.arm()
-                return self.send_json({"ok": True, "name": name})
+                return self.send_json({"ok": True, "name": name, "took": load_choices()["took"].get(name)})
             if path == "/api/key":
                 if b.get("key") not in KEYS:
                     return self.send_json({"error": "unknown key"}, 400)

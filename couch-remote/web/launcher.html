@@ -1049,16 +1049,17 @@ async function launch(body, name, rgb) {
   try {
     const r = await api("/api/launch", body);
     if (!r.ok) { hideStarting(); toast(r.error || `Couldn't start ${name}. Try again in a moment.`); }
+    else if (r.took) $("#starting-note").textContent = startHint = `Starting… Last time it took about ${r.took} seconds.`;
   } catch { hideStarting(); toast("Couch isn't responding. Try again in a moment; if it keeps happening, restart the PC."); }
 }
 
 // The starting screen stays until the game's window takes the screen (the launcher loses focus for good),
 // ○ hides it, or 90 s pass (the server's limit for showing a launcher that's stuck). Hiding it never stops the game from starting.
-let startTimer, slowTimer;
+let startTimer, slowTimer, startHint;
 function showStarting(name) {
   $("#starting-title").textContent = name;
-  $("#starting-note").textContent = "Starting…";
-  clearTimeout(slowTimer); slowTimer = setTimeout(() => $("#starting-note").textContent = "Still starting. Big games can take a minute.", 10000);
+  $("#starting-note").textContent = "Starting…"; startHint = null;
+  clearTimeout(slowTimer); slowTimer = setTimeout(() => { if (!startHint) $("#starting-note").textContent = "Still starting. Big games can take a minute."; }, 10000);
   $("#starting").classList.add("show"); document.body.classList.add("modal", "starting");
   modal = { els: [], i: 0, onBack: hideStarting };
   clearTimeout(startTimer); startTimer = setTimeout(hideStarting, 90000);

@@ -30,8 +30,11 @@ class CoverStoreLaunchers(unittest.TestCase):
                 mock.patch.object(server, "window_title", lambda h: titles(h, clock[0])), \
                 mock.patch.object(server, "find_launcher", lambda: COUCH), \
                 mock.patch.object(server, "focus_window", lambda h: focused.append((round(clock[0]), h))), \
-                mock.patch.object(server.user32, "GetForegroundWindow", lambda: foreground(clock[0])):
+                mock.patch.object(server.user32, "GetForegroundWindow", lambda: foreground(clock[0])), \
+                mock.patch.object(server, "load_choices", return_value={"took": {}}), \
+                mock.patch.object(server, "save_choices") as save:  # never the real choices.json
             server.focus_what_opens(list(before))
+        self.saved = save.call_args[0][0]["took"] if save.called else None
         return focused
 
     def test_auto_sign_in_never_shows_a_launcher(self):
@@ -40,6 +43,7 @@ class CoverStoreLaunchers(unittest.TestCase):
         self.assertNotIn(EPIC, [h for _, h in focused])
         self.assertNotIn(SIGNIN, [h for _, h in focused])
         self.assertEqual(focused[-1][1], GAME)
+        self.assertEqual(self.saved, {"GTA": 30})  # launch time kept for the next Starting screen
 
     def test_sign_in_still_waiting_after_15_s_comes_forward(self):
         focused = self.run_launch({2: SIGNIN, 60: GAME}, lambda h, t: "Rockstar Games - Sign In")
