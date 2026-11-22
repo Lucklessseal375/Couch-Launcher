@@ -1052,8 +1052,8 @@ async function launch(body, name, rgb) {
   } catch { hideStarting(); toast("Couch isn't responding. Try again in a moment; if it keeps happening, restart the PC."); }
 }
 
-// The starting screen stays until the game's window takes the screen (the launcher loses focus),
-// ○ hides it, or a minute passes. Hiding it never stops the game from starting.
+// The starting screen stays until the game's window takes the screen (the launcher loses focus for good),
+// ○ hides it, or 90 s pass (the server's limit for showing a launcher that's stuck). Hiding it never stops the game from starting.
 let startTimer, slowTimer;
 function showStarting(name) {
   $("#starting-title").textContent = name;
@@ -1061,7 +1061,7 @@ function showStarting(name) {
   clearTimeout(slowTimer); slowTimer = setTimeout(() => $("#starting-note").textContent = "Still starting. Big games can take a minute.", 10000);
   $("#starting").classList.add("show"); document.body.classList.add("modal", "starting");
   modal = { els: [], i: 0, onBack: hideStarting };
-  clearTimeout(startTimer); startTimer = setTimeout(hideStarting, 60000);
+  clearTimeout(startTimer); startTimer = setTimeout(hideStarting, 90000);
   updatePrompts();
 }
 function hideStarting() {
@@ -1071,7 +1071,9 @@ function hideStarting() {
   if (modal?.onBack === hideStarting) closeModal($("#starting"));
   updatePrompts();
 }
-addEventListener("blur", hideStarting);
+let blurTimer;  // a store launcher the server keeps behind Couch can take focus for a moment; Couch takes it back
+addEventListener("blur", () => { clearTimeout(blurTimer); blurTimer = setTimeout(hideStarting, 1500); });
+addEventListener("focus", () => clearTimeout(blurTimer));
 
 function openModal(overlay, els, onBack, start = 0, sound = "open") {
   overlay.classList.add("show"); document.body.classList.add("modal"); if (sound) Sound[sound]();
