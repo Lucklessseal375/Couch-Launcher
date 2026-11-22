@@ -1252,6 +1252,22 @@ ROCKSTAR_EXE = r"C:\Program Files\Rockstar Games\Launcher\Launcher.exe"
 ROCKSTAR_LOG = Path(os.environ.get("USERPROFILE", "")) / "Documents/Rockstar Games/Launcher/launcher.log"
 
 
+def warm_rockstar():
+    """At login, start Rockstar's launcher so a GTA press skips its startup and sign-in (Epic starts itself at login
+    already). Its window stays behind Couch for 90 s (covered, never minimized); a sign-in it asks for is left until
+    a GTA press, whose launch shows it after 15 s."""
+    if exe_running("Launcher.exe") or not Path(ROCKSTAR_EXE).exists():
+        return
+    log.info("starting Rockstar's launcher in the background")
+    subprocess.Popen([ROCKSTAR_EXE], cwd=str(Path(ROCKSTAR_EXE).parent), creationflags=0x00000008 | 0x00000200)
+    t0, name = time.time(), RUNNING["name"]
+    while time.time() - t0 < 90 and RUNNING["name"] == name:  # a launch takes over covering
+        time.sleep(0.5)
+        fg = user32.GetForegroundWindow()
+        if window_exe(fg) in ("socialclubhelper.exe", "launcher.exe") and find_launcher():
+            focus_window(find_launcher())
+
+
 def start_then(cmd, log_file, signed_in, then, limit):
     """Starts a closed store launcher, waits until its log shows `signed_in`, then calls then(). Games launch reliably
     only with their launchers already up and signed in (Epic ignores a link while it starts from closed; GTA ran when
@@ -1858,6 +1874,7 @@ def main():
     print(f"Couch Remote on http://127.0.0.1:{port}  (phone: {', '.join(lan_ips()) or 'no LAN IP'})")
     if want_open:
         threading.Timer(0.5, open_launcher).start()
+        threading.Timer(5, warm_rockstar).start()  # after the launcher is up, so there's a Couch to keep in front
     srv.serve_forever()
 
 

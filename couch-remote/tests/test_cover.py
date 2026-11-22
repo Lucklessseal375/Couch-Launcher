@@ -69,5 +69,41 @@ class CoverStoreLaunchers(unittest.TestCase):
         self.assertEqual(focused[0][1], EPIC)
 
 
+class WarmRockstar(unittest.TestCase):
+    def run_warm(self, running, fg_exe, launch_at=None):
+        clock, focused = [0.0], []
+        server.RUNNING.update(name=None)
+
+        def sleep(s):
+            clock[0] += s
+            if launch_at is not None and clock[0] >= launch_at:
+                server.RUNNING["name"] = "GTA"
+
+        with mock.patch.object(server, "exe_running", return_value=running), \
+                mock.patch.object(server.subprocess, "Popen") as popen, \
+                mock.patch.object(server.time, "time", lambda: clock[0]), \
+                mock.patch.object(server.time, "sleep", sleep), \
+                mock.patch.object(server.user32, "GetForegroundWindow", lambda: 9), \
+                mock.patch.object(server, "window_exe", lambda h: fg_exe(clock[0])), \
+                mock.patch.object(server, "find_launcher", lambda: COUCH), \
+                mock.patch.object(server, "focus_window", lambda h: focused.append(round(clock[0]))):
+            server.warm_rockstar()
+        return popen, focused
+
+    def test_already_running_does_nothing(self):
+        popen, focused = self.run_warm(True, lambda t: "socialclubhelper.exe")
+        popen.assert_not_called()
+        self.assertEqual(focused, [])
+
+    def test_starts_it_and_keeps_couch_in_front(self):
+        popen, focused = self.run_warm(False, lambda t: "socialclubhelper.exe" if 3 <= t < 6 else "msedge.exe")
+        self.assertEqual(popen.call_args[0][0], [server.ROCKSTAR_EXE])
+        self.assertTrue(focused and all(3 <= t <= 6 for t in focused), focused)  # times are rounded
+
+    def test_stops_when_a_game_launch_takes_over(self):
+        _, focused = self.run_warm(False, lambda t: "socialclubhelper.exe", launch_at=10)
+        self.assertTrue(focused and max(focused) <= 10, focused)
+
+
 if __name__ == "__main__":
     unittest.main()
