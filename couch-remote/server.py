@@ -1217,24 +1217,27 @@ def exe_running(name):
 
 
 EPIC_LOG = Path(os.environ.get("LOCALAPPDATA", "")) / "EpicGamesLauncher/Saved/Logs/EpicGamesLauncher.log"
+ROCKSTAR_EXE = r"C:\Program Files\Rockstar Games\Launcher\Launcher.exe"
+ROCKSTAR_LOG = Path(os.environ.get("USERPROFILE", "")) / "Documents/Rockstar Games/Launcher/launcher.log"
 
 
-def start_epic_then(exe, send_link):
-    """Epic ignores a game link while it starts from closed (no Epic process, no log; three times on 2026-11-22), but
-    starts fine on its own. So start it quietly, wait until its log says it signed in (~3 s), then send the link."""
-    t0 = time.time()
-    subprocess.Popen([exe, "-silent"], cwd=str(Path(exe).parent), creationflags=0x00000008 | 0x00000200)
-    while time.time() - t0 < 30:
+def start_then(cmd, log_file, signed_in, then, limit):
+    """Starts a closed store launcher, waits until its log shows `signed_in`, then calls then(). Games launch reliably
+    only with their launchers already up and signed in (Epic ignores a link while it starts from closed; GTA ran when
+    Epic and Rockstar were both open; 2026-11-22). After `limit` seconds, then() runs anyway."""
+    t0, name = time.time(), Path(cmd[0]).name
+    subprocess.Popen(cmd, cwd=str(Path(cmd[0]).parent), creationflags=0x00000008 | 0x00000200)
+    while time.time() - t0 < limit:
         time.sleep(0.5)
-        try:  # Epic starts a fresh log each run, so only a log written after t0 counts
-            if EPIC_LOG.stat().st_mtime > t0 and "OnLoginComplete" in EPIC_LOG.read_text(errors="ignore"):
-                log.info("Epic started and signed in after %.0f s", time.time() - t0)
+        try:  # both launchers start a fresh log each run, so only a log written after t0 counts
+            if log_file.stat().st_mtime > t0 and signed_in in log_file.read_text(errors="ignore"):
+                log.info("%s started and signed in after %.0f s", name, time.time() - t0)
                 break
         except OSError:
             pass
     else:
-        log.info("Epic didn't report signing in within 30 s; sending the link anyway")
-    send_link()
+        log.info("%s didn't report signing in within %d s; going on anyway", name, limit)
+    then()
 
 
 def controller_loop():
@@ -1411,7 +1414,8 @@ def open_url(url):
 
     if scheme == "com.epicgames.launcher" and not exe_running("EpicGamesLauncher.exe"):
         log.info("Epic is closed; starting it before sending the link")
-        return threading.Thread(target=start_epic_then, args=(exe, send_link), daemon=True).start()
+        return threading.Thread(target=start_then, args=([exe, "-silent"], EPIC_LOG, "OnLoginComplete", send_link, 30),
+                                daemon=True).start()
     send_link()
 
 
@@ -1421,7 +1425,12 @@ def launch_app(app_id):
     if not app:
         raise KeyError(app_id)
     kind, target = app.get("kind"), os.path.expandvars(app.get("target", ""))
-    if kind == "url":
+    if kind == "url" and app.get("rockstar") and not exe_running("Launcher.exe"):
+        # shortcut: any program named Launcher.exe counts as Rockstar's; make this check the path if one ever clashes
+        log.info("Rockstar's launcher is closed; starting it before %s", app["name"])
+        threading.Thread(target=start_then, args=([ROCKSTAR_EXE], ROCKSTAR_LOG, "is now signed in",
+                                                  lambda: open_url(target), 60), daemon=True).start()
+    elif kind == "url":
         open_url(target)
     elif kind == "exe":
         subprocess.Popen([target] + list(app.get("args", [])), cwd=str(Path(target).parent),
