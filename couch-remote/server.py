@@ -938,12 +938,11 @@ def running_window():
 
 def focus_what_opens(before):
     """Windows won't give focus to a window our background process started (Steam, a game...), so the
-    controller wouldn't reach it. Focus each new window as it appears; stop 10 s after the last one.
-    The windows are also remembered for Resume / Close game."""
-    # shortcut: a game window that appears more than 10 s after the last launcher window isn't tracked;
-    # keep watching longer if slow launchers (Rockstar) turn out to need it.
-    seen, last, t0 = set(before), 0.0, time.time()
-    while time.time() - t0 < 60:
+    controller wouldn't reach it. Focus each new window as it appears. The windows are also remembered for
+    Resume / Close game, so keep watching until the game's own window shows up: store launchers (Epic, then
+    Rockstar's) come first, and the game can take minutes. Stop 10 s after a game window, or after 3 minutes."""
+    seen, last, t0, name = set(before), 0.0, time.time(), RUNNING["name"]
+    while time.time() - t0 < 180 and RUNNING["name"] == name:  # a newer launch takes over
         time.sleep(0.5)
         new = [h for h in visible_windows() if h not in seen]
         seen.update(new)
@@ -951,7 +950,8 @@ def focus_what_opens(before):
             RUNNING["windows"] += new
             time.sleep(0.3)  # let it finish appearing
             focus_window(new[0])
-            last = time.time()
+            if any(window_exe(h) not in LAUNCHER_EXES for h in new):
+                last = time.time()
         elif last and time.time() - last > 10:
             return
 
@@ -1537,6 +1537,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"ok": PAD_SPEAKER.available()})
             if path == "/api/tasks":
                 return self.send_json(task_list())
+            if path == "/api/running":  # cheap: the launcher polls it to keep Now playing current
+                return self.send_json({"running": {"name": RUNNING["name"]} if running_window() else None})
             if path == "/api/info":
                 apps, _ = load_apps()
                 games, hidden = library()

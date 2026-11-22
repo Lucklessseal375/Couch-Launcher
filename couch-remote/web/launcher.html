@@ -1512,6 +1512,12 @@ async function refresh(toResume) {
   build();
   if (toResume && info.running) focus(0, 0);  // back from the game: Resume is where you'd want to be
 }
+// Now playing stays current while the launcher is up: a game can close from the phone, the task manager or a crash
+setInterval(async () => {
+  if (!info || document.hidden || modal) return;
+  let r; try { r = await api("/api/running"); } catch { return; }
+  if (!!r.running !== !!info.running || r.running?.name !== info.running?.name) refresh();
+}, 3000);
 addEventListener("focus", () => { wake(); refresh(true); Out.detect(); padLight(); if (!PREVIEW) Sound.startBgm(); });
 </script>
 </body>
