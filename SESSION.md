@@ -57,12 +57,14 @@ A PS5-style, controller-driven TV launcher ("Couch") for a Windows PC: a Python 
 - The launcher vanished once at 12:05:43 (clean close, cause unknown). Now logged via `window:` lines.
 - The stray 63× sleep was a held Enter key (fixed).
 - **Don't minimize Epic/Rockstar windows during a launch** (tried 2026-11-22, commits 6b4eadc, d9867c4; reverted). While it was in, every GTA launch hung: Rockstar sign-in stuck loading, then "Game launch validation timed out" (`Documents\Rockstar Games\Launcher\launcher.log`). Rockstar's UI is embedded Chromium. If hiding launchers is wanted again, cover them instead (e.g. keep Couch on top), never minimize.
-- Rockstar sign-in window can draw black while its log says "Finished loading Social Club UI" (`Documents\Rockstar Games\Social Club\socialclub_launcher.log`). Tried: deleting `%LOCALAPPDATA%\Rockstar Games\Social Club\Launcher\Renderer` (cache, with the user's OK).
+- Rockstar sign-in window can draw black while its log says "Finished loading Social Club UI" (`Documents\Rockstar Games\Social Club\socialclub_launcher.log`). Deleting `%LOCALAPPDATA%\Rockstar Games\Social Club\Launcher\Renderer` fixed the black window, but that cache also holds Rockstar's auto sign-in: afterwards GTA launches from Epic stuck on the sign-in logo (log stops at "Client is ready to attempt a launch") until the user signed in once in the standalone Rockstar Games Launcher with Auto Sign In ticked. Then GTA worked (2026-11-22 ~15:25).
+- **Don't open store links through `explorer.exe`** (commit daaa5ec, reverted in e8db8a6): explorer can't parse the Epic GTA link and opens Documents instead. After reverting server code, restart the server: the user hit the old code once because I didn't.
+- **The server's job object is not why cold Epic fails.** The scheduled task does run the server inside a job, but Epic started cold from a job I created, and from the server itself (Epic tile, 15:16). `CREATE_BREAKAWAY_FROM_JOB` is refused (WinError 5) even outside a job, so don't use it.
 
 ## 5. Immediate Next Steps
 1. Done 2026-11-22: the user tested Create screenshot, mute, PS back to game, Volume, Storage and two-controller batteries on the TV; all work.
 2. PS returned to the game in the user's test, so Steam didn't take over then. The user hasn't confirmed that Steam's guide-button action is off.
-3. Test a cold GTA V launch from the launcher with Epic closed (the original failure case for `open_url`), and check that Now playing tracks GTA and clears on quit.
+3. GTA V launches from Couch when Epic is already running (verified by the user 2026-11-22). **Still broken: GTA with Epic fully closed.** Couch's log says "opened … link", but no Epic process appears and Epic writes no log (13:27, 13:28, 15:10). Epic started cold without a link works. Idea, not tried: when Epic isn't running, start it with `-silent` first and send the GTA link once it's up. Now playing tracking/clearing for GTA also not checked.
 4. Optional, offered: Game clips (hold Create → Game Bar "record that"; the user must enable background recording), Downloads row, in-game quick menu. All deferred as riskier.
 5. Leftovers: `couch-remote/profiles/web-youtube` holds the YouTube sign-in (issue 03); `Screenshot (2).png` was a test capture; the "UI UX Pro Max" plugin wasn't in the catalog (closest: "UI Design Review", "Design").
 
