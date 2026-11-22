@@ -444,28 +444,48 @@ const Sound = (() => {
     if (ctx.state === "suspended") ctx.resume();
     return ctx;
   }
+  // Every part of one sound is scheduled from the same instant: currentTime is read once per task, not per part.
+  let T = null;
+  const now = () => { if (T === null) { T = ac().currentTime; queueMicrotask(() => { T = null; }); } return T; };
   function tone(freq, t0, dur, type = "sine", gain = 0.1, toFreq) {
-    const c = ac(), t = c.currentTime + t0, o = c.createOscillator(), g = c.createGain();
+    const c = ac(), t = now() + t0, o = c.createOscillator(), g = c.createGain();
     o.type = type; o.frequency.setValueAtTime(freq, t);
     if (toFreq) o.frequency.exponentialRampToValueAtTime(toFreq, t + dur);
     g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + 0.006);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.connect(g).connect(out); o.start(t); o.stop(t + dur + 0.02);
   }
-  function noise(t0, dur, f0, f1, gain = 0.12, q = 1.2) {
-    const c = ac(), t = c.currentTime + t0, len = Math.ceil(c.sampleRate * dur);
+  function noise(t0, dur, f0, f1, gain = 0.12, q = 1.2, attack = 0.01) {
+    const c = ac(), t = now() + t0, len = Math.ceil(c.sampleRate * dur);
     const buf = c.createBuffer(1, len, c.sampleRate), d = buf.getChannelData(0);
     for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
     const s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
     s.buffer = buf; f.type = "bandpass"; f.Q.value = q;
     f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(f1, t + dur);
-    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + 0.01);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + attack);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    s.connect(f).connect(g).connect(out); s.start(t); s.stop(t + dur);
+    s.connect(f).connect(g).connect(out); s.start(t); s.stop(t + dur + 0.01);
+    s.onended = () => { s.disconnect(); f.disconnect(); g.disconnect(); };
   }
-  const clop = (t0, hi) => { tone(hi ? 340 : 270, t0, 0.07, "sine", 0.22, hi ? 120 : 95); noise(t0, 0.03, 2600, 1800, 0.06, 3); };
-  const jingle = t0 => [2350, 3120, 4060].forEach((f, i) => tone(f * (0.98 + Math.random() * 0.04), t0 + i * 0.018, 0.22, "triangle", 0.035));
-  const whir = t0 => { tone(140, t0, 0.35, "sawtooth", 0.025, 900); noise(t0, 0.3, 600, 4000, 0.05, 6); }; // steel ball spin-up
+  // FM bell: a carrier bent by an inharmonic modulator (ratio 1.41) rings like struck metal; ratio 2 is warmer
+  function bell(freq, t0, dur, gain = 0.05, ratio = 1.41, bright = 1.2) {
+    const c = ac(), t = now() + t0, m = c.createOscillator(), mg = c.createGain(), o = c.createOscillator(), g = c.createGain();
+    m.frequency.value = freq * ratio; o.frequency.value = freq;
+    mg.gain.setValueAtTime(freq * bright, t); mg.gain.exponentialRampToValueAtTime(0.001, t + dur * 0.8);  // bright strike, mellowing
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + 0.003);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    m.connect(mg).connect(o.frequency); o.connect(g).connect(out);
+    m.start(t); o.start(t); m.stop(t + dur + 0.02); o.stop(t + dur + 0.02);
+  }
+  // A hoof: a hollow knock (coconut-shell foley, which TV speakers carry) over a low thump the grips feel.
+  // Slightly different every time, so a run of moves sounds like a horse, not a metronome.
+  const clop = (t0, hi) => {
+    const v = 0.96 + Math.random() * 0.08;
+    noise(t0, 0.04, (hi ? 1250 : 950) * v, (hi ? 800 : 620) * v, 0.5, 5, 0.002);
+    tone((hi ? 210 : 175) * v, t0, 0.06, "sine", 0.17, hi ? 90 : 75);
+  };
+  const jingle = t0 => [2350, 3120, 4060].forEach((f, i) => bell(f * (0.98 + Math.random() * 0.04), t0 + i * 0.02, 0.14, 0.012, 1.41, 0.5));  // spurs
+  const whir = t0 => { tone(150, t0, 0.3, "triangle", 0.04, 700); noise(t0, 0.28, 600, 3600, 0.2, 2.5); };  // steel ball spin-up
   const play = fn => { if (on) try { fn(); } catch {} };
   // A clip for this slot, started right away (clips overlap; nothing waits for them). False = none added.
   function clip(slot, gain = sfxVol) {
@@ -476,16 +496,17 @@ const Sound = (() => {
     s.connect(g).connect(sfx); s.start();
     return true;
   }
-  // Built-in sounds, used for any slot you haven't added a clip for
+  // Built-in sounds, used for any slot you haven't added a clip for. Loudest last, as heard on the TV: move (you
+  // hear it most), bump, back and tab, menu and select, battery, launch; measured offline, 4 to 10 dB apart.
   const synth = {
     move: () => clop(0, (foot ^= 1)),                                 // clip-clop as you move
-    tab: () => { whir(0); tone(1320, 0.02, 0.08, "triangle", 0.05); }, // steel ball deflects
-    back: () => noise(0, 0.2, 2400, 500, 0.14, 0.9),                  // rope swish
-    menu: () => { noise(0, 0.32, 400, 3200, 0.09, 0.8); tone(784, 0.22, 0.3, "sine", 0.06); },
+    tab: () => { noise(0, 0.2, 700, 3800, 0.33, 2); tone(170, 0, 0.18, "triangle", 0.075, 680); bell(1319, 0.07, 0.35, 0.075); },  // a steel ball spins and rings
+    back: () => { noise(0, 0.16, 2800, 600, 0.34, 1.2); tone(240, 0, 0.05, "sine", 0.09, 110); },  // rope swish, with a light tap
+    menu: () => { noise(0, 0.26, 400, 3000, 0.26, 1); bell(784, 0.12, 0.5, 0.08, 1.41, 0.8); bell(1175, 0.2, 0.45, 0.056, 1.41, 0.8); },  // swoosh up, two-note chime
     launch: () => {                                                   // gallop off + golden chord
       [0, .09, .2, .36, .45, .56].forEach((t, i) => clop(t, i % 3 === 2));
-      [392, 494, 587, 784].forEach((f, i) => tone(f, 0.62 + i * 0.07, 0.9, "triangle", 0.06)); whir(0.55);
-      jingle(0.62);
+      [392, 494, 587, 784].forEach((f, i) => bell(f, 0.62 + i * 0.07, 1.1, 0.1, 2, 0.5)); whir(0.55);
+      jingle(0.66);
     },
   };
   const cue = slot => play(() => clip(slot) || synth[slot]());
@@ -571,15 +592,15 @@ const Sound = (() => {
     move: () => cue("move"),
     tab: () => cue("tab"),
     menu: () => cue("menu"),
-    bump: () => play(() => tone(95, 0, 0.12, "sine", 0.18, 60)),     // can't go further
-    select: () => play(() => { tone(660, 0, 0.09, "triangle", 0.08); tone(990, 0.05, 0.16, "triangle", 0.08); jingle(0.03); whir(0); }),
+    bump: () => play(() => { tone(110, 0, 0.11, "sine", 0.23, 55); noise(0, 0.025, 500, 350, 0.29, 1.5, 0.002); }),  // can't go further: a dull wooden thud
+    select: () => play(() => { tone(330, 0, 0.05, "sine", 0.15, 140); bell(659, 0, 0.22, 0.09, 2, 0.6); bell(988, 0.06, 0.32, 0.09, 2, 0.6); jingle(0.05); }),  // rising fifth + spurs
     back: () => cue("back"),
-    open: () => play(() => { noise(0, 0.32, 400, 3200, 0.09, 0.8); tone(784, 0.22, 0.3, "sine", 0.06); }),
-    battery: () => play(() => { tone(880, 0, 0.16, "triangle", 0.1); tone(587, 0.2, 0.26, "triangle", 0.1); }),  // controller low
+    open: () => play(synth.menu),
+    battery: () => play(() => { bell(880, 0, 0.18, 0.105, 2, 0.4); bell(587, 0.2, 0.3, 0.105, 2, 0.4); }),  // controller low: falling, soft
     launch: () => { stopBgm(0.5); cue("launch"); },
     fanfare: () => play(() => {                                      // original "race start": gallop, bugle call, spurs
       [0, .11, .24, .42, .53, .66, .84, .95, 1.08].forEach((t, i) => clop(t, i % 3 === 2));
-      [[392, 1.2, .2], [523, 1.4, .2], [659, 1.6, .2], [784, 1.8, 1]].forEach(([f, t, d]) => { tone(f, t, d, "sawtooth", 0.03); tone(f * 2, t, d, "triangle", 0.025); });
+      [[392, 1.2, .2], [523, 1.4, .2], [659, 1.6, .2], [784, 1.8, 1]].forEach(([f, t, d]) => { tone(f, t, d, "sawtooth", 0.09); tone(f * 2, t, d, "triangle", 0.075); });
       jingle(1.85); whir(1.75);
     }),
   };
