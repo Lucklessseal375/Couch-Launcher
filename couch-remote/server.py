@@ -904,9 +904,6 @@ def task_action(h, action):
     steam = exe in ("steamwebhelper.exe", "steam.exe")  # Steam's windows belong to a helper Steam restarts at once
     if action == "switch":
         focus_window(h)
-    elif action == "close" and steam and "Big Picture" in title:
-        open_url("steam://close/bigpicture")  # it ignores close messages; leaving it opens Steam's desktop window
-        threading.Thread(target=_tuck_steam_away, args=(set(visible_windows()),), daemon=True).start()
     elif action == "close":
         close_window(h)
     elif action == "force":
@@ -917,20 +914,12 @@ def task_action(h, action):
 
 
 def close_window(h):
-    """What the window's own X button does (WM_SYSCOMMAND SC_CLOSE): apps can still ask to save, and Steam, which
-    ignores a bare WM_CLOSE, goes to the tray."""
+    """What the window's own X button does (WM_SYSCOMMAND SC_CLOSE), so apps can still ask to save. Steam's own
+    windows (Big Picture, the Steam window) only go to the tray that way, so quit Steam itself instead."""
+    if window_exe(h) in ("steamwebhelper.exe", "steam.exe"):
+        log.info("closing Steam (steam://exit)")
+        return open_url("steam://exit")
     user32.PostMessageW(h, 0x0112, 0xF060, 0)
-
-
-def _tuck_steam_away(before):
-    for _ in range(16):  # up to 8 s for Steam's desktop window to appear after Big Picture closes
-        time.sleep(0.5)
-        new = [h for h in visible_windows() if h not in before and window_exe(h) == "steamwebhelper.exe"]
-        if new:
-            time.sleep(0.5)
-            for h in new:
-                close_window(h)
-            return
 
 
 def running_window():
