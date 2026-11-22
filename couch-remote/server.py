@@ -1281,7 +1281,7 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/light" and kind == "local":  # the controllers' light bar: {"rgb": [r, g, b]}
                 r, g, bl = (max(0, min(255, int(v))) for v in b["rgb"])
                 LIGHT[0] = (r, g, bl)
-            elif path == "/api/padoff" and kind == "local":  # turn wireless controllers off (menu, or idle)
+            elif path == "/api/padoff":  # turn wireless controllers off (launcher menu or idle, or the phone)
                 if b.get("idle") and not launcher_in_front():
                     return self.send_json({"ok": False, "off": 0})  # idle page behind a game: someone's playing
                 return self.send_json({"ok": True, "off": padspeaker.turn_off()})

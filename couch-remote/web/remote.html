@@ -122,6 +122,7 @@
     <div class="grid g2">
       <button class="k" data-win="launcher">Show launcher</button>
       <button class="k" data-confirm="close-app">Close current app</button>
+      <button class="k" id="pad-off" style="grid-column: 1 / -1">Turn off controller</button>
     </div>
     <h2>Power</h2>
     <div class="grid">
@@ -186,6 +187,9 @@ document.querySelectorAll("[data-win]").forEach(b => b.onclick = () => { buzz();
 document.querySelectorAll("[data-confirm]").forEach(b => b.onclick = () => {
   if (confirm("Close the app that's in front on the PC (Alt+F4)?")) send("/api/window", { action: b.dataset.confirm });
 });
+$("#pad-off").onclick = () => {
+  buzz(); api("/api/padoff", {}).then(r => toast(r.off ? "Controller off" : "No wireless controller connected")).catch(() => {});
+};
 $("#close-game").onclick = () => {
   if (confirm("Close the game? Progress since your last save will be lost.")) send("/api/window", { action: "close-game" }).then(load);
 };
