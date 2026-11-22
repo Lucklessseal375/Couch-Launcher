@@ -73,6 +73,15 @@
   #idle-art { position: absolute; inset: 0; background: center 25% / cover no-repeat; filter: brightness(.5); opacity: 0; transition: opacity 1.2s;
     animation: idle-pan 60s ease-in-out infinite alternate; }
   #idle-art.on { opacity: 1; }
+  /* easter egg: now and then Gyro's steel ball rolls across the screensaver */
+  #idle-ball { position: absolute; bottom: 6vh; left: -12vh; width: 9vh; opacity: 0; filter: brightness(.7) drop-shadow(0 1vh 1.5vh #000); }
+  #idle-ball.roll { animation: idle-roll 9s linear; }
+  @keyframes idle-roll { 0% { opacity: 1; transform: translateX(0) rotate(0); } 100% { opacity: 1; transform: translateX(calc(100vw + 24vh)) rotate(1440deg); } }
+  /* easter egg: the Golden Spin (L1 R1 L1 R1) */
+  #golden-spin { position: fixed; left: 50%; top: 50%; width: 120vh; height: 120vh; margin: -60vh 0 0 -60vh; color: var(--gold); opacity: 0;
+    pointer-events: none; z-index: 40; filter: drop-shadow(0 0 2vh rgba(242,184,68,.8)); }
+  #golden-spin.go { animation: golden-spin 2.4s var(--spring); }
+  @keyframes golden-spin { 0% { opacity: 0; transform: scale(.2) rotate(0); } 30% { opacity: .9; } 100% { opacity: 0; transform: scale(1.3) rotate(720deg); } }
   @keyframes idle-pan { from { transform: scale(1.04) translate(-1.5%, -1%); } to { transform: scale(1.1) translate(1.5%, 1%); } }
 
   /* ---------- details of the focused tile (PS5 game hub) */
@@ -175,6 +184,9 @@
   .card { position: relative; background: var(--glass-hi); backdrop-filter: blur(30px) saturate(1.2); color: #fff; border-radius: 2.8vh; padding: 4.4vh 4.6vw;
           text-align: center; max-width: 80vw; box-shadow: inset 0 0 0 1px var(--line), 0 4vh 8vh rgba(0,0,0,.6); animation: pop .45s var(--spring); }
   @keyframes pop { from { transform: scale(.94); opacity: 0; } }
+  .card::before { content: ""; position: absolute; left: 2.8vh; right: 2.8vh; top: 0; height: 1.3vh; border-radius: 0 0 1vh 1vh; pointer-events: none;
+    background: radial-gradient(circle, #ffe3b0 .22vh, transparent .3vh) 0 .62vh / 1.4vh 1.4vh repeat-x,
+      linear-gradient(#21a7c4 0 22%, var(--pink) 22% 44%, #fe5000 44%); }
   .card h3 { margin: 0 0 1vh; font: 800 4vh/1.1 var(--ui); }
   .card p { margin: .8vh 0; color: var(--dim); font-size: 2.3vh; }
   .card .choices { display: flex; gap: 1.4vw; justify-content: center; margin-top: 3.2vh; }
@@ -240,7 +252,7 @@
 
   /* Windows "Animation effects" off: ゴゴゴ becomes a fade; nothing spins, shakes, slides or zooms */
   @media (prefers-reduced-motion: reduce) {
-    .sky::after, #idle-art, .app-shell, .details.swap #d-title, .details.swap #sfx span, .item.focus .badge img, .card, .overlay.show, .launch .ball { animation: none !important; }
+    .sky::after, #idle-art, #idle-ball, #golden-spin, .app-shell, .details.swap #d-title, .details.swap #sfx span, .item.focus .badge img, .card, .overlay.show, .launch .ball { animation: none !important; }
     .details.swap #sfx { animation: fade-sfx 1.6s ease-out; }
     #rows, .track, .item, .item .badge, .key { transition: opacity .2s, box-shadow .2s, filter .2s; }
     .item.focus, .card .choice.focus, .key.focus { transform: none; }
@@ -309,7 +321,8 @@
 </div>
 <footer id="prompts"></footer>
 <div id="toast"></div>
-<div id="idle"><div id="idle-art"></div><div id="idle-clock"></div></div>
+<div id="idle"><div id="idle-art"></div><img id="idle-ball" src="/steelball.png" alt=""><div id="idle-clock"></div></div>
+<svg id="golden-spin" viewBox="0 0 2 2" aria-hidden="true"><use href="#spiral"/></svg>
 <div class="overlay" id="dialog"><div class="card" id="dlg-card">
   <img id="dlg-art" alt="">
   <div class="dlg-body">
@@ -683,7 +696,9 @@ let idleN = 0;
 function placeIdleClock() {
   const a = $("#idle-art"), c = $("#idle-clock");
   a.classList.remove("on");
-  setTimeout(() => { a.style.backgroundImage = `url("${SKIES[idleN++ % SKIES.length]}")`; a.classList.add("on"); }, 1200);
+  setTimeout(() => { a.style.backgroundImage = `url("${IDLE_ART[idleN++ % IDLE_ART.length]}")`; a.classList.add("on"); }, 1200);
+  const b = $("#idle-ball"); b.classList.remove("roll");
+  if (Math.random() < .25) { void b.offsetWidth; b.classList.add("roll"); }
   c.style.left = 5 + Math.random() * 75 + "vw"; c.style.top = 5 + Math.random() * 80 + "vh";
 }
 setInterval(() => {
@@ -720,6 +735,7 @@ function toast(msg) {
 
 // ---------- home backdrop: the show's official key art, crossfading slowly; a focused game's art covers it
 const SKIES = ["/poster.webp", "/img/sbr-riders.jpg", "/img/sbr-race.jpg"];
+const IDLE_ART = [...SKIES, "/img/sbr-desert.jpg"];  // too wide for the home backdrop: Johnny would sit under the menu
 let skyFront = $("#skyA"), skyBack = $("#skyB"), skyN = 0;
 function nextSky() {
   const url = SKIES[skyN++ % SKIES.length], img = new Image();
@@ -1195,6 +1211,45 @@ function openSearch() {
   renderSearch();
 }
 function closeSearch() { S = null; closeModal($("#search")); }
+// ---------- easter eggs from Steel Ball Run
+const EGGS = [
+  [/^johnny|^joestar/, "Johnny Joestar. The jockey who got back on the horse."],
+  [/^tusk/, "Tusk Act 1… Act 2… Act 3… ACT 4!", true],
+  [/^gyro|^zeppeli|^nyo/, "Nyo-ho! Gyro Zeppeli, steel balls ready."],
+  [/^(spin|rotation|golden)/, "Trust the spin. Follow the golden rectangle.", true],
+  [/^slow ?dancer/, "Slow Dancer: Johnny's spotted horse."],
+  [/^valkyrie/, "Valkyrie: Gyro's horse, the one with the striped legs."],
+  [/^(diego|dio|scary)/, "Diego Brando on Silver Bullet. Scary Monsters!"],
+  [/^silver ?bullet/, "Silver Bullet: Diego's horse, fast and mean."],
+  [/^(valentine|d4c|president)/, "D4C. Dojyaaan~"],
+  [/^(lucy|steel$)/, "Lucy Steel: braver than everyone in the race."],
+  [/^hot ?pants/, "Hot Pants. Cream Starter, sprayed on."],
+  [/^(pizza|mozzarella)/, "Gyro's cheese song is stuck in your head now. 🍕"],
+  [/^(corpse|saint)/, "A Saint's Corpse part! Keep it hidden."],
+  [/^(sbr|steel ball)/, "6,000 km from San Diego to New York. Ready?", true],
+  [/^(horseshoe|wanted|cowboy)/, "Yeehaw. 🐎"],
+];
+function showEgg(q) {
+  if (q.length < 3) return "";
+  const hit = EGGS.find(([re]) => re.test(q));
+  if (!hit) return "";
+  if (hit[2] && showEgg.last !== hit[1]) goldenSpin();
+  showEgg.last = hit[1];
+  return hit[1];
+}
+function goldenSpin() {
+  const g = $("#golden-spin"); g.classList.remove("go"); void g.getBoundingClientRect(); g.classList.add("go");
+  Sound.select();
+}
+// L1 R1 L1 R1 (PageUp PageDown twice on a keyboard): the Golden Spin
+let combo = [];
+function comboPress(a) {
+  combo = [...combo.filter(([, t]) => Date.now() - t < 2500), [a, Date.now()]].slice(-4);
+  if (combo.map(([k]) => k).join() === "l1,r1,l1,r1") { combo = []; goldenSpin(); toast("Golden Spin!"); }
+}
+// the race started on San Diego beach on September 25, 1890
+{ const d = new Date(); if (d.getMonth() === 8 && d.getDate() === 25) setTimeout(() => toast(`The Steel Ball Run started ${d.getFullYear() - 1890} years ago today. Giddy up!`), 4000); }
+
 function renderSearch() {
   $("#sq-text").textContent = S.q;
   $("#sq-hint").hidden = !!S.q;
@@ -1207,7 +1262,8 @@ function renderSearch() {
     c.onclick = () => { closeSearch(); orig.onactivate(); };
     box.append(c); return { el: c, orig };
   });
-  $("#sr-title").textContent = !q ? "" : hits.length ? `${hits.length} result${hits.length === 1 ? "" : "s"}` : "Nothing matches";
+  const egg = !hits.length && showEgg(q);
+  $("#sr-title").textContent = !q ? "" : hits.length ? `${hits.length} result${hits.length === 1 ? "" : "s"}` : egg || "Nothing matches";
   if (!S.results.length) S.zone = "keys";
   S.r = Math.min(S.r, Math.max(0, S.results.length - 1));
   paintSearch();
@@ -1270,7 +1326,7 @@ addEventListener("keydown", e => {
   if (wake()) return;
   if (padSeen && padKey) return;
   if (k) move(k);
-  else if (e.key === "PageUp" || e.key === "PageDown") { e.preventDefault(); category(e.key === "PageUp" ? -1 : 1); }
+  else if (e.key === "PageUp" || e.key === "PageDown") { e.preventDefault(); comboPress(e.key === "PageUp" ? "l1" : "r1"); category(e.key === "PageUp" ? -1 : 1); }
   else if (e.key === "Enter" || e.key === " ") activate();
   else if (e.key === "Escape" || e.key === "Backspace") back();
   else if (e.key === "/" || e.key === "y") { if (!modal) { Sound.select(); openSearch(); } }
@@ -1287,7 +1343,7 @@ function onPad(a) {
   if (wake()) return;
   if (a === "a") activate();
   else if (a === "b") back();
-  else if (a === "l1" || a === "r1") category(a === "l1" ? -1 : 1);
+  else if (a === "l1" || a === "r1") { comboPress(a); category(a === "l1" ? -1 : 1); }
   else if (a === "x") { if (modal?.del) modal.del(); else gameDetails(); }
   else if (a === "y") { if (modal) back(); else { Sound.select(); openSearch(); } }
   else if (a === "options") { if (modal) back(); else quickMenu(); }
