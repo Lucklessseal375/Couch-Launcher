@@ -525,6 +525,17 @@ TV_HINTS = {"brands": [], "fullVersion": "", "platform": "Tizen", "platformVersi
             "model": "SMART-TV", "mobile": False}
 TV_PIDS = set()  # Edge browser processes showing a TV site: the controller drives them with TV-remote keys
 TV_OPEN = {}  # profile -> its Edge browser pid while its TV window is open
+# YouTube's TV app has no way out: back from home goes to its account screen, and back there does nothing (on a TV the
+# system closes the app). So ○ there, or a ○ that changes nothing on screen, asks us to close the window.
+TV_EXIT_JS = """(() => {
+  const exit = window.couchExit ? () => window.couchExit("") : () => {};  // a DevTools binding (YouTube mutes the console)
+  addEventListener("keydown", e => {
+    if (e.key !== "Escape" || !e.isTrusted) return;
+    if (document.querySelector("ytlr-welcome")) return exit();
+    const before = document.body ? document.body.innerText : "";
+    setTimeout(() => { if (document.body && document.body.innerText === before) exit(); }, 700);
+  }, true);
+})();"""
 
 
 class Cdp:
@@ -622,6 +633,10 @@ def edge_tv(url, profile):
     try:
         cdp = Cdp(page["webSocketDebuggerUrl"])
         cdp.send("Emulation.setUserAgentOverride", userAgent=TV_USER_AGENT, userAgentMetadata=TV_HINTS)
+        cdp.send("Page.enable")  # for the script below
+        cdp.send("Page.addScriptToEvaluateOnNewDocument", source=TV_EXIT_JS)
+        cdp.send("Runtime.enable")
+        cdp.send("Runtime.addBinding", name="couchExit")  # the script calls it; it arrives here as an event
         cdp.send("Page.navigate", url=url)
         if pid:
             TV_PIDS.add(pid)
@@ -629,7 +644,12 @@ def edge_tv(url, profile):
         log.info("TV mode: %s open as a TV (edge pid %s)", url, pid)
         cdp.s.settimeout(None)
         while True:  # stay attached: the TV identity lasts only as long as this session
-            cdp.recv()
+            m = cdp.recv()
+            if m.get("method") == "Runtime.bindingCalled" and m.get("params", {}).get("name") == "couchExit":
+                h = pid and pid_window(pid)
+                if h:
+                    log.info("TV mode: back on YouTube's last screen; closing it")
+                    user32.PostMessageW(h, 0x0010, 0, 0)  # WM_CLOSE
     except (OSError, ValueError, RuntimeError, ConnectionError) as e:
         log.info("TV mode: %s closed (%s)", url, e)
     finally:
