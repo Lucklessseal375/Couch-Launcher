@@ -655,7 +655,8 @@ def edge_tv(url, profile):
     finally:
         TV_PIDS.discard(pid)
         TV_OPEN.pop(profile, None)
-        if not (pid and pid_window(pid)):  # its window is gone: don't leave Edge running behind it
+        if not (pid and pid_window(pid)):  # its window is gone: back to the launcher, and no Edge left behind it
+            open_launcher()  # focuses it, or opens it again; Windows would put whatever was behind in front
             end_profile_edge(profile)
 
 
@@ -1494,6 +1495,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"ok": True, "off": padspeaker.turn_off()})
             elif path == "/api/window":
                 act = b.get("action")
+                log.info("window: %s (from %s)", act, self.client_address[0])
                 if act == "launcher":
                     open_launcher()
                 elif act == "close-launcher":
