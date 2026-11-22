@@ -1365,26 +1365,12 @@ def _controller_loop():
 # ---------------------------------------------------------------- launching & power
 
 def open_url(url):
-    """Opens a store link (com.epicgames.launcher://..., steam://...) by running the program Windows has registered for
-    it. os.startfile alone (ShellExecute from a server thread) once did nothing at all for Epic links, three times."""
-    scheme = url.split(":", 1)[0]
-    try:
-        with winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, rf"{scheme}\shell\open\command") as k:
-            cmd = winreg.QueryValueEx(k, "")[0]
-    except OSError:
-        return os.startfile(url)
-    m = re.match(r'\s*"([^"]+)"\s*(.*)$', cmd) or re.match(r"\s*(\S+)\s*(.*)$", cmd)
-    exe, rest = m.group(1), m.group(2)
-    args = [a.replace("%1", url) for a in (re.findall(r'"[^"]*"|\S+', rest) or ["%1"])]
-    args = [a.strip('"') for a in args]
-    if "%1" not in rest:
-        args.append(url)
-    try:
-        subprocess.Popen([exe] + args, cwd=str(Path(exe).parent), creationflags=0x00000008 | 0x00000200)
-    except OSError as e:  # e.g. Steam set to run as administrator (WinError 740): Windows' own way handles that
-        log.info("opening %s link directly failed (%s); using Windows' handler", scheme, e)
-        return os.startfile(url)
-    log.info("opened %s link with %s", scheme, Path(exe).name)
+    """Opens a store link (com.epicgames.launcher://..., steam://...) through explorer.exe, which hands it to the
+    user's own Windows shell. Run directly, the handler starts inside the scheduled task's job object, and Epic's
+    starter, which launches the real Epic and exits, then does nothing at all (a cold GTA launch failed this way).
+    The shell also handles Steam's run-as-administrator prompt (WinError 740)."""
+    subprocess.Popen([os.path.expandvars(r"%WINDIR%\explorer.exe"), url])
+    log.info("opened %s link through the shell", url.split(":", 1)[0])
 
 
 def launch_app(app_id):
