@@ -5,6 +5,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import server  # noqa: E402
+server.log.disabled = True  # keep test runs out of the real server.log
 
 COUCH, EPIC, SIGNIN, GAME = 1, 2, 3, 4
 EXE = {EPIC: "epicgameslauncher.exe", SIGNIN: "socialclubhelper.exe", GAME: "gta5_enhanced.exe"}

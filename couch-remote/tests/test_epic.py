@@ -8,6 +8,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import server  # noqa: E402
+server.log.disabled = True  # keep test runs out of the real server.log
 
 
 class StartThen(unittest.TestCase):
