@@ -974,6 +974,9 @@ def focus_what_opens(before):
             elif find_launcher():
                 focus_window(find_launcher())
             if any(window_exe(h) not in LAUNCHER_EXES for h in new):
+                if not last:  # how long a launch takes from the press, to tell Couch's part from the game's
+                    log.info("%s window after %.0f s (%s)", name, time.time() - t0,
+                             next(window_exe(h) for h in new if window_exe(h) not in LAUNCHER_EXES))
                 last = time.time()
                 RUNNING["game_seen"] = RUNNING.get("is_game", False)  # an app tile (Big Picture) stays "running" itself
         elif last and time.time() - last > 10:
