@@ -68,7 +68,12 @@
   /* idle: nothing still and bright on the TV, just a dim clock that moves every minute */
   #idle { position: fixed; inset: 0; background: #05060a; opacity: 0; pointer-events: none; transition: opacity 1.2s; z-index: 30; }
   body.idle #idle { opacity: 1; }
-  #idle-clock { position: absolute; font: 600 6vh/1 var(--ui); color: #6f7790; font-variant-numeric: tabular-nums; }
+  #idle-clock { position: absolute; font: 600 6vh/1 var(--ui); color: #aab2c8; font-variant-numeric: tabular-nums; text-shadow: 0 .3vh 2vh #000c; }
+  /* the show's art, dimmed, a new picture each minute and always drifting so nothing sits still on the TV */
+  #idle-art { position: absolute; inset: 0; background: center 25% / cover no-repeat; filter: brightness(.5); opacity: 0; transition: opacity 1.2s;
+    animation: idle-pan 60s ease-in-out infinite alternate; }
+  #idle-art.on { opacity: 1; }
+  @keyframes idle-pan { from { transform: scale(1.04) translate(-1.5%, -1%); } to { transform: scale(1.1) translate(1.5%, 1%); } }
 
   /* ---------- details of the focused tile (PS5 game hub) */
   .details { position: relative; height: 21vh; padding: .4vh var(--pad) 0; }
@@ -235,7 +240,7 @@
 
   /* Windows "Animation effects" off: ゴゴゴ becomes a fade; nothing spins, shakes, slides or zooms */
   @media (prefers-reduced-motion: reduce) {
-    .sky::after, .app-shell, .details.swap #d-title, .details.swap #sfx span, .item.focus .badge img, .card, .overlay.show, .launch .ball { animation: none !important; }
+    .sky::after, #idle-art, .app-shell, .details.swap #d-title, .details.swap #sfx span, .item.focus .badge img, .card, .overlay.show, .launch .ball { animation: none !important; }
     .details.swap #sfx { animation: fade-sfx 1.6s ease-out; }
     #rows, .track, .item, .item .badge, .key { transition: opacity .2s, box-shadow .2s, filter .2s; }
     .item.focus, .card .choice.focus, .key.focus { transform: none; }
@@ -304,7 +309,7 @@
 </div>
 <footer id="prompts"></footer>
 <div id="toast"></div>
-<div id="idle"><div id="idle-clock"></div></div>
+<div id="idle"><div id="idle-art"></div><div id="idle-clock"></div></div>
 <div class="overlay" id="dialog"><div class="card" id="dlg-card">
   <img id="dlg-art" alt="">
   <div class="dlg-body">
@@ -674,8 +679,11 @@ function wake() {
   document.body.classList.remove("idle");
   return true;
 }
+let idleN = 0;
 function placeIdleClock() {
-  const c = $("#idle-clock");
+  const a = $("#idle-art"), c = $("#idle-clock");
+  a.classList.remove("on");
+  setTimeout(() => { a.style.backgroundImage = `url("${SKIES[idleN++ % SKIES.length]}")`; a.classList.add("on"); }, 1200);
   c.style.left = 5 + Math.random() * 75 + "vw"; c.style.top = 5 + Math.random() * 80 + "vh";
 }
 setInterval(() => {
