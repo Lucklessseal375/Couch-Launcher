@@ -928,20 +928,49 @@ def running_window():
     return pick_running(alive, RUNNING.get("game_seen", False))
 
 
+def keep_behind(exe, is_game, game_seen):
+    """While a game starts, its store launchers (not Steam's) stay behind Couch: covered, never minimized, since a
+    minimized Rockstar launcher hung every GTA launch (2026-11-22)."""
+    return is_game and not game_seen and exe in LAUNCHER_EXES - {"steam.exe", "steamwebhelper.exe"}
+
+
 def focus_what_opens(before):
     """Windows won't give focus to a window our background process started (Steam, a game...), so the
     controller wouldn't reach it. Focus each new window as it appears. The windows are also remembered for
     Resume / Close game, so keep watching until the game's own window shows up: store launchers (Epic, then
-    Rockstar's) come first, and the game can take minutes. Stop 10 s after a game window, or after 3 minutes."""
+    Rockstar's) come first, and the game can take minutes. Stop 10 s after a game window, or after 3 minutes.
+    Store launchers stay behind Couch (keep_behind); one still asking to sign in after 15 s comes forward, and if no
+    game window shows within 90 s the newest one does (it may want an update or a click)."""
     seen, last, t0, name = set(before), 0.0, time.time(), RUNNING["name"]
+    behind = {}  # store-launcher window -> when it appeared; None once Couch stops covering for this launch
     while time.time() - t0 < 180 and RUNNING["name"] == name:  # a newer launch takes over
         time.sleep(0.5)
+        if behind:
+            for h, since in list(behind.items()):
+                if time.time() - since > 15 and re.search(r"sign.?in|log.?in", window_title(h), re.I):
+                    log.info("%s is asking to sign in; showing it", window_exe(h))
+                    focus_window(h)
+                    del behind[h]
+            if behind and not last and time.time() - t0 > 90:
+                h = max(behind, key=behind.get)
+                log.info("no game window after 90 s; showing %s", window_exe(h))
+                focus_window(h)
+                behind = None
+            elif behind and not last and user32.GetForegroundWindow() in behind and find_launcher():
+                focus_window(find_launcher())  # a launcher took the screen by itself: cover it again
         new = [h for h in visible_windows() if h not in seen]
         seen.update(new)
         if new:
             RUNNING["windows"] += new
             time.sleep(0.3)  # let it finish appearing
-            focus_window(new[0])
+            hide = [h for h in new if behind is not None and keep_behind(window_exe(h), RUNNING.get("is_game"), last)]
+            show = [h for h in new if h not in hide]
+            for h in hide:
+                behind[h] = time.time()
+            if show:
+                focus_window(show[0])
+            elif find_launcher():
+                focus_window(find_launcher())
             if any(window_exe(h) not in LAUNCHER_EXES for h in new):
                 last = time.time()
                 RUNNING["game_seen"] = RUNNING.get("is_game", False)  # an app tile (Big Picture) stays "running" itself
