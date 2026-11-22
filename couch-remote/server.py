@@ -23,8 +23,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))  # audio.py sits next to this file
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # audio.py and padspeaker.py sit next to this file
 import audio  # noqa: E402
+import padspeaker  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent
 WEB = ROOT / "web"
@@ -757,7 +758,8 @@ PAD_STATUS = "pad:none"  # last controller/battery state sent to the launcher; n
 PAD_READER = False  # True once the server reads the controller; otherwise the page uses the Gamepad API
 RUMBLES = []  # (when, low, high, ms): haptic pulses waiting for the controller loop
 RUMBLE_LOCK = threading.Lock()
-# Controller-side cues that keep the TV quiet; they work over Bluetooth, unlike the speaker.
+PAD_SPEAKER = padspeaker.Speaker()  # launcher sounds on a wireless DualSense's speaker (the page posts them)
+# Haptic cues, felt in the hands while the sounds play on the controller or the TV.
 PATTERNS = {"launch": [(0, .45, .25, 110), (.22, .9, .55, 240)],          # the race starts
             "low": [(0, .7, .7, 90), (.2, .7, .7, 90), (.4, .7, .7, 90)]}  # battery low
 
@@ -1140,6 +1142,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.stream_events()
             if path == "/api/audio":
                 return self.send_json(audio_state())
+            if path == "/api/padspeaker" and kind == "local":  # can the launcher play on a wireless controller?
+                return self.send_json({"ok": PAD_SPEAKER.available()})
             if path == "/api/info":
                 apps, _ = load_apps()
                 games, hidden = library()
@@ -1193,6 +1197,12 @@ class Handler(BaseHTTPRequestHandler):
         kind = self.gate(True)
         if not kind:
             return
+        if urlparse(self.path).path == "/api/padaudio" and kind == "local":  # launcher sound for the controller
+            n = int(self.headers.get("Content-Length") or 0)
+            if not 0 < n <= 50 * padspeaker.BLOCK * 2 or n % (padspeaker.BLOCK * 2):  # whole 21 ms blocks only
+                return self.send_json({"error": "bad audio"}, 400)
+            ok = PAD_SPEAKER.feed(self.rfile.read(n))
+            return self.send_json({"ok": ok}, 200 if ok else 409)
         path, b = urlparse(self.path).path, self.body()
         try:
             if path == "/api/launch":

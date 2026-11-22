@@ -6,6 +6,7 @@ The first .mp3, .m4a, .ogg, .opus, .wav or .flac file in this folder (alphabetic
   - when the launcher starts, and
   - when you start a game,
 
-on the DualSense speaker when the controller is plugged in by USB (Windows only exposes the speaker over USB).
-Without the cable, it plays on the TV at startup only, so it never talks over a game.
+At startup it plays where the menu sounds do: the TV and the controller's speaker (over Bluetooth), or
+only the controller on a USB cable. When a game starts it plays on the controller only, so it never talks
+over the game on the TV.
 No file here: a short original "race start" fanfare plays instead.

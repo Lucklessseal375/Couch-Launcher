@@ -143,5 +143,32 @@ class AudioNamesPermissionTest(unittest.TestCase):
                              ["http://127.0.0.1:8765,*"], {"setting": 1})
 
 
+class PadSpeakerTest(unittest.TestCase):
+    def test_reports_carry_the_bluetooth_crc_and_layout(self):
+        import zlib
+        ps = server.padspeaker
+        for r, size, report_id in ((ps.control_report(), 78, 0x31), (ps.audio_report(17, bytes(range(200)) * 2), 547, 0x39)):
+            self.assertEqual((len(r), r[0]), (size, report_id))
+            self.assertEqual(int.from_bytes(r[-4:], "little"), zlib.crc32(b"\xa2" + r[:-4]))
+        a = ps.audio_report(17, bytes(range(200)) * 2)
+        self.assertEqual((a[1], a[9], a[10], a[11], a[140], a[141], a[142:144]), (0x10, 34, 0xD2, 64, 0xD3, 200, b"\x00\x01"))
+        c = ps.control_report(70, 2)
+        self.assertEqual((c[3], c[4], c[8], c[10], c[40]), (0xA0, 0x80, 70, 0x30, 0x02))
+
+    def test_only_bluetooth_dualsenses(self):
+        tail = "#{4d1e55b2-f16f-11cf-88cb-001111000030}"
+        bt = r"\\?\HID#{00001124-0000-1000-8000-00805f9b34fb}_VID&0002054c_PID&0ce6#a&1&0&0000" + tail
+        usb = r"\\?\HID#VID_054C&PID_0CE6&MI_03#8&2&0&0000" + tail
+        ds4 = bt.replace("0ce6", "09cc")
+        self.assertEqual([server.padspeaker.is_bt_dualsense(p) for p in (bt, usb, ds4)], [True, False, False])
+
+    def test_encodes_fixed_size_opus_frames(self):
+        from array import array
+        ps = server.padspeaker
+        if not ps.Speaker().opus:
+            self.skipTest("no libopus (pygame missing)")
+        self.assertEqual(len(ps.Encoder(ps._load_opus()).encode(array("h", range(-960, 960)))), 2 * ps.FRAME)
+
+
 if __name__ == "__main__":
     unittest.main()

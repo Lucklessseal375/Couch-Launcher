@@ -21,5 +21,5 @@ Effects and music volume are set in Menu > Sound, and Menu > Sound > Test sounds
 
 Use clips you have the rights to use, for example from your own copies.
 
-Where they play: the DualSense speaker when the controller is on a USB cable (Windows only offers its speaker
-over USB), otherwise Windows' default output (the TV).
+Where they play: the TV and the DualSense's own speaker when the controller is on Bluetooth (the server sends
+it the sound, see `padspeaker.py`). On a USB cable they play only on the controller.
