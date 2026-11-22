@@ -5,7 +5,8 @@
     {"id": "epic", "meta": "Your Epic Games library and store", "name": "Epic Games", "kind": "exe", "target": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe", "color": "#3a3a3a"},
     {"id": "ea", "meta": "Your EA library and store", "name": "EA app", "kind": "exe", "target": "C:\\Program Files\\Electronic Arts\\EA Desktop\\EA Desktop\\EALauncher.exe", "color": "#ff4747"},
     {"id": "youtube", "meta": "Videos and music, in YouTube's TV app", "name": "YouTube", "kind": "web", "target": "https://www.youtube.com/tv", "tv": true, "color": "#e62117"},
-    {"id": "ubisoft", "meta": "Your Ubisoft library and store", "name": "Ubisoft Connect", "kind": "exe", "target": "C:\\Program Files (x86)\\Ubisoft\\Ubisoft Game Launcher\\UbisoftConnect.exe", "color": "#0070ff"}
+    {"id": "ubisoft", "meta": "Your Ubisoft library and store", "name": "Ubisoft Connect", "kind": "exe", "target": "C:\\Program Files (x86)\\Ubisoft\\Ubisoft Game Launcher\\UbisoftConnect.exe", "color": "#0070ff"},
+    {"id": "claude", "meta": "Chat with Claude, and Claude Code", "name": "Claude", "kind": "exe", "target": "C:\\Windows\\explorer.exe", "args": ["shell:AppsFolder\\Claude_pzs8sxrjxfjjc!Claude"], "color": "#d97757"}
   ],
   "games": [
     {"id": "gta5", "name": "GTA V Enhanced", "kind": "url", "target": "com.epicgames.launcher://apps/b0cd075465c44f87be3b505ac04a2e46%3A122e5e90b7b8424d930be8bc1a7e05fb%3A8769e24080ea413b8ebca3f1b8c50951?action=launch&silent=true", "art": "/img/gta5-poster.jpg", "hero": "/img/gta5-hero.jpg", "meta": "Epic Games"}
