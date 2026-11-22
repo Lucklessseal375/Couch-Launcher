@@ -1,90 +1,82 @@
-# Session handoff (2026-11-21)
+# Session Handoff
 
-Read this first, then the gotchas in `PICKUP.md` §6 (they matter before you touch anything), then `CLAUDE.md`.
+_Session of 2026-11-22. Repo: `C:\Users\eli\Documents\CouchSetup` (branch `main`, all work committed; last commit `17b0d29`). Read `PICKUP.md` §6 gotchas and `CLAUDE.md` too._
 
-## Where things stand
+## 1. Primary Objective
+A PS5-style, controller-driven TV launcher ("Couch") for a Windows PC: a Python stdlib server (`couch-remote/server.py`, port 8765) plus a full-screen Edge page (`couch-remote/web/launcher.html`) and a phone remote (`web/remote.html`), themed after JoJo Part 7, Steel Ball Run.
 
-- **Everything is committed and the working tree is clean.** The last commit is the one that adds this file, on `main`. Nothing is pushed.
-- **Running now:** the server (`python server.py`, started hidden, not by the logon task) and the TV launcher (Edge `--app`), both on the latest code. The phone remote is a static page; reload it on the phone to get the new icons.
-- **Tests:** `cd couch-remote && python -m unittest discover tests`. Result: 17 tests, OK.
+## 2. Current State & Completed Work
+**Look / design** (`web/launcher.html`)
+- Redesign "Steel Ball Run at night": tokens `--obsidian #150f0b`, `--ink #f3e6cf`, `--dim #bfae96`, `--gold #f2b844` (focus ring), `--bib #13809a` (Play button, 4.6:1 with white), `--serif "Aoboshi One"` (titles, row and card headings, hard Johnny-cyan offset shadow on `#d-title`), Archivo for UI.
+- Home backdrop `.sky` (blurred `::before` plus sharp masked `::after`, `--art/--f0/--f1`), with a bottom fade mask (`--low`) that hides the logo printed on `poster.webp`. `SKIES` = poster, sbr-riders, sbr-race; `IDLE_ART` = SKIES + `img/sbr-desert.jpg` (cropped official key visual).
+- Screensaver (10 min idle): dimmed art, new picture every minute, drifting, rolling steel ball (25% chance).
+- Easter eggs: search names (`EGGS`: Johnny, Tusk, Gyro, Valentine...), L1 R1 L1 R1 Golden Spin (`comboPress`), Sept 25 note, marquee ribbon on `.card::before`.
+- Long titles step down (`#d-title.long`), ™ stripped; inactive rows at opacity .62.
 
-## What this session did
+**Launcher features**
+- PC row and Menu (`pcItems()`): Phone remote, Audio output, Sound, Turn off controller, **Power** (`powerMenu`: Sleep/Restart/Shut down), **Volume** (`volumeMenu`), **Storage** (`storageMenu`), **Media gallery** (`mediaGallery`), **Task manager** (`taskManager`/`taskActions`), **Controls** (`showControls`), Desktop.
+- `choose()` gained `gauges` (`#dlg-gauges`, shared `gauge()` HTML); `openModal(..., sound="")` is silent; `modal.prompts` and `modal.move` overrides.
+- Now playing polls `/api/running` every 3 s.
+- Launch music: the intro (or `Sound.fanfare`) plays on the TV during "Starting…" and fades in `hideStarting()`.
+- Held keys don't repeat Enter/Back (`e.repeat && !k`).
+- One battery icon per controller (`showPad("full,low")`). Toasts for `shot` and `mic:*`.
 
-Earlier in the session (details in `PICKUP.md` §1):
+**Server** (`couch-remote/server.py`, `audio.py`)
+- YouTube tile (`apps.json` id `youtube`, `tv: true`) → `edge_tv()`: Edge with `--remote-debugging-port=0` and a black data: start page. A CDP session (`Cdp` class) sets `Emulation.setUserAgentOverride` with `TV_HINTS` (Samsung Tizen) and stays attached. `TV_EXIT_JS` plus `Runtime.addBinding("couchExit")` closes the window on ○ at YouTube's last screen. `end_profile_edge()` kills Edge lingering on the profile (before launch, and after close only if the window is gone). On close, `open_launcher()`. `TV_PIDS`/`TV_KEYS` map the pad to remote keys only while that window is in front.
+- Task manager: `task_list()` (CPU via `GetSystemTimes`, memory, per-window process-tree working set, `IsHungAppWindow`), `task_action()` (switch/close/force; only listed windows). `close_window()` = WM_SYSCOMMAND SC_CLOSE; Steam windows → `steam://exit`. Force on Steam → `taskkill /IM steam.exe /T /F`.
+- `open_url()`: runs the registered `HKCR\<scheme>\shell\open\command`, and falls back to `os.startfile` on OSError (Steam needs elevation, WinError 740).
+- Now playing: `focus_what_opens` watches up to 180 s; `RUNNING{name,windows,game_seen,is_game}`; `pick_running(cands, game_seen)` ignores leftover store-launcher windows after the game window was seen (games only, not app tiles).
+- Controller (`act()`): `create` → `take_screenshot()` (SendInput Win+PrtScn, rumble "shot", emit "shot"). `mic` (SDL button 15) → `toggle_mic()`. PS: if launcher in front and a game is running → `focus_window(running)`, else `open_launcher()` (no longer skips when Steam runs).
+- Endpoints: `GET /api/tasks`, `/api/running`, `/api/media`, `/api/volume`, `/api/storage`; `POST /api/tasks {id,action}`, `/api/volume {level|muted|mic}`; `/media/<file>` serves the Screenshots folder only. `/api/window` actions are logged.
+- `audio.py`: `volume_state()`, `set_volume(level, muted)`, `set_mic_muted()` (IAudioEndpointVolume via raw COM vtables).
+- `screenshots_dir()` (FOLDERID_Screenshots = `C:\Users\eli\Pictures\Screenshots`), `media_list()`, `fixed_drives()`.
+- Tests: `couch-remote/tests/test_gate.py`, `tests/test_tasks.py` (20 tests, all pass: `python -m unittest discover -s tests` from `couch-remote`).
 
-| Commit | Work |
-|---|---|
-| `2fcf0d6` | Launcher UI cleanup and row scroll fix |
-| `784604d` | Games-only launcher: resume/close, battery, idle screen |
-| `b4797cb` | Hide/pin games with Square; audio output tool |
-| `5166807` | Audio output that holds the TV as default; real app icons; polish |
-| `6decd0c` | PS5-style launcher with SBR key art, search, details, menu, sound slots |
+## 3. Architectural & Key Decisions
+- Stack stays Python stdlib plus pygame/SDL (controller) and ctypes Win32/COM. No new dependencies in the server. Pillow was installed for the user only as a dev tool, for cropping.
+- Identity is Steel Ball Run, not PlayStation.com colours. PS5 features borrow layout and behaviour only (user chose: "PS5 layout, SBR look").
+- **PS button wins over Steam** (user chose). The user must turn off Steam's guide-button action in Steam → Settings → Controller. Never change Steam settings ourselves.
+- YouTube = the TV app (youtube.com/tv), not YouTube Music. The user dropped Music: it has no TV version, and a desktop site plus homemade arrow-key navigation looked wrong.
+- Controller-to-key mapping only for our TV window (`TV_PIDS`). The user rejected general keyboard/mouse mapping for desktop apps.
+- Close = what the X button does (SC_CLOSE); apps may ask to save. Force close only for hung or still-open apps, behind a confirmation.
+- Copyrighted music isn't downloaded; the user supplies `web/audio/<song>` and `web/audio/sbr/bgm-loop.mp3`. Official SBR key art was downloaded with the user's OK.
+- Ponytail mode: smallest complete change; commit when work completes (user asked "commit keep working").
+- Restart the server with: kill the `python …server.py` process, then `Start-ScheduledTask -TaskName 'Couch Launcher'`. Reload the TV page: POST `/api/window {"action":"close-launcher"}` then `{"action":"launcher"}` (needs header `X-Couch: 1`).
 
-Then:
+## 4. Failed Attempts & Gotchas (Do Not Repeat)
+- `/api/key`, phone, PS and controller input all type into the real TV. Never activate tiles in `/launcher?preview`; never send `enter`. The user stopped one key-sending test: ask before pressing keys on the TV.
+- The `--user-agent` flag alone no longer works for youtube.com/tv (client hints leak "Windows / Edge"). `--disable-features=UserAgentClientHint` does nothing. A DNR extension can't strip `Sec-CH-UA`. Only the CDP `userAgentMetadata` override works.
+- YouTube mutes `console.log`; use `Runtime.addBinding`. `Page.addScriptToEvaluateOnNewDocument` needs `Page.enable` first. `Cdp.send()` swallows events, so read them in a dedicated loop.
+- Edge lingers windowless after `/json/close`; a later launch on that profile shows a blank new-tab page ("weird VM"). Hence `end_profile_edge`.
+- Windows scales the TV display (4K at 300%; screen captures need `SetProcessDPIAware`). Don't add `--force-device-scale-factor`.
+- Steam ignores WM_CLOSE. Killing steamwebhelper respawns it. steam.exe can't be started directly (needs elevation).
+- `os.startfile` from a server thread once silently failed for Epic links (hence `open_url`, which tries the direct command first).
+- Headless Edge `--dump-dom`/`--screenshot` are unreliable; use `dev/shoot.py` or CDP.
+- Python heredocs: `\r\n` and `\s` escapes get mangled. Write scripts with the Write tool or use raw strings. `tests/test_gate.py` has CRLF line endings.
+- Hooks open launcher/remote HTML as file:// tabs in the browser pane; close them.
+- The launcher vanished once at 12:05:43 (clean close, cause unknown). Now logged via `window:` lines.
+- The stray 63× sleep was a held Enter key (fixed).
 
-| Commit | Work | Confirmed by the user? |
-|---|---|---|
-| `5bf0e41` | No more "unsupported command-line flag" banner. The `--use-fake-ui-for-media-stream` flag is gone; `allow_audio_names()` writes the media permission into the launcher's own Edge profile instead. | Yes: "banner is gone" |
-| `9f939cf` | Launcher sounds on a wireless DualSense's speaker, plus the TV. `padspeaker.py` sends HID report 0x31 (speaker on, volume 100, preamp 7 = max) and 0x39 (Opus audio). Opus comes from pygame's `libopus-0.dll`. Music started with a game is controller-only. USB is unchanged. | Yes: "works", "louder", no delay |
-| `19bf408` | Menu sounds felt in the grips. The haptic bytes in 0x39 are driven by the menu sounds' low end (a 150 Hz buzz, drive x120, 25 ms fade). Music is never felt. | Yes: "taps feel good" |
-| `fddfed9` | The ui-sound-design skill (`.claude/skills/ui-sound-design`, MIT, every file read first) and a sound redesign: its rule fixes, a hoof knock + thump, FM bells for metal, and a measured loudness order (move -40 … launch -30 dB). | Yes: "sounds good" |
-| `d88eac8` | **Light bar:** gold in the menu, the game's cover colour (or a store app's brand colour) when it starts, restored on Resume; `POST /api/light`, set through SDL. **Steam updates (issue 09):** "Updating 45%" / waiting / paused on the tile with an "Open Steam" pill, refreshed every 20 s. Also fixes updating games vanishing from the shelf. | Not yet |
-| `d4c77c6` | Phone remote: drawn PlayStation buttons and icons instead of text symbols. Screenshot-checked at 390x844 and sent to the user. | Not yet |
+## 5. Immediate Next Steps
+1. Ask the user to test on the TV with the real controller, since none of these button paths were pressed by me: Create → screenshot, mute button → "Microphone muted", PS on launcher → back to game, Volume slider, Storage, two-controller batteries.
+2. Confirm the user turned off Steam's guide-button action. If PS still opens Steam, guide them; don't change Steam config.
+3. Test a cold GTA V launch from the launcher with Epic closed (the original failure case for `open_url`), and check that Now playing tracks GTA and clears on quit.
+4. Optional, offered: Game clips (hold Create → Game Bar "record that"; the user must enable background recording), Downloads row, in-game quick menu. All deferred as riskier.
+5. Leftovers: `couch-remote/profiles/web-youtube` holds the YouTube sign-in (issue 03); `Screenshot (2).png` was a test capture; the "UI UX Pro Max" plugin wasn't in the catalog (closest: "UI Design Review", "Design").
 
-Answered, no code: a Godot rewrite isn't worth it (the server would keep all the real work); the launcher's Edge uses ~600 MB of the PC's 32 GB.
-
-## How the sound and light paths work (one-minute map)
-
-- `launcher.html` `Sound` holds one AudioContext. Its nodes:
-  - `out`: synth sounds, through a 9 kHz low-pass.
-  - `sfx`: menu sounds, felt in the grips.
-  - `bus`: everything.
-- `Out.detect()` picks one of three outputs:
-  - A USB DualSense device id, via `setSinkId`.
-  - `"bt"`: `GET /api/padspeaker` says a wireless one is connected.
-  - `""`, the TV.
-- In `"bt"` mode an AudioWorklet (`padTapWorklet`) taps two inputs:
-  - The bus, through a 4x lift and a limiter, becomes the speaker.
-  - `sfx` becomes the grips.
-- `PadLink` posts 2048-byte blocks (960 16-bit samples at 45 kHz, then 128 haptic bytes) to `POST /api/padaudio`, one request at a time.
-- `padspeaker.Speaker` paces one 0x39 report every 21.333 ms to every Bluetooth DualSense, and rests after ~1 s of quiet. `python padspeaker.py` plays a test chime plus a tap.
-- **Light bar:** `padLight(rgb)` posts to `POST /api/light`. The controller loop calls `SDL_GameControllerSetLED` (ctypes on pygame's `SDL2.dll`). `artColor(img)` picks the colour from a 16x16 sample of the cover.
-- Protocol details: `PICKUP.md` §6 (the "Controller speaker over Bluetooth" and "Light bar" bullets).
-
-## Ground rules from the user (keep following them)
-
-- **Ponytail mode (full).** Smallest complete change; end replies with what was skipped and any risk.
-- **Working style.** Work without asking for permission and verify things yourself. Commit only when the user asks ("fix all" from the handoff list counted).
-- **No copyrighted audio downloads.** The user asked several times for "SPIN" by Kroi (YouTube, majdata.net); it was declined each time. They can drop their own file into `couch-remote/web/audio/` (intro) or `web/audio/sbr/` (slots).
-- **Don't change Windows system or security settings.** Issues 01 and 02 hold the exact commands for the user to run.
-- **Never activate a tile** (Enter / ✕ / `.onactivate()`) in `/launcher?preview`: it launches real games.
-- **Close every preview tab when done.** The newest launcher page takes the controller's presses away from the TV. Then reload the TV launcher.
-
-## Restart recipe (what was used all session)
-
+## 6. Reference Context / Code Snippets
 ```powershell
-cd C:\Users\eli\Documents\CouchSetup\couch-remote
-# stop the server and the launcher's Edge
-Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'python.exe' -and $_.CommandLine -match 'server\.py' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
-Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'msedge.exe' -and $_.CommandLine -match 'profiles.launcher' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
-Start-Process python -ArgumentList 'server.py' -WindowStyle Hidden
-# then open the launcher on the TV
-Invoke-WebRequest http://127.0.0.1:8765/api/window -Method Post -Headers @{'X-Couch'='1'} -ContentType 'application/json' -Body '{"action":"launcher"}' -UseBasicParsing
+# restart server (scheduled task, independent of the agent shell)
+Get-CimInstance Win32_Process -Filter "Name like 'python%'" | ? { $_.CommandLine -like '*server.py*' } | % { Stop-Process -Id $_.ProcessId -Force }
+Start-ScheduledTask -TaskName 'Couch Launcher'
 ```
-
-- **A page-only change:** `{"action":"close-launcher"}`, then `{"action":"launcher"}`.
-- **Safe test keys:** `POST /api/key` with arrows or escape, and `POST /api/text {"text":"m"}` for the menu. Never send `enter`.
-- **Light bar test:** `POST /api/light {"rgb":[98,171,255]}`.
-
-## Next
-
-1. **For the user to do or confirm:**
-   - Watch the light bar change when a game starts, and reload the phone remote to see the new buttons.
-   - Issue 01: never sleep, so the phone remote always works. Issue 02: one restore point per day again. Each issue has the admin command.
-   - Add their own intro song file.
-2. **Not verified (needs the hardware or a real situation):**
-   - A real Steam update on a tile. No game was updating, so it was only tested with a faked one.
-   - Steam Input or a running game taking over the light bar or the speaker stream.
-   - Two DualSenses on at once. Both get the sound and the colour; never tried.
-   - The 0x31 haptic flags (full motor power, built-in haptic low-pass off). They come from community notes (nondebug's DualSense docs); the taps feel good either way.
-3. **No open feature work is left from the list.** All issues are resolved, wontfix (07), or the user's own (01, 02).
+```bash
+# reload TV launcher; screenshots via headless page
+H='-H X-Couch:1 -H Content-Type:application/json'
+curl -s -X POST $H -d '{"action":"close-launcher"}' http://127.0.0.1:8765/api/window; sleep 2
+curl -s -X POST $H -d '{"action":"launcher"}' http://127.0.0.1:8765/api/window
+python couch-remote/dev/shoot.py steps.json <out_dir>   # steps: {"url": ".../launcher?preview", "steps":[{"js":"...","wait":ms,"shot":"x.png"}]}
+```
+- Log: `couch-remote/server.log` (`launch … asked by`, `opened … link`, `TV mode:`, `task manager:`, `window:`).
+- Controller map (`server.py` `buttons`): A=a(✕), B=b(○), X=x(□), Y=y(△), L1/R1, START=options, BACK=create, GUIDE=guide, 15=mic.
+- Config: `couch-remote/apps.json` (apps/games; `kind` url|exe|web, `tv: true`), `choices.json` (hidden/pinned/played), `config.json` (`edge`, `port`).
