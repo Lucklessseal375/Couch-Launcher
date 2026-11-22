@@ -1,89 +1,70 @@
 # Session Handoff
 
-_Session of 2026-11-22. Repo: `C:\Users\eli\Documents\CouchSetup` (branch `main`, all work committed; last commit `17b0d29`). Read `PICKUP.md` §6 gotchas and `CLAUDE.md` too._
+_Session of 2026-11-22, afternoon (second session that day). Repo: `C:\Users\eli\Documents\CouchSetup` (branch `main`, all work committed; last code commit `79a4443`). Read `PICKUP.md` §6 gotchas and `CLAUDE.md` too. The morning session's handoff is in git history (`59af84f`)._
 
 ## 1. Primary Objective
-A PS5-style, controller-driven TV launcher ("Couch") for a Windows PC: a Python stdlib server (`couch-remote/server.py`, port 8765) plus a full-screen Edge page (`couch-remote/web/launcher.html`) and a phone remote (`web/remote.html`), themed after JoJo Part 7, Steel Ball Run.
+A PS5-style, controller-driven TV launcher ("Couch") for a Windows PC: a Python stdlib server (`couch-remote/server.py`, port 8765, started at login by the scheduled task "Couch Launcher" with `--open`) plus a full-screen Edge page (`couch-remote/web/launcher.html`) and a phone remote (`web/remote.html`), themed after JoJo Part 7, Steel Ball Run. This session's focus: make GTA V (Epic + Rockstar) launch reliably and quickly from the TV.
 
 ## 2. Current State & Completed Work
-**Look / design** (`web/launcher.html`)
-- Redesign "Steel Ball Run at night": tokens `--obsidian #150f0b`, `--ink #f3e6cf`, `--dim #bfae96`, `--gold #f2b844` (focus ring), `--bib #13809a` (Play button, 4.6:1 with white), `--serif "Aoboshi One"` (titles, row and card headings, hard Johnny-cyan offset shadow on `#d-title`), Archivo for UI.
-- Home backdrop `.sky` (blurred `::before` plus sharp masked `::after`, `--art/--f0/--f1`), with a bottom fade mask (`--low`) that hides the logo printed on `poster.webp`. `SKIES` = poster, sbr-riders, sbr-race; `IDLE_ART` = SKIES + `img/sbr-desert.jpg` (cropped official key visual).
-- Screensaver (10 min idle): dimmed art, new picture every minute, drifting, rolling steel ball (25% chance).
-- Easter eggs: search names (`EGGS`: Johnny, Tusk, Gyro, Valentine...), L1 R1 L1 R1 Golden Spin (`comboPress`), Sept 25 note, marquee ribbon on `.card::before`.
-- Long titles step down (`#d-title.long`), ™ stripped; inactive rows at opacity .62.
+**Verified by the user on the TV this session**
+- Morning features all work: Create → screenshot, mute button, PS back to game, Volume, Storage, one battery per controller.
+- New **Claude** tile (`apps.json` id `claude`): `explorer.exe shell:AppsFolder\Claude_pzs8sxrjxfjjc!Claude` (Store app, its folder changes with updates). Opens the Claude desktop app.
+- **GTA V from fully closed launchers** (15:30): Couch started Rockstar, the user signed in, Couch started Epic, sent the link, the game ran.
 
-**Launcher features**
-- PC row and Menu (`pcItems()`): Phone remote, Audio output, Sound, Turn off controller, **Power** (`powerMenu`: Sleep/Restart/Shut down), **Volume** (`volumeMenu`), **Storage** (`storageMenu`), **Media gallery** (`mediaGallery`), **Task manager** (`taskManager`/`taskActions`), **Controls** (`showControls`), Desktop.
-- `choose()` gained `gauges` (`#dlg-gauges`, shared `gauge()` HTML); `openModal(..., sound="")` is silent; `modal.prompts` and `modal.move` overrides.
-- Now playing polls `/api/running` every 3 s.
-- Launch music: the intro (or `Sound.fanfare`) plays on the TV during "Starting…" and fades in `hideStarting()`.
-- Held keys don't repeat Enter/Back (`e.repeat && !k`).
-- One battery icon per controller (`showPad("full,low")`). Toasts for `shot` and `mic:*`.
+**GTA launch path (server.py)**
+- `apps.json` GTA entry has `"rockstar": true`. `launch_app`: if `exe_running("Launcher.exe")` is false, a thread runs `start_then([ROCKSTAR_EXE], ROCKSTAR_LOG, "is now signed in", lambda: open_url(target), 60)`.
+- `open_url` (registry command, unchanged otherwise): for `com.epicgames.launcher` links when `EpicGamesLauncher.exe` isn't running, a thread runs `start_then([exe, "-silent"], EPIC_LOG, "OnLoginComplete", send_link, 30)`.
+- `start_then(cmd, log_file, signed_in, then, limit)`: starts the launcher, polls its log (both write a fresh log per run, so only a log newer than the start counts), calls `then()` on sign-in or after `limit` seconds.
+- `exe_running(name)` (tasklist) replaced the unused `steam_running`.
+- **Covering, not minimizing** (`focus_what_opens` + `keep_behind`): during a game launch, Epic/Rockstar windows (new *and* already open; not Steam) stay behind Couch; Couch refocuses itself if one takes the screen, until the game window appears. A window still titled sign-in/log-in after 15 s comes forward; no game window after 90 s → newest launcher comes forward. App tiles unchanged.
+- **Warm start** `warm_rockstar()`: 5 s after the server starts with `--open`, starts Rockstar's launcher if it isn't running and keeps its window behind Couch for 90 s (stops early if a launch begins). Epic already starts at login by its own setting (HKCU Run: `EpicGamesLauncher.exe -silent -launchcontext=boot`).
+- Tests: `tests/test_epic.py` (start_then, Rockstar-first launch), `tests/test_cover.py` (covering, warm start). 33 tests, all pass (`python -m unittest discover -s tests` from `couch-remote`).
 
-**Server** (`couch-remote/server.py`, `audio.py`)
-- YouTube tile (`apps.json` id `youtube`, `tv: true`) → `edge_tv()`: Edge with `--remote-debugging-port=0` and a black data: start page. A CDP session (`Cdp` class) sets `Emulation.setUserAgentOverride` with `TV_HINTS` (Samsung Tizen) and stays attached. `TV_EXIT_JS` plus `Runtime.addBinding("couchExit")` closes the window on ○ at YouTube's last screen. `end_profile_edge()` kills Edge lingering on the profile (before launch, and after close only if the window is gone). On close, `open_launcher()`. `TV_PIDS`/`TV_KEYS` map the pad to remote keys only while that window is in front.
-- Task manager: `task_list()` (CPU via `GetSystemTimes`, memory, per-window process-tree working set, `IsHungAppWindow`), `task_action()` (switch/close/force; only listed windows). `close_window()` = WM_SYSCOMMAND SC_CLOSE; Steam windows → `steam://exit`. Force on Steam → `taskkill /IM steam.exe /T /F`.
-- `open_url()`: runs the registered `HKCR\<scheme>\shell\open\command`, and falls back to `os.startfile` on OSError (Steam needs elevation, WinError 740).
-- Now playing: `focus_what_opens` watches up to 180 s; `RUNNING{name,windows,game_seen,is_game}`; `pick_running(cands, game_seen)` ignores leftover store-launcher windows after the game window was seen (games only, not app tiles).
-- Controller (`act()`): `create` → `take_screenshot()` (SendInput Win+PrtScn, rumble "shot", emit "shot"). `mic` (SDL button 15) → `toggle_mic()`. PS: if launcher in front and a game is running → `focus_window(running)`, else `open_launcher()` (no longer skips when Steam runs).
-- Endpoints: `GET /api/tasks`, `/api/running`, `/api/media`, `/api/volume`, `/api/storage`; `POST /api/tasks {id,action}`, `/api/volume {level|muted|mic}`; `/media/<file>` serves the Screenshots folder only. `/api/window` actions are logged.
-- `audio.py`: `volume_state()`, `set_volume(level, muted)`, `set_mic_muted()` (IAudioEndpointVolume via raw COM vtables).
-- `screenshots_dir()` (FOLDERID_Screenshots = `C:\Users\eli\Pictures\Screenshots`), `media_list()`, `fixed_drives()`.
-- Tests: `couch-remote/tests/test_gate.py`, `tests/test_tasks.py` (20 tests, all pass: `python -m unittest discover -s tests` from `couch-remote`).
+**Unchanged from the morning (see `59af84f` SESSION.md for detail)**: SBR look, screensaver, easter eggs, PC row (Power, Volume, Storage, Media gallery, Task manager, Controls), YouTube TV app via CDP (`edge_tv`), task manager endpoints, controller map, `audio.py` volume/mic.
 
 ## 3. Architectural & Key Decisions
-- Stack stays Python stdlib plus pygame/SDL (controller) and ctypes Win32/COM. No new dependencies in the server. Pillow was installed for the user only as a dev tool, for cropping.
-- Identity is Steel Ball Run, not PlayStation.com colours. PS5 features borrow layout and behaviour only (user chose: "PS5 layout, SBR look").
-- **PS button wins over Steam** (user chose). The user must turn off Steam's guide-button action in Steam → Settings → Controller. Never change Steam settings ourselves.
-- YouTube = the TV app (youtube.com/tv), not YouTube Music. The user dropped Music: it has no TV version, and a desktop site plus homemade arrow-key navigation looked wrong.
-- Controller-to-key mapping only for our TV window (`TV_PIDS`). The user rejected general keyboard/mouse mapping for desktop apps.
-- Close = what the X button does (SC_CLOSE); apps may ask to save. Force close only for hung or still-open apps, behind a confirmation.
-- Copyrighted music isn't downloaded; the user supplies `web/audio/<song>` and `web/audio/sbr/bgm-loop.mp3`. Official SBR key art was downloaded with the user's OK.
-- Ponytail mode: smallest complete change; commit when work completes (user asked "commit keep working").
-- Restart the server with: kill the `python …server.py` process, then `Start-ScheduledTask -TaskName 'Couch Launcher'`. Reload the TV page: POST `/api/window {"action":"close-launcher"}` then `{"action":"launcher"}` (needs header `X-Couch: 1`).
+- Stack stays Python stdlib + pygame/SDL + ctypes Win32/COM. No new server dependencies.
+- SBR identity; PS5 layout/behaviour only. PS button wins over Steam (user must turn off Steam's guide-button action; never change Steam settings ourselves).
+- **GTA needs Epic and Rockstar both up and signed in** (user's own finding). Couch starts whichever is missing and waits for its log's sign-in line before sending the link. Don't auto-close Rockstar's launcher.
+- **Hide store launchers by covering them with Couch, never by minimizing** (user wanted "just the GTA loading screen").
+- **Warm start at login: Rockstar only, kept behind Couch, sign-in left until a GTA press** (user accepted all four recommendations in a grilling round).
+- Ponytail mode; commit when work completes. Restart the server only (not the launcher page) when only `server.py`/`apps.json` changed: the page's `/api/events` loop reconnects by itself, and reloading the launcher would cover a running game.
+- Restart: kill `python …server.py`, then `Start-ScheduledTask -TaskName 'Couch Launcher'` (runs `--open`, so `open_launcher` focuses Couch: don't restart while the user is in a game).
 
 ## 4. Failed Attempts & Gotchas (Do Not Repeat)
-- `/api/key`, phone, PS and controller input all type into the real TV. Never activate tiles in `/launcher?preview`; never send `enter`. The user stopped one key-sending test: ask before pressing keys on the TV.
-- The `--user-agent` flag alone no longer works for youtube.com/tv (client hints leak "Windows / Edge"). `--disable-features=UserAgentClientHint` does nothing. A DNR extension can't strip `Sec-CH-UA`. Only the CDP `userAgentMetadata` override works.
-- YouTube mutes `console.log`; use `Runtime.addBinding`. `Page.addScriptToEvaluateOnNewDocument` needs `Page.enable` first. `Cdp.send()` swallows events, so read them in a dedicated loop.
-- Edge lingers windowless after `/json/close`; a later launch on that profile shows a blank new-tab page ("weird VM"). Hence `end_profile_edge`.
-- Windows scales the TV display (4K at 300%; screen captures need `SetProcessDPIAware`). Don't add `--force-device-scale-factor`.
-- Steam ignores WM_CLOSE. Killing steamwebhelper respawns it. steam.exe can't be started directly (needs elevation).
-- `os.startfile` from a server thread once silently failed for Epic links (hence `open_url`, which tries the direct command first).
-- Headless Edge `--dump-dom`/`--screenshot` are unreliable; use `dev/shoot.py` or CDP.
-- Python heredocs: `\r\n` and `\s` escapes get mangled. Write scripts with the Write tool or use raw strings. `tests/test_gate.py` has CRLF line endings.
-- Hooks open launcher/remote HTML as file:// tabs in the browser pane; close them.
-- The launcher vanished once at 12:05:43 (clean close, cause unknown). Now logged via `window:` lines.
-- The stray 63× sleep was a held Enter key (fixed).
-- **Don't minimize Epic/Rockstar windows during a launch** (tried 2026-11-22, commits 6b4eadc, d9867c4; reverted). While it was in, every GTA launch hung: Rockstar sign-in stuck loading, then "Game launch validation timed out" (`Documents\Rockstar Games\Launcher\launcher.log`). Rockstar's UI is embedded Chromium. If hiding launchers is wanted again, cover them instead (e.g. keep Couch on top), never minimize.
-- Rockstar sign-in window can draw black while its log says "Finished loading Social Club UI" (`Documents\Rockstar Games\Social Club\socialclub_launcher.log`). Deleting `%LOCALAPPDATA%\Rockstar Games\Social Club\Launcher\Renderer` fixed the black window, but that cache also holds Rockstar's auto sign-in: afterwards GTA launches from Epic stuck on the sign-in logo (log stops at "Client is ready to attempt a launch") until the user signed in once in the standalone Rockstar Games Launcher with Auto Sign In ticked. Then GTA worked (2026-11-22 ~15:25).
-- **Don't open store links through `explorer.exe`** (commit daaa5ec, reverted in e8db8a6): explorer can't parse the Epic GTA link and opens Documents instead. After reverting server code, restart the server: the user hit the old code once because I didn't.
-- **The server's job object is not why cold Epic fails.** The scheduled task does run the server inside a job, but Epic started cold from a job I created, and from the server itself (Epic tile, 15:16). `CREATE_BREAKAWAY_FROM_JOB` is refused (WinError 5) even outside a job, so don't use it.
+- `/api/key`, phone, PS and controller input all hit the real TV. Never activate tiles in `/launcher?preview`; never send `enter`; ask before pressing keys on the TV. **Tests must never reach the real `open_url`/`Popen`**: a test once called a deferred step after its mocks ended and sent `com.epicgames.launcher://x` to the real Epic. Patch in `setUp` with `addCleanup`. Tests also log into the real `server.log` (e.g. "x.exe didn't report signing in"): those lines aren't real launches.
+- **Don't minimize Epic/Rockstar windows during a launch** (6b4eadc/d9867c4, reverted): every GTA launch hung (sign-in stuck loading, "Game launch validation timed out").
+- **Don't open store links through `explorer.exe`** (daaa5ec, reverted e8db8a6): it can't parse the Epic GTA link and opens Documents. After reverting server code, restart the server (the user hit the old code once because I didn't).
+- **The server's job object isn't why cold Epic failed.** Epic started cold from a job I made and from the server (Epic tile). `CREATE_BREAKAWAY_FROM_JOB` is refused (WinError 5) even outside a job; don't use it. What fails is sending a game link while Epic starts from closed; start Epic first instead.
+- **Rockstar cache:** a black sign-in window (log says "Finished loading Social Club UI") was fixed by deleting `%LOCALAPPDATA%\Rockstar Games\Social Club\Launcher\Renderer`, but that also wiped Rockstar's auto sign-in. GTA then stuck on the sign-in logo (log stops at "Client is ready to attempt a launch") until the user signed in once in the standalone launcher.
+- **A leftover Rockstar launcher from a failed try blocks the next launch**: Epic holds the link until it's closed. "Game launch validation timed out" (14:52, 15:24, Nov 20) each followed another Rockstar run.
+- `exe_running("Launcher.exe")` matches any program named Launcher.exe (marked `shortcut:` in code).
+- The `Starting…` overlay change that waited for a server "opened" event (d9867c4) was reverted: with hiding gone it ended on Epic's window anyway and could stick 3 min when no window opened.
+- RAM is not the slowness: 32 GB @ 3600, ~12.6 GB free, page file 0%. GTA is on an NVMe SSD (D:). Time goes to Rockstar sign-in (40 s when it asks for a password), Epic start (~3 s), Rockstar → game (~14 s warm), then GTA's own load.
+- Playwright (plugin installed this session) can't drive Rockstar's window; it only controls browsers it starts. Capture windows with `SetProcessDPIAware` + `ImageGrab` (4K at 300%).
+- The Ruflo AI-team connector is present but needs the user to authenticate; its tools only record plans, they don't run agents.
+- Older gotchas (YouTube CDP, Edge lingering, Steam elevation, heredoc escapes, hooks opening file:// tabs): see `PICKUP.md` §6 and the morning SESSION.md.
 
 ## 5. Immediate Next Steps
-1. Done 2026-11-22: the user tested Create screenshot, mute, PS back to game, Volume, Storage and two-controller batteries on the TV; all work.
-2. PS returned to the game in the user's test, so Steam didn't take over then. The user hasn't confirmed that Steam's guide-button action is off.
-3. GTA V launches from Couch when Epic is already running (verified by the user 2026-11-22). **Still broken: GTA with Epic fully closed.** Couch's log says "opened … link", but no Epic process appears and Epic writes no log (13:27, 13:28, 15:10). Epic started cold without a link works. Fix in 8b3a63c (`start_epic_then`): when Epic isn't running, start it with `-silent`, wait for "OnLoginComplete" in its log, then send the link. Unit-tested only; not yet tried on the TV with Epic closed (at 15:25 the user closed GTA, not Epic).
-   A leftover Rockstar launcher (`PlayGTAV.exe` + `Launcher.exe` from an earlier try) blocks the next GTA launch: Epic holds the link until it's closed, then GTA starts (15:25 press → game at 15:26 after closing the leftover via Couch's Task manager). "Game launch validation timed out" (14:52, 15:24, Nov 20) each came right after another Rockstar launcher run. The user's own finding (2026-11-22): GTA runs from Couch when both Epic and the Rockstar launcher are already open. So don't auto-close Rockstar's launcher; if anything, so Couch now makes sure both are open (apps.json `rockstar: true` on GTA): if `Launcher.exe` isn't running it starts Rockstar's launcher, waits up to 60 s for "is now signed in" in its log, then sends the Epic link (which itself starts Epic first if needed). Shared helper `start_then`; tests in `tests/test_epic.py`. Verified on the TV 2026-11-22 15:30: with Epic and Rockstar both closed, Couch started Rockstar, the user signed in (40 s), Couch started Epic (3 s), sent the link, and GTA ran at 15:31:45. Rockstar asked for a sign-in again that time: Auto Sign In apparently isn't being kept, which Couch can't fix.
-   Store launchers now stay *behind* Couch during a game launch (`keep_behind` in `focus_what_opens`; covered, never minimized). A sign-in window still asking after 15 s comes forward; no game window after 90 s → the newest launcher comes forward. Tests: `tests/test_cover.py`. Not yet tried on the TV; if GTA hangs again, revert this commit first.
-   Warm start (user's choice 2026-11-22): Epic already starts at login by its own setting (HKCU Run, `-silent`). Couch's `warm_rockstar` starts Rockstar's launcher 5 s after the server starts with `--open` (login), if it isn't running, and keeps its window behind Couch for 90 s. A sign-in it asks for is left until a GTA press. Now playing tracking/clearing for GTA also not checked.
-4. Optional, offered: Game clips (hold Create → Game Bar "record that"; the user must enable background recording), Downloads row, in-game quick menu. All deferred as riskier.
-5. Leftovers: `couch-remote/profiles/web-youtube` holds the YouTube sign-in (issue 03); `Screenshot (2).png` was a test capture; the "UI UX Pro Max" plugin wasn't in the catalog (closest: "UI Design Review", "Design").
+1. **Watch the first GTA press after the next login/reboot**: Epic silent + Rockstar warm-started behind Couch → should take the fast path (~14 s to game start) with only Couch's screen, then GTA. `warm_rockstar` hasn't run for real yet (Rockstar was already open when the server restarted at 15:47). If anything hangs, revert `79a4443`, then `121f64e`/`1873803` (covering), in that order.
+2. Covering during a launch (`121f64e`, `1873803`) is unit-tested; the user saw Rockstar once before `1873803` (an already-open window). Confirm it stays hidden now.
+3. Ask the user to keep **Auto Sign In** ticked in Rockstar's launcher; it asked for a password again at 15:30.
+4. Still unconfirmed: Steam's guide-button action turned off; Now playing shows GTA and clears on quit.
+5. Optional, offered earlier: Game clips (hold Create), Downloads row, in-game quick menu. Leftovers: `profiles/web-youtube` sign-in location (issue 03), `Screenshot (2).png` test capture.
 
 ## 6. Reference Context / Code Snippets
 ```powershell
-# restart server (scheduled task, independent of the agent shell)
+# restart server only (don't while a game is running: --open focuses Couch)
 Get-CimInstance Win32_Process -Filter "Name like 'python%'" | ? { $_.CommandLine -like '*server.py*' } | % { Stop-Process -Id $_.ProcessId -Force }
 Start-ScheduledTask -TaskName 'Couch Launcher'
 ```
 ```bash
-# reload TV launcher; screenshots via headless page
+# reload TV launcher page (only when launcher.html changed)
 H='-H X-Couch:1 -H Content-Type:application/json'
 curl -s -X POST $H -d '{"action":"close-launcher"}' http://127.0.0.1:8765/api/window; sleep 2
 curl -s -X POST $H -d '{"action":"launcher"}' http://127.0.0.1:8765/api/window
-python couch-remote/dev/shoot.py steps.json <out_dir>   # steps: {"url": ".../launcher?preview", "steps":[{"js":"...","wait":ms,"shot":"x.png"}]}
 ```
-- Log: `couch-remote/server.log` (`launch … asked by`, `opened … link`, `TV mode:`, `task manager:`, `window:`).
+- Logs: Couch `couch-remote/server.log` (`launch … asked by`, `opened … link`, `… started and signed in after N s`, `Rockstar's launcher is closed`, `Epic is closed`, `no game window after 90 s`). Epic `%LOCALAPPDATA%\EpicGamesLauncher\Saved\Logs\EpicGamesLauncher.log` (UTC timestamps, local = UTC−7; `LogUriHandler`, `OnLoginComplete`). Rockstar `Documents\Rockstar Games\Launcher\launcher.log` (`is now signed in`, `Client is ready to attempt a launch`, `[gla]`, `gamelaunch`) and `Documents\Rockstar Games\Social Club\socialclub_launcher.log` (UTF-16: `iconv -f UTF-16LE`).
+- Paths: Epic `C:\Program Files (x86)\Epic Games\Launcher\Portal\Binaries\Win64\EpicGamesLauncher.exe`; Rockstar `C:\Program Files\Rockstar Games\Launcher\Launcher.exe`; GTA `D:\GTAVEnhanced\` (`PlayGTAV.exe` → `GTA5_Enhanced_BE.exe` → `GTA5_Enhanced.exe`).
+- Config: `couch-remote/apps.json` (apps/games; `kind` url|exe|web, `tv: true`, `rockstar: true`, `args` for exe), `choices.json`, `config.json`.
 - Controller map (`server.py` `buttons`): A=a(✕), B=b(○), X=x(□), Y=y(△), L1/R1, START=options, BACK=create, GUIDE=guide, 15=mic.
-- Config: `couch-remote/apps.json` (apps/games; `kind` url|exe|web, `tv: true`), `choices.json` (hidden/pinned/played), `config.json` (`edge`, `port`).
