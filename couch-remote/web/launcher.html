@@ -1241,7 +1241,8 @@ function taskActions(a) {
     { label: "Switch to", icon: "resume", fn: () => act("switch") },
     { label: "Close", icon: "close", sub: "Like its own close button: it can still ask to save", fn: () => act("close") },
     ...(stuck ? [{ label: "Force close", icon: "power", cls: "danger", sub: "Unsaved work in it will be lost",
-                   fn: () => confirmAction("Force close?", `${a.name} closes right away without saving.`, "Force close", () => act("force")) }] : []),
+                   fn: () => confirmAction("Force close?", /steam/i.test(a.exe) ? "Steam closes completely, with any game it started."
+                     : `${a.name} closes right away without saving.`, "Force close", () => act("force")) }] : []),
   ], { vertical: true });
 }
 function showControls() {

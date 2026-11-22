@@ -896,15 +896,38 @@ def task_action(h, action):
     """Switch to, close (as its own close button does) or force-close one of task_list()'s windows."""
     if h not in visible_windows():  # only windows the task manager lists, never an arbitrary handle
         raise ValueError("That app isn't open any more")
-    log.info("task manager: %s %s (%s)", action, window_title(h), window_exe(h))
+    title, exe = window_title(h), window_exe(h)
+    log.info("task manager: %s %s (%s)", action, title, exe)
+    steam = exe in ("steamwebhelper.exe", "steam.exe")  # Steam's windows belong to a helper Steam restarts at once
     if action == "switch":
         focus_window(h)
+    elif action == "close" and steam and "Big Picture" in title:
+        os.startfile("steam://close/bigpicture")  # it ignores close messages; leaving it opens Steam's desktop window
+        threading.Thread(target=_tuck_steam_away, args=(set(visible_windows()),), daemon=True).start()
     elif action == "close":
-        user32.PostMessageW(h, 0x0010, 0, 0)  # WM_CLOSE: it can still ask to save
+        close_window(h)
     elif action == "force":
-        subprocess.run(["taskkill", "/PID", str(window_pid(h)), "/T", "/F"], capture_output=True, creationflags=0x08000000)
+        cmd = ["taskkill", "/IM", "steam.exe", "/T", "/F"] if steam else ["taskkill", "/PID", str(window_pid(h)), "/T", "/F"]
+        subprocess.run(cmd, capture_output=True, creationflags=0x08000000)
     else:
         raise ValueError(f"unknown action {action!r}")
+
+
+def close_window(h):
+    """What the window's own X button does (WM_SYSCOMMAND SC_CLOSE): apps can still ask to save, and Steam, which
+    ignores a bare WM_CLOSE, goes to the tray."""
+    user32.PostMessageW(h, 0x0112, 0xF060, 0)
+
+
+def _tuck_steam_away(before):
+    for _ in range(16):  # up to 8 s for Steam's desktop window to appear after Big Picture closes
+        time.sleep(0.5)
+        new = [h for h in visible_windows() if h not in before and window_exe(h) == "steamwebhelper.exe"]
+        if new:
+            time.sleep(0.5)
+            for h in new:
+                close_window(h)
+            return
 
 
 def running_window():
@@ -1613,7 +1636,7 @@ class Handler(BaseHTTPRequestHandler):
                     if act == "resume":
                         focus_window(h)
                     else:
-                        user32.PostMessageW(h, 0x0010, 0, 0)  # WM_CLOSE: same as the game's own close button
+                        close_window(h)  # same as the game's own close button
                 elif act == "close-app":
                     fg = user32.GetForegroundWindow()
                     if fg and window_class(fg) not in ReturnWatcher.DESKTOP:
