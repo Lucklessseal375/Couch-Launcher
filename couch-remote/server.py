@@ -928,6 +928,20 @@ def running_window():
     return pick_running(alive, RUNNING.get("game_seen", False))
 
 
+def started_after(h, t):
+    """Whether window h's program started after time t (True if Windows won't say)."""
+    ph = kernel32.OpenProcess(0x1000, False, window_pid(h))  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not ph:
+        return True
+    try:
+        made, x1, x2, x3 = _FILETIME(), _FILETIME(), _FILETIME(), _FILETIME()
+        if not kernel32.GetProcessTimes(ph, *(ctypes.byref(f) for f in (made, x1, x2, x3))):
+            return True
+        return (made.hi << 32 | made.lo) / 1e7 - 11644473600 > t  # FILETIME counts 100 ns from 1601
+    finally:
+        kernel32.CloseHandle(ph)
+
+
 def keep_behind(exe, is_game, game_seen):
     """While a game starts, its store launchers (not Steam's) stay behind Couch: covered, never minimized, since a
     minimized Rockstar launcher hung every GTA launch (2026-11-22)."""
@@ -962,6 +976,8 @@ def focus_what_opens(before):
                 focus_window(find_launcher())  # a launcher took the screen by itself: cover it again
         new = [h for h in visible_windows() if h not in seen]
         seen.update(new)
+        if RUNNING.get("is_game"):  # an app that was already running (Claude opening after login) isn't the game
+            new = [h for h in new if window_exe(h) in LAUNCHER_EXES or started_after(h, t0 - 2)]
         if new:
             RUNNING["windows"] += new
             time.sleep(0.3)  # let it finish appearing

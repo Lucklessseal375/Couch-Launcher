@@ -69,6 +69,15 @@ class CoverStoreLaunchers(unittest.TestCase):
         self.assertNotIn(SIGNIN, [h for _, h in focused])
         self.assertEqual(focused[-1][1], GAME)
 
+    def test_app_already_running_isnt_taken_for_the_game(self):
+        CLAUDE = 5  # Claude, started at login, opens its window while GTA is starting
+        with mock.patch.object(server, "started_after", lambda h, t: h != CLAUDE):
+            focused = self.run_launch({2: EPIC, 20: CLAUDE, 40: GAME}, lambda h, t: "Epic Games Launcher")
+        self.assertNotIn(CLAUDE, [h for _, h in focused])
+        self.assertNotIn(CLAUDE, server.RUNNING["windows"])  # never offered as "Close game"
+        self.assertEqual(focused[-1][1], GAME)
+        self.assertEqual(self.saved, {"GTA": 40})  # timed by the game's window, not Claude's
+
     def test_app_tiles_still_focus_their_windows(self):
         focused = self.run_launch({2: EPIC}, lambda h, t: "Epic Games Launcher", is_game=False)
         self.assertEqual(focused[0][1], EPIC)
