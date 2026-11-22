@@ -58,7 +58,7 @@
   .brand h1 { margin: 0; font: 400 5.8vh/1 var(--logo); color: var(--pink); -webkit-text-stroke: .18vh #fff;
               text-shadow: .35vh .35vh 0 var(--johnny), .7vh .7vh 1.6vh rgba(0,0,0,.5); transform: rotate(-4deg); }
   .brand .mark { width: 4.6vh; height: 4.6vh; filter: drop-shadow(0 .3vh .4vh rgba(0,0,0,.5)); }
-  .status { display: flex; align-items: center; gap: 2.6vw; }
+  .status { display: flex; align-items: center; gap: 2.6vw; text-shadow: 0 .2vh 1.2vh rgba(0,0,0,.85); }
   .time { text-align: right; }
   #clock { font: 650 4.2vh/1 var(--ui); font-variant-numeric: tabular-nums; }
   #date { color: var(--dim); font-size: 2.1vh; margin-top: .7vh; }
@@ -95,6 +95,7 @@
          box-shadow: inset 0 0 0 .25vh rgba(255,255,255,.85), inset 0 0 0 .55vh var(--bib), 0 .8vh 2vh rgba(0,0,0,.45); }
   .cta .glyph { background: var(--obsidian); box-shadow: none; }
   body:not(.chosen) .cta { visibility: hidden; } /* ✕ does nothing until a tile is selected */
+  #d-title.long { font-size: 5.2vh; padding-top: 1.6vh; }
   .details.swap #d-title { animation: dash .5s var(--spring); }
   @keyframes dash { from { opacity: 0; transform: translateX(-3vw) skewX(-12deg); } to { opacity: 1; transform: none; } }
   #sfx { position: absolute; right: 7vw; top: 0; font: 900 6vh/1 "Yu Gothic UI", "Meiryo", "MS Gothic", sans-serif; color: var(--pink);
@@ -139,7 +140,7 @@
   /* with the app's real icon: a dark card tinted by the brand colour, the icon centred, the name as a caption */
   .app.logo { justify-content: center; align-items: center; background: color-mix(in srgb, var(--c) 24%, #10131a); }
   .app.logo .appicon { width: 9vh; height: 9vh; object-fit: contain; margin-bottom: 2.4vh; filter: drop-shadow(0 .6vh 1.2vh rgba(0,0,0,.4)); }
-  .app.logo .name { position: absolute; left: 1vh; right: 1vh; bottom: 1.5vh; text-align: center; font: 700 1.9vh/1.1 var(--ui); color: var(--dim);
+  .app.logo .name { position: absolute; left: 1vh; right: 1vh; bottom: 1.5vh; text-align: center; font: 700 1.9vh/1.1 var(--ui); font-stretch: 80%; color: var(--dim);
                     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .app.logo.focus .name { color: #fff; }
 
@@ -787,7 +788,9 @@ function playtime(min) {
 }
 function showDetails(e) {
   const d = $("#details");
-  $("#d-title").textContent = e.dataset.title || "";
+  const t = $("#d-title");
+  t.textContent = (e.dataset.title || "").replace(/[™®©]/g, "");
+  t.classList.remove("long"); t.classList.toggle("long", t.scrollWidth > t.clientWidth);  // long names step down a size before they'd be cut
   $("#d-meta").textContent = e.dataset.meta || "";
   $("#d-cta").textContent = e.dataset.cta || "Open";
   d.classList.remove("swap"); void d.offsetWidth; d.classList.add("swap");
