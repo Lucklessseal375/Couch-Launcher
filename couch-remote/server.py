@@ -529,7 +529,11 @@ _launcher_spawned = [0.0]
 STARTED = time.time()  # when this server process started (sign-in, or a manual restart)
 
 
+LAUNCHER_WANTED = [False]  # opened and not sent to the desktop on purpose: keep it alive
+
+
 def open_launcher():
+    LAUNCHER_WANTED[0] = True
     h = find_launcher()
     if h:
         focus_window(h)
@@ -648,6 +652,7 @@ def focus_what_opens(before):
 
 
 def close_launcher():
+    LAUNCHER_WANTED[0] = False
     h = find_launcher()
     if h:
         user32.PostMessageW(h, 0x0010, 0, 0)  # WM_CLOSE
@@ -668,8 +673,17 @@ class ReturnWatcher(threading.Thread):
             self.armed_at, self.saw_app = time.time(), False
 
     def run(self):
+        gone = 0  # checks in a row with the launcher's window missing on a bare desktop
         while True:
             time.sleep(1.5)
+            fg = user32.GetForegroundWindow()
+            if LAUNCHER_WANTED[0] and (window_class(fg) if fg else "") in self.DESKTOP and not find_launcher():
+                gone += 1
+                if gone % 20 == 4:  # ~6 s (then every 30 s): its Edge closed or crashed (seen overnight)
+                    log.info("launcher window gone; opening it again")
+                    open_launcher()
+            else:
+                gone = 0
             with self.lock:
                 if not self.armed_at:
                     continue
@@ -780,7 +794,9 @@ def app_icon(app_id):
 LISTENERS = []  # one queue per open launcher page
 LISTENERS_LOCK = threading.Lock()
 PAD_STATUS = "pad:none"  # last controller/battery state sent to the launcher; new pages get it on connect
-PAD_READER = False  # True once the server reads the controller; otherwise the page uses the Gamepad API
+# True once the server reads the controller, False if it can't (then the page uses the Gamepad API).
+# None while it's still starting: the page must not fall back then, or both read the pad (seen at logon).
+PAD_READER = None
 RUMBLES = []  # (when, low, high, ms): haptic pulses waiting for the controller loop
 RUMBLE_LOCK = threading.Lock()
 LIGHT = [None]  # (r, g, b) the launcher wants on the controllers' light bar; the controller loop applies it
@@ -858,6 +874,7 @@ def _controller_loop():
         from pygame._sdl2 import controller as gc
     except ImportError:
         log.warning("pygame not installed: run  python -m pip install pygame  for controller support")
+        PAD_READER = False
         return False
     pygame.display.init()  # needed for SDL's event queue; no window is opened
     pygame.joystick.init()
@@ -1251,6 +1268,10 @@ class Handler(BaseHTTPRequestHandler):
         path, b = urlparse(self.path).path, self.body()
         try:
             if path == "/api/launch":
+                # who asks (a game once started by itself at logon; this tells the TV page, phone or else apart)
+                log.info("launch %s asked by %s (%s)", b, self.client_address[0], self.headers.get("User-Agent"))
+                if time.time() - STARTED < 10:  # nobody picks a game this fast: a stray request, refuse it
+                    return self.send_json({"error": "still starting"}, 409)
                 before = visible_windows()
                 name = launch_game(b["game"]) if "game" in b else launch_app(str(b.get("id")))
                 RUNNING.update(name=name, windows=[])
@@ -1271,6 +1292,7 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/scroll":
                 mouse_scroll(max(-1200, min(1200, float(b.get("dy", 0)))))
             elif path == "/api/power":
+                log.info("power %s asked by %s (%s)", b.get("action"), self.client_address[0], self.headers.get("User-Agent"))
                 power(str(b.get("action")))
             elif path == "/api/games":
                 set_choice(str(b.get("action")), str(b.get("key", "")))

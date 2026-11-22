@@ -1328,7 +1328,7 @@ async function load() {
     info = await api("/api/info");
     if (info.running) pos.r = 0;  // reloaded mid-game: first press lands on Resume
     build();
-    if (!info.padReader) gamepadLoop();
+    if (info.padReader === false) gamepadLoop();  // null = the server's reader is still starting
     const clipsReady = Sound.loadClips(info.sounds || []);  // decoded in the background; nothing waits on it
     padLight();  // gold while you're in the menu
     if (!PREVIEW) {
