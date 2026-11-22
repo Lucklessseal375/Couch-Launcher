@@ -799,13 +799,16 @@ def window_exe(h):
 # Store/launcher windows that open on the way to a game; the game is the window that isn't one of these.
 LAUNCHER_EXES = {"steam.exe", "steamwebhelper.exe", "epicgameslauncher.exe", "eadesktop.exe", "ealauncher.exe",
                  "upc.exe", "ubisoftconnect.exe", "launcher.exe", "launcherpatcher.exe", "socialclubhelper.exe"}
-RUNNING = {"name": None, "windows": []}  # what was launched last and the windows that opened for it, oldest first
+RUNNING = {"name": None, "windows": [], "game_seen": False}  # what was launched last and the windows that opened for it, oldest first
 
 
-def pick_running(cands):
-    """cands: [(hwnd, exe)] still open, oldest first. The newest non-launcher window, else the newest window."""
+def pick_running(cands, game_seen=False):
+    """cands: [(hwnd, exe)] still open, oldest first. The newest non-launcher window, else the newest window, unless the
+    game's own window was already seen: then it has closed, and only its store launcher (Epic, Rockstar) is left."""
     games = [h for h, exe in cands if exe not in LAUNCHER_EXES]
-    return (games or [h for h, _ in cands] or [None])[-1]
+    if games or game_seen:
+        return (games or [None])[-1]
+    return ([h for h, _ in cands] or [None])[-1]
 
 
 # ---------------------------------------------------------------- task manager (launcher PC row / Menu)
@@ -933,7 +936,7 @@ def _tuck_steam_away(before):
 def running_window():
     """The launched game/app's window while it's still open, else None."""
     alive = [(h, window_exe(h)) for h in RUNNING["windows"] if user32.IsWindow(h) and user32.IsWindowVisible(h)]
-    return pick_running(alive)
+    return pick_running(alive, RUNNING.get("game_seen", False))
 
 
 def focus_what_opens(before):
@@ -952,6 +955,7 @@ def focus_what_opens(before):
             focus_window(new[0])
             if any(window_exe(h) not in LAUNCHER_EXES for h in new):
                 last = time.time()
+                RUNNING["game_seen"] = RUNNING.get("is_game", False)  # an app tile (Big Picture) stays "running" itself
         elif last and time.time() - last > 10:
             return
 
@@ -1607,7 +1611,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_json({"error": "Couch is still starting. Try again in a few seconds."}, 409)
                 before = visible_windows()
                 name = launch_game(b["game"]) if "game" in b else launch_app(str(b.get("id")))
-                RUNNING.update(name=name, windows=[])
+                is_game = "game" in b or any(g.get("id") == b.get("id") for g in load_games())
+                RUNNING.update(name=name, windows=[], game_seen=False, is_game=is_game)
                 rumble("launch")
                 threading.Thread(target=focus_what_opens, args=(before,), daemon=True).start()
                 WATCHER.arm()

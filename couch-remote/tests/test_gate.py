@@ -73,6 +73,8 @@ class PickRunningTest(unittest.TestCase):
         self.assertIsNone(server.pick_running([]))
         self.assertEqual(server.pick_running([(1, "steam.exe"), (2, "game.exe"), (3, "steamwebhelper.exe")]), 2)
         self.assertEqual(server.pick_running([(1, "steam.exe"), (3, "steamwebhelper.exe")]), 3)  # Big Picture
+        # GTA quit: only Epic's and Rockstar's windows are left, so nothing is playing
+        self.assertIsNone(server.pick_running([(1, "epicgameslauncher.exe"), (2, "launcher.exe")], game_seen=True))
 
 
 class ChoicesTest(unittest.TestCase):
