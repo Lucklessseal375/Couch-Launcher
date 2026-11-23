@@ -50,6 +50,13 @@
       linear-gradient(180deg, rgba(21,15,11,.72) 0%, rgba(21,15,11,0) 20%); }
   .spiral-mark { position: fixed; right: -14vh; bottom: -20vh; width: 78vh; height: 78vh; opacity: .05; color: var(--gold); pointer-events: none; }
   @keyframes spin { to { transform: rotate(360deg); } }
+  /* PS5-style light behind whatever is focused, in its own colour (--focus), following the focus */
+  #glow { position: fixed; left: var(--gx, 50vw); top: var(--gy, 60vh); width: 64vh; height: 64vh; margin: -32vh 0 0 -32vh; border-radius: 50%;
+          pointer-events: none; opacity: 0; filter: blur(3vh);
+          background: radial-gradient(circle, color-mix(in srgb, var(--focus, var(--gold)) 26%, transparent) 0%, transparent 62%);
+          transition: left .7s var(--spring), top .7s var(--spring), opacity .5s ease, background .5s ease; }
+  body.chosen #glow { opacity: 1; }
+  body.modal #glow { opacity: 0; }
   .app-shell { position: relative; height: 100%; animation: enter .7s var(--spring); transition: opacity .35s ease; }
   @keyframes enter { from { opacity: 0; transform: translateY(2vh); } }
 
@@ -76,6 +83,7 @@
   #stream { padding: .9vh 1.8vh; border-radius: 1vh; background: var(--bib); color: #fff; font: 700 2vh/1 var(--ui); white-space: nowrap;
             box-shadow: 0 .6vh 1.6vh rgba(0,0,0,.4); }
   #stream[hidden] { display: none; }
+  #search.prompt .sq > svg { display: none; }  /* a sign-in or PIN, not a search */
   #bell { display: flex; align-items: center; gap: .6vh; font: 700 2.1vh/1 var(--ui); color: var(--ink); }
   #bell[hidden] { display: none; }
   #bell svg { width: 3vh; height: 3vh; color: var(--gold); }
@@ -107,7 +115,8 @@
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .cta { display: inline-flex; align-items: center; gap: 1.2vh; margin-top: 1.3vh; padding: 1vh 3.2vh 1vh 1.2vh; border-radius: 1vh;
          background: var(--bib); color: #fff; font: 400 2.6vh/1 var(--serif); transform: rotate(-1.5deg);
-         box-shadow: inset 0 0 0 .25vh rgba(255,255,255,.85), inset 0 0 0 .55vh var(--bib), 0 .8vh 2vh rgba(0,0,0,.45); }
+         box-shadow: inset 0 0 0 .25vh rgba(255,255,255,.85), inset 0 0 0 .55vh var(--bib), 0 .8vh 2vh rgba(0,0,0,.45),
+                     0 0 3.2vh color-mix(in srgb, var(--bib) 55%, transparent); }  /* a soft PS5-style glow */
   .cta .glyph { background: var(--obsidian); box-shadow: none; }
   body:not(.chosen) .cta { visibility: hidden; } /* ✕ does nothing until a tile is selected */
   #d-title.long { font-size: 5.2vh; padding-top: 1.6vh; }
@@ -222,7 +231,7 @@
   footer .sound svg { width: 2.8vh; height: 2.8vh; }
 
   /* ---------- toast, overlays, dialogs: frosted glass with a 1px inner light edge */
-  #toast { position: fixed; right: var(--pad); top: 3vh; transform: translateY(-2vh); opacity: 0; transition: opacity .35s ease, transform .5s var(--spring);
+  #toast { position: fixed; right: var(--pad); top: 12vh;  /* under the header, never over the clock */ transform: translateY(-2vh); opacity: 0; transition: opacity .35s ease, transform .5s var(--spring);
            background: var(--glass-hi); backdrop-filter: blur(24px); color: #fff; padding: 1.6vh 3vh; border-radius: 99vh;
            font: 600 2.3vh/1.25 var(--ui); box-shadow: inset 0 0 0 1px var(--line), 0 1.4vh 3vh rgba(0,0,0,.5); pointer-events: none; z-index: 20; }
   #toast.show { opacity: 1; transform: none; }
@@ -315,6 +324,7 @@
     .details.swap #d-meta, .details.swap .cta, .sys .ring, footer .p.new { animation: none !important; }
     .details.swap #sfx { animation: fade-sfx 1.6s ease-out; }
     #rows, .track, .item, .item .badge, .key { transition: opacity .2s, box-shadow .2s, filter .2s; }
+    #glow { transition: opacity .2s; }
     .item.focus, .card .choice.focus, .key.focus { transform: none; }
   }
   @keyframes fade-sfx { 12% { opacity: .95; } 70% { opacity: .75; } 100% { opacity: 0; } }
@@ -372,6 +382,7 @@
   </defs>
 </svg>
 
+<div id="glow" aria-hidden="true"></div>
 <div class="app-shell">
   <header>
     <div class="brand"><svg class="mark" viewBox="0 0 2 2"><use href="#horseshoe"/></svg><h1>Couch</h1></div>
@@ -1160,6 +1171,9 @@ function focus(r, c) {
   // tint the focus by what's focused, after iOS's tinted icons: a game's cover colour, an app's brand colour, else gold
   if (e.tint === undefined && e.classList.contains("loaded")) e.tint = artColor(e.querySelector(".art"));
   document.body.style.setProperty("--focus", e.tint ? `rgb(${e.tint})` : "");
+  const glowAt = () => { const r = e.getBoundingClientRect(), b = document.body.style;  // twice: the rows glide into place
+    b.setProperty("--gx", `${r.left + r.width / 2}px`); b.setProperty("--gy", `${r.top + r.height / 2}px`); };
+  glowAt(); clearTimeout(focus.glow); focus.glow = setTimeout(glowAt, 620);
   document.querySelectorAll("#rows section").forEach(sec => sec.classList.toggle("active", sec.contains(e)));
   document.body.classList.add("chosen");
   showDetails(e);
@@ -1657,6 +1671,7 @@ function renderSearch() {
   $("#sq-text").textContent = S.prompt?.secret ? "•".repeat(S.q.length) : S.q;
   $("#sq-hint").hidden = !!S.q;
   $("#sq-hint").textContent = S.prompt ? S.prompt.title : "Search games and apps";
+  $("#search").classList.toggle("prompt", !!S.prompt);
   if (S.prompt) { S.results = []; $("#results").innerHTML = ""; $("#sr-title").textContent = ""; S.zone = "keys"; return paintSearch(); }
   const q = S.q.trim().toLowerCase();
   const pool = rows.flat().filter(t => t.closest("#apps, #games"));
