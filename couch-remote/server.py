@@ -1288,23 +1288,103 @@ def exe_icon_png(exe, out, size=256):
         user32.DestroyIcon(hicon)
 
 
+def msix_logo(args):
+    """The biggest square logo of a Store (MSIX) app launched through shell:AppsFolder, or None.
+    The package folder carries the version, so it is found by pattern each time."""
+    for a in args:
+        m = re.fullmatch(r"shell:AppsFolder\\(\w+)_(\w+)!.*", str(a), re.I)
+        if m:
+            # WindowsApps can't be listed without admin, but the package's own folder can be read: the registry names it
+            repo = r"Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\Repository\Packages"
+            logos = []
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, repo) as k:
+                for i in range(winreg.QueryInfoKey(k)[0]):
+                    name = winreg.EnumKey(k, i)
+                    if name.startswith(m[1] + "_") and name.endswith("__" + m[2]):
+                        with winreg.OpenKey(k, name) as pk:
+                            logos = list((Path(winreg.QueryValueEx(pk, "PackageRootFolder")[0]) / "assets").glob("Square*Logo*.png"))
+            best = [p for p in logos if p.name == "Square44x44Logo.targetsize-256.png"]
+            return (best or sorted(logos, key=lambda p: p.stat().st_size)[-1:] or [None])[0]
+    return None
+
+
+def manifest_icon(manifest, base):
+    """URL of the largest plain ("any") icon in a web app manifest (already parsed), or None."""
+    from urllib.parse import urljoin
+    best, best_px = None, 0
+    for ic in manifest.get("icons", []):
+        px = int(m[1]) if (m := re.match(r"(\d+)x", str(ic.get("sizes", "")))) else 0
+        if "any" in ic.get("purpose", "any").split() and px > best_px and ic.get("src"):
+            best, best_px = urljoin(base, ic["src"]), px
+    return best
+
+
+def web_icon_png(url, out):
+    """Save a site's icon as a PNG: its apple-touch-icon, else the biggest icon in its web manifest. False if none.
+    shortcut: stdlib only and no retry; some sites (claude.ai) block scripts and give just the apple-touch-icon."""
+    import urllib.request
+    from urllib.parse import urljoin
+
+    def get(u, limit=2_000_000):
+        req = urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0 Couch"})
+        with urllib.request.urlopen(req, timeout=5) as r:
+            return r.read(limit)
+
+    def save(u):
+        import io
+        import pygame
+        pygame.image.save(pygame.image.load(io.BytesIO(get(u))), str(out))  # a bad image raises: caller moves on
+        return True
+
+    p = urlparse(url)
+    origin = f"{p.scheme}://{p.netloc}/"
+    try:
+        return save(urljoin(origin, "apple-touch-icon.png"))
+    except Exception:
+        pass
+    try:
+        m = re.search(rb'<link[^>]+rel=["\']manifest["\'][^>]*href=["\']([^"\']+)', get(origin, 500_000), re.I) \
+            or re.search(rb'<link[^>]+href=["\']([^"\']+)["\'][^>]*rel=["\']manifest', get(origin, 500_000), re.I)
+        murl = urljoin(origin, m[1].decode()) if m else urljoin(origin, "manifest.webmanifest")
+        icon = manifest_icon(json.loads(get(murl)), murl)
+        return bool(icon) and save(icon)
+    except Exception as e:
+        log.info("no web icon for %s: %s", origin, e)
+        return False
+
+
 def app_icon(app_id):
-    """PNG of an app tile's icon (cached; redone when the app updates), or None."""
+    """PNG of an app tile's icon, or None. Order: a PNG dropped in cache/icons (your own override, kept), the
+    program's own icon (redone when the app updates), a Store app's package logo, a website's icon. A failed
+    lookup is remembered for an hour (<id>.none) so an offline PC doesn't retry on every tile."""
     apps, _ = load_apps()
     app = next((a for a in apps if a.get("id") == app_id), None)
     if not app:
         return None
     target = os.path.expandvars(app.get("target", ""))
     exe = Path(target) if app.get("kind") == "exe" else steam_path() / "steam.exe" if target.startswith("steam:") else None
-    if not exe or not exe.exists() or exe.name.lower() == "explorer.exe":  # a Store app opened through explorer: its icon is a folder
-        return None
-    out = ICON_CACHE / f"{app_id}.png"
+    out, none = ICON_CACHE / f"{app_id}.png", ICON_CACHE / f"{app_id}.none"
+    if exe and exe.exists() and exe.name.lower() != "explorer.exe":
+        with ICON_LOCK:
+            if not out.exists() or out.stat().st_mtime < exe.stat().st_mtime:
+                ICON_CACHE.mkdir(parents=True, exist_ok=True)
+                if not exe_icon_png(exe, out):
+                    return None
+        return out
     with ICON_LOCK:
-        if not out.exists() or out.stat().st_mtime < exe.stat().st_mtime:
-            ICON_CACHE.mkdir(parents=True, exist_ok=True)
-            if not exe_icon_png(exe, out):
-                return None
-    return out
+        if out.exists():
+            return out
+        if none.exists() and time.time() - none.stat().st_mtime < 3600:
+            return None
+        ICON_CACHE.mkdir(parents=True, exist_ok=True)
+        logo = msix_logo(app.get("args", []))
+        if logo:
+            shutil.copyfile(logo, out)
+            return out
+        if target.startswith("http") and web_icon_png(target, out):
+            return out
+        none.touch()
+    return None
 
 
 # ---------------------------------------------------------------- controller
