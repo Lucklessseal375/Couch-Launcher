@@ -398,6 +398,18 @@ def sunshine_api(method, path, body=None):
         raise
 
 
+# the Streaming menu's Sunshine actions: request body from Couch -> (method, path, body) for Sunshine's API
+SUNSHINE_ACTIONS = {
+    "pending": lambda b={}: ("GET", "/api/pin", None),
+    "clients": lambda b={}: ("GET", "/api/clients/list", None),
+    "restart": lambda b={}: ("POST", "/api/restart", {}),
+    "close": lambda b={}: ("POST", "/api/apps/close", {}),  # ends the session: Sunshine closes the running app (Couch)
+    "pair": lambda b={}: ("POST", "/api/pin", {"pairing_id": str(b.get("pairing_id", "")), "pin": str(b.get("pin", ""))[:16],
+                                               "name": str(b.get("name", ""))[:40]}),
+    "unpair": lambda b={}: ("POST", "/api/clients/unpair", {"uuid": str(b.get("uuid", ""))}),
+}
+
+
 def parse_sc(out):
     """`sc query SunshineService` output -> "running", "stopped", or None when Sunshine isn't installed."""
     if "FAILED 1060" in out or "SERVICE_NAME" not in out:
@@ -2005,19 +2017,14 @@ class Handler(BaseHTTPRequestHandler):
                     log.info("opening Sunshine's settings page")
                     subprocess.Popen([CONFIG["edge"], "--new-window", SUNSHINE_URL], creationflags=0x00000008 | 0x00000200)
                     return self.send_json({"ok": True})
-                calls = {"pending": ("GET", "/api/pin", None), "clients": ("GET", "/api/clients/list", None),
-                         "restart": ("POST", "/api/restart", {}),
-                         "pair": ("POST", "/api/pin", {"pairing_id": str(b.get("pairing_id", "")),
-                                                       "pin": str(b.get("pin", ""))[:16], "name": str(b.get("name", ""))[:40]}),
-                         "unpair": ("POST", "/api/clients/unpair", {"uuid": str(b.get("uuid", ""))})}
                 try:
                     if a == "login":
                         ok = sunshine_login(str(b.get("user", "")), str(b.get("password", "")))
                         return self.send_json({"ok": ok} if ok else {"error": "Sunshine didn't accept that username and password."})
-                    if a not in calls:
+                    if a not in SUNSHINE_ACTIONS:
                         return self.send_json({"error": "unknown action"}, 400)
                     log.info("Sunshine: %s", a)
-                    return self.send_json({"ok": True, "result": sunshine_api(*calls[a])})
+                    return self.send_json({"ok": True, "result": sunshine_api(*SUNSHINE_ACTIONS[a](b))})
                 except PermissionError:
                     return self.send_json({"error": "login", "login": False})
                 except (OSError, ValueError) as e:  # Sunshine not running, or it restarted mid-call

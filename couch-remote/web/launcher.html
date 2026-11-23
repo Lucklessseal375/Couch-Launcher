@@ -996,8 +996,12 @@ function streamMenu() {
         fn: () => confirmAction("Restart Sunshine?", "A stream in progress ends; the other TV can reconnect after a few seconds.", "Restart",
           () => sunshineCall("restart").then(r => r && toast("Sunshine is restarting"))) },
     ] : []),
-    ...(info.stream ? [{ label: "End stream", icon: "close", sub: "If Couch still thinks a stream is on",
-      fn: () => api("/api/stream", { on: false }).then(() => toast("Stream ended")).catch(() => {}) }] : []),
+    ...(info.stream ? [signedIn
+      ? { label: "End stream", icon: "close", sub: "Closes the session on the other screen",
+          fn: () => confirmAction("End the stream?", `${info.stream} will be disconnected; unsaved game progress there may be lost.`, "End stream",
+            () => sunshineCall("close").then(r => { if (!r) return; api("/api/stream", { on: false }).catch(() => {}); toast("Stream ended"); })) }
+      : { label: "Clear streaming status", icon: "close", sub: "If Couch still shows a stream that has ended",
+          fn: () => api("/api/stream", { on: false }).then(() => toast("Streaming status cleared")).catch(() => {}) }] : []),
     ...(info.sunshine === "running" ? [{ label: "Open Sunshine settings", icon: "exit", sub: "Its full page, on this screen (mouse and keyboard)",
       fn: () => { toast("Opening Sunshine…"); api("/api/sunshine", { action: "open" }).catch(() => {}); } }] : []),
     { label: "Done" },

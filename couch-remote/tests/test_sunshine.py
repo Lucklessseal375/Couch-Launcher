@@ -85,6 +85,9 @@ class SunshineLogin(unittest.TestCase):
                 server.sunshine_api("POST", "/api/restart", {})
         self.assertFalse(server.SUNSHINE_CRED.exists())
 
+    def test_end_stream_closes_sunshines_app(self):
+        self.assertEqual(server.SUNSHINE_ACTIONS["close"](), ("POST", "/api/apps/close", {}))
+
     def test_no_login_yet(self):
         with self.assertRaises(PermissionError):
             server.sunshine_api("GET", "/api/clients/list")
