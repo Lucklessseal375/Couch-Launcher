@@ -16,6 +16,8 @@ In Sunshine's page, go to **Applications → Add New**:
   - **Do:** `"C:\Users\eli\Documents\CouchSetup\couch-remote\stream.cmd" on "Apple TV"`
   - **Undo:** `"C:\Users\eli\Documents\CouchSetup\couch-remote\stream.cmd" off`
 - Save.
+- Keep the name in quotes plain: letters, numbers and spaces only.
+- If Couch doesn't react when a stream starts, change both commands to the `cmd /C` form, for example Do: `cmd /C ""C:\Users\eli\Documents\CouchSetup\couch-remote\stream.cmd" on "Apple TV""`.
 
 When a stream starts, Couch comes to the front, shows **Streaming to Apple TV** in its header, and stops moving the sound back to the living-room TV. When it ends, everything goes back to normal.
 
@@ -26,7 +28,9 @@ When a stream starts, Couch comes to the front, shows **Streaming to Apple TV** 
 4. Pair your PS5 controller to the Apple TV: Apple TV **Settings → Remotes and Devices → Bluetooth**, then hold **PS + Create** on the controller until its light flashes, and select it.
 
 ## 4. Play
-On the Apple TV: Moonlight → your PC → **Couch**. Use the controller as usual. To stop, press **Start + Select + L1 + R1** (Moonlight's quit combo) or close the app.
+On the Apple TV: Moonlight → your PC → **Couch**. Use the controller as usual.
+
+**When you're done, quit Couch in Moonlight**: in Moonlight's app list, hold select on **Couch** and choose **Quit App**. Just leaving Moonlight keeps the session open on the PC, so Couch keeps showing "Streaming to Apple TV" and keeps its hands off the sound until the session is quit.
 
 ## Known limits
 - If Couch restarts during a stream, it forgets that a stream is on until the next one starts (the header pill and the audio stand-down come back then).

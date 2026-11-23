@@ -1651,7 +1651,11 @@ addEventListener("keydown", e => {
 let lastPadAt = -1e9;
 function onPad(a) {
   if (a.startsWith("pad:")) { Out.detect(); return showPad(a.slice(4)); }  // a controller came or went
-  if (a.startsWith("stream:")) return showStream(a === "stream:off" ? null : a.slice(7));  // a Sunshine stream started or ended
+  if (a.startsWith("stream:")) {  // a Sunshine stream started or ended; keep info in step so a rebuild shows the same
+    const d = a === "stream:off" ? null : a.slice(7);
+    if (info) info.stream = d;
+    return showStream(d);
+  }
   if (a === "shot") return toast("Screenshot saved. See it in Media gallery");
   if (a.startsWith("mic:")) return toast({ on: "Microphone on", off: "Microphone muted", none: "No microphone found" }[a.slice(4)]);
   padSeen = true; lastPadAt = performance.now(); Sound.unlock();
