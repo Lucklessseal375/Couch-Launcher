@@ -145,7 +145,7 @@
   /* ---------- rows: carousels that glide on a spring */
   main { height: calc(100% - 11vh - 23vh - 8vh); overflow: hidden;
          -webkit-mask-image: linear-gradient(#000 calc(100% - 4vh), transparent); mask-image: linear-gradient(#000 calc(100% - 4vh), transparent); }
-  #rows { transition: transform .6s var(--spring); }
+  #rows { transition: transform .6s var(--spring); padding-bottom: 4vh; }  /* the last row clears the prompt bar */
   section { padding: .2vh 0; opacity: .62; transition: opacity .45s ease; }
   section.active, body:not(.chosen) section { opacity: 1; }
   section h2 { margin: 0 0 0 var(--pad); font: 400 2.6vh/1 var(--serif); color: var(--dim); }
@@ -212,7 +212,9 @@
   .sys.focus small { color: var(--ink); }
   .sys.shot { justify-content: flex-end; padding-bottom: 1.4vh; background: center / cover no-repeat; }
   .sys.shot .glance { display: none; }
-  .sys.shot > span { padding: .5vh 1.1vh; border-radius: .8vh; background: rgba(21,15,11,.72); backdrop-filter: blur(8px); }
+  .sys::after { box-shadow: none; }  /* no outline box around PC tiles: the focus ring shows what's selected */
+  .sys.shot { background-image: linear-gradient(transparent 35%, rgba(21,15,11,.9)), var(--shot); }  /* shade, not a box, under the label */
+  .sys.shot > span { text-shadow: 0 .2vh .8vh rgba(0,0,0,.9); }
   .empty { color: var(--dim); padding: 2vh 0; font-size: 2.4vh; }
 
   /* ---------- PlayStation button glyphs (SVG) */
@@ -827,7 +829,7 @@ async function liveTiles() {
     st.querySelector(".glance").innerHTML = ring(used, used > .9 ? "var(--ps-circle)" : null);
     st.querySelector("small").textContent = `${d.name} ${Math.round(d.free / 1e9)} GB free`;
   }
-  if (me && m?.shots?.length) { me.classList.add("shot"); me.style.backgroundImage = `url("/media/${encodeURIComponent(m.shots[0].name)}")`; }
+  if (me && m?.shots?.length) { me.classList.add("shot"); me.style.setProperty("--shot", `url("/media/${encodeURIComponent(m.shots[0].name)}")`); }
 }
 
 function showPad(levels) {  // "none", or one level per controller: "full,low"
