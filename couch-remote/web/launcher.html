@@ -168,6 +168,8 @@
     .item.focus::before { animation: glint .9s var(--spring) .08s both; }
     @keyframes glint { from { opacity: 1; background-position: 160% 0; } to { opacity: 1; background-position: -60% 0; } }
   }
+  .item.nudge { animation: nudge .32s var(--spring); }  /* `translate`, so the focus lift (transform) stays put */
+  @keyframes nudge { 35% { translate: var(--nx) var(--ny); } }
   .item .badge { position: absolute; top: -2vh; right: -2vh; width: 5.8vh; height: 5.8vh; opacity: 0; z-index: 2;
                  transform: scale(.4) rotate(-90deg); transition: opacity .2s, transform .5s var(--spring); pointer-events: none;
                  filter: drop-shadow(0 .3vh .6vh rgba(0,0,0,.7)); }
@@ -320,12 +322,26 @@
   .url { font-family: Consolas, monospace; color: #fff !important; }
 
   /* Windows "Animation effects" off: ゴゴゴ becomes a fade; nothing spins, shakes, slides or zooms */
+  /* Windows "Transparency effects" off: solid surfaces instead of frosted glass (Apple: Reduce Transparency) */
+  @media (prefers-reduced-transparency: reduce) {
+    :root { --glass: #2a1f17; --glass-hi: #2a1f17; }
+    * { backdrop-filter: none !important; }
+    footer { background: #1d1510; }
+    .overlay { background: rgba(5, 6, 9, .92); }
+  }
+  /* Windows contrast settings on: full-strength text and rows (Apple: Increase Contrast) */
+  @media (prefers-contrast: more) {
+    :root { --dim: #ece0cb; --line: rgba(255, 236, 205, .45); }
+    section { opacity: 1; }
+    .item { filter: none; }
+  }
   @media (prefers-reduced-motion: reduce) {
     .sky::after, #idle-art, #idle-ball, #golden-spin, .app-shell, .details.swap #d-title, .details.swap #sfx span, .item.focus .badge img, .card, .overlay.show, .launch .ball,
     .details.swap #d-meta, .details.swap .cta, .sys .ring, footer .p.new { animation: none !important; }
     .details.swap #sfx { animation: fade-sfx 1.6s ease-out; }
     #rows, .track, .item, .item .badge, .key { transition: opacity .2s, box-shadow .2s, filter .2s; }
     #glow { transition: opacity .2s; }
+    .item.nudge { animation: none; }
     .item.focus, .card .choice.focus, .key.focus { transform: none; }
   }
   @keyframes fade-sfx { 12% { opacity: .95; } 70% { opacity: .75; } 100% { opacity: 0; } }
@@ -1215,7 +1231,11 @@ function move(dir) {
   if (dir === "right") focus(pos.r, pos.c + 1);
   if (dir === "up" && pos.r > 0) focus(pos.r - 1, lastCol[pos.r - 1] ?? 0);
   if (dir === "down" && pos.r < rows.length - 1) focus(pos.r + 1, lastCol[pos.r + 1] ?? 0);
-  (pos.r + ":" + pos.c === before) ? Sound.bump() : Sound.move();
+  if (pos.r + ":" + pos.c !== before) return Sound.move();
+  Sound.bump();  // the end of a row: like tvOS, the tile nudges that way and springs back
+  const e = rows[pos.r][pos.c], d = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] }[dir] || [0, 0];
+  e.style.setProperty("--nx", `${d[0] * 1.4}vh`); e.style.setProperty("--ny", `${d[1] * 1.4}vh`);
+  e.classList.remove("nudge"); void e.offsetWidth; e.classList.add("nudge");
 }
 // L1/R1: previous/next category (row)
 function category(step) {
