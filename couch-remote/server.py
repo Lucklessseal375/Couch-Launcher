@@ -332,6 +332,72 @@ def watch_sunshine():
             pass  # no Sunshine (yet): keep checking
 
 
+SUNSHINE_CRED = Path(__file__).resolve().parent / "cache" / "sunshine.cred"  # git-ignored (cache/)
+SUNSHINE_URL = "https://localhost:47990"  # Sunshine's own page on this PC; its certificate is self-signed
+
+
+class _BLOB(ctypes.Structure):
+    _fields_ = [("n", wintypes.DWORD), ("p", ctypes.POINTER(ctypes.c_char))]
+
+
+def dpapi(data, protect):
+    """Windows DPAPI: data only this Windows account on this PC can read back (used for Sunshine's login)."""
+    crypt = ctypes.windll.crypt32
+    src, out = _BLOB(len(data), ctypes.cast(ctypes.create_string_buffer(data, len(data)), ctypes.POINTER(ctypes.c_char))), _BLOB()
+    fn = crypt.CryptProtectData if protect else crypt.CryptUnprotectData
+    if not fn(ctypes.byref(src), None, None, None, None, 0, ctypes.byref(out)):
+        raise OSError(ctypes.GetLastError(), "DPAPI failed")
+    try:
+        return ctypes.string_at(out.p, out.n)
+    finally:
+        kernel32.LocalFree(out.p)
+
+
+def _sunshine_request(method, path, body, user_pass):
+    import base64
+    import ssl
+    import urllib.request
+    ctx = ssl.create_default_context()
+    ctx.check_hostname, ctx.verify_mode = False, ssl.CERT_NONE  # localhost only, Sunshine's self-signed certificate
+    req = urllib.request.Request(SUNSHINE_URL + path, method=method, data=None if body is None else json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json",
+                                          "Authorization": "Basic " + base64.b64encode(user_pass).decode()})
+    raw = urllib.request.urlopen(req, timeout=8, context=ctx).read()
+    return json.loads(raw) if raw.strip() else {}
+
+
+def sunshine_login(user, password):
+    """Check a Sunshine login against Sunshine itself; only a working one is kept, encrypted for this Windows account."""
+    import urllib.error
+    pair = f"{user}:{password}".encode()
+    try:
+        _sunshine_request("GET", "/api/clients/list", None, pair)
+    except urllib.error.HTTPError as e:
+        if e.code == 401:
+            return False
+        raise
+    SUNSHINE_CRED.parent.mkdir(parents=True, exist_ok=True)
+    SUNSHINE_CRED.write_bytes(dpapi(pair, protect=True))
+    log.info("Sunshine login saved (encrypted)")
+    return True
+
+
+def sunshine_api(method, path, body=None):
+    """A call to Sunshine's API with the saved login. PermissionError when there is none or Sunshine no longer
+    accepts it (then it's forgotten, and the Streaming menu asks again)."""
+    import urllib.error
+    if not SUNSHINE_CRED.exists():
+        raise PermissionError("no Sunshine login")
+    try:
+        return _sunshine_request(method, path, body, dpapi(SUNSHINE_CRED.read_bytes(), protect=False))
+    except urllib.error.HTTPError as e:
+        if e.code == 401:
+            SUNSHINE_CRED.unlink(missing_ok=True)
+            log.info("Sunshine refused the saved login; forgot it")
+            raise PermissionError("Sunshine login no longer works") from e
+        raise
+
+
 def parse_sc(out):
     """`sc query SunshineService` output -> "running", "stopped", or None when Sunshine isn't installed."""
     if "FAILED 1060" in out or "SERVICE_NAME" not in out:
@@ -1837,7 +1903,8 @@ class Handler(BaseHTTPRequestHandler):
                 games, hidden = library()
                 info = {"name": socket.gethostname(), "apps": apps, "games": games, "hidden": hidden,
                         "padReader": PAD_READER, "intro": bool(intro_file()), "sounds": sound_clips(),
-                        "stream": STREAM["device"] if STREAM["on"] else None, "sunshine": sunshine_status()}
+                        "stream": STREAM["device"] if STREAM["on"] else None, "sunshine": sunshine_status(),
+                        "sunshineLogin": SUNSHINE_CRED.exists()}
                 try:
                     info["audio"] = audio_state()["current"]
                 except Exception:  # noqa: BLE001  (optional extra: never lose the library over it)
@@ -1932,12 +1999,30 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"ok": True, "name": set_audio(str(b.get("id", "")))})
             elif path == "/api/stream" and kind == "local":  # from stream.cmd: {"on": bool, "device": "Apple TV"}
                 return self.send_json({"ok": True, "stream": set_stream(bool(b.get("on")), str(b.get("device", "")))})
-            elif path == "/api/sunshine" and kind == "local":  # {"action": "open"}: Sunshine's settings page on this screen
-                if b.get("action") != "open":
-                    return self.send_json({"error": "unknown action"}, 400)
-                log.info("opening Sunshine's settings page")
-                subprocess.Popen([CONFIG["edge"], "--new-window", "https://localhost:47990"],
-                                 creationflags=0x00000008 | 0x00000200)
+            elif path == "/api/sunshine" and kind == "local":  # the Streaming menu, all by controller
+                a = b.get("action")
+                if a == "open":  # Sunshine's settings page on this screen
+                    log.info("opening Sunshine's settings page")
+                    subprocess.Popen([CONFIG["edge"], "--new-window", SUNSHINE_URL], creationflags=0x00000008 | 0x00000200)
+                    return self.send_json({"ok": True})
+                calls = {"pending": ("GET", "/api/pin", None), "clients": ("GET", "/api/clients/list", None),
+                         "restart": ("POST", "/api/restart", {}),
+                         "pair": ("POST", "/api/pin", {"pairing_id": str(b.get("pairing_id", "")),
+                                                       "pin": str(b.get("pin", ""))[:16], "name": str(b.get("name", ""))[:40]}),
+                         "unpair": ("POST", "/api/clients/unpair", {"uuid": str(b.get("uuid", ""))})}
+                try:
+                    if a == "login":
+                        ok = sunshine_login(str(b.get("user", "")), str(b.get("password", "")))
+                        return self.send_json({"ok": ok} if ok else {"error": "Sunshine didn't accept that username and password."})
+                    if a not in calls:
+                        return self.send_json({"error": "unknown action"}, 400)
+                    log.info("Sunshine: %s", a)
+                    return self.send_json({"ok": True, "result": sunshine_api(*calls[a])})
+                except PermissionError:
+                    return self.send_json({"error": "login", "login": False})
+                except (OSError, ValueError) as e:  # Sunshine not running, or it restarted mid-call
+                    log.info("Sunshine %s failed: %s", a, e)
+                    return self.send_json({"error": "Sunshine isn't answering. Try again in a moment."})
             elif path == "/api/light" and kind == "local":  # the controllers' light bar: {"rgb": [r, g, b]}
                 r, g, bl = (max(0, min(255, int(v))) for v in b["rgb"])
                 LIGHT[0] = (r, g, bl)

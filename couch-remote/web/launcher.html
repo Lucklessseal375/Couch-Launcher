@@ -951,6 +951,7 @@ function setPrompts(items) {
 }
 function updatePrompts() {
   if (document.body.classList.contains("starting")) return setPrompts([["circle", "Hide"]]);
+  if (modal?.search && S?.prompt) return setPrompts([["cross", "Type"], ["square", "Delete"], [["l1", "r1"], ["Capitals", "Symbols", "Lowercase"][S.layer]], ["circle", "Cancel"]]);
   if (modal?.search) return setPrompts([["cross", S?.zone === "results" ? "Open" : "Type"], ["square", "Delete"], ["circle", "Close"]]);
   if (modal?.prompts) return setPrompts(modal.prompts);
   if (modal) return setPrompts(modal.els.length ? [["cross", "Select"], ["circle", "Back"]] : [["circle", "Close"]]);
@@ -972,11 +973,61 @@ const streamStatus = () => !info.sunshine ? "Play on another TV with Sunshine an
   : info.stream ? `Streaming to ${info.stream}` : "Ready: open Moonlight on the other TV and pick Couch";
 function streamMenu() {
   if (!info.sunshine) return choose("Streaming", "Install Sunshine on this PC and Moonlight on the other TV first. The steps are in docs/streaming-setup.md.", [{ label: "Done" }]);
+  const signedIn = info.sunshineLogin && info.sunshine === "running";
   choose("Streaming", streamStatus(), [
-    { label: "Open Sunshine settings", icon: "tv", sub: "Opens on this screen. Use a mouse and keyboard",
-      fn: () => { toast("Opening Sunshine…"); api("/api/sunshine", { action: "open" }).catch(() => {}); } },
-    ...(info.stream ? [{ label: "End stream", icon: "close", sub: "If you left Moonlight without quitting Couch",
+    ...(!info.sunshineLogin ? [{ label: "Connect to Sunshine", icon: "pad", sub: "Once, with the controller: then pairing and restarting work from here", fn: connectSunshine }] : []),
+    ...(signedIn ? [
+      { label: "Pair a device", icon: "phone", sub: "Type the PIN a new Moonlight device shows", fn: pairDevice },
+      { label: "Paired devices", icon: "tv", sub: "See them, or remove one", fn: pairedDevices },
+      { label: "Restart Sunshine", icon: "restart", sub: "If streaming misbehaves",
+        fn: () => confirmAction("Restart Sunshine?", "A stream in progress ends; the other TV can reconnect after a few seconds.", "Restart",
+          () => sunshineCall("restart").then(r => r && toast("Sunshine is restarting"))) },
+    ] : []),
+    ...(info.stream ? [{ label: "End stream", icon: "close", sub: "If Couch still thinks a stream is on",
       fn: () => api("/api/stream", { on: false }).then(() => toast("Stream ended")).catch(() => {}) }] : []),
+    { label: "Open Sunshine settings", icon: "exit", sub: "Its full page, on this screen (mouse and keyboard)",
+      fn: () => { toast("Opening Sunshine…"); api("/api/sunshine", { action: "open" }).catch(() => {}); } },
+    { label: "Done" },
+  ], { vertical: true });
+}
+// Sunshine by controller: the server holds its login (encrypted for this Windows account) and makes the calls
+async function sunshineCall(action, extra = {}) {
+  const r = await api("/api/sunshine", { action, ...extra }).catch(() => ({ error: "Couch isn't responding. Try again in a moment." }));
+  if (r.error === "login") { info.sunshineLogin = false; toast("Sunshine needs its login again: Streaming → Connect to Sunshine"); return null; }
+  if (r.error) { toast(r.error); return null; }
+  return r.result ?? r;
+}
+async function connectSunshine() {
+  const user = await promptText("Sunshine username");
+  if (user == null) return;
+  const password = await promptText("Sunshine password", { secret: true });
+  if (password == null) return;
+  toast("Checking with Sunshine…");
+  if ((await sunshineCall("login", { user, password }))?.ok) { info.sunshineLogin = true; toast("Connected to Sunshine"); streamMenu(); }
+}
+async function pairDevice() {
+  const r = await sunshineCall("pending");
+  if (!r) return;
+  const list = r.pairings || [], nameOf = p => p.name || p.client_name || p.device_name || "Moonlight device";
+  if (!list.length) return choose("Pair a device", "On the new device, open Moonlight and choose this PC. When it shows a PIN, come back here.",
+    [{ label: "It shows a PIN now", fn: pairDevice }, { label: "Done" }], { vertical: true });
+  const pair = async p => {
+    const pin = await promptText(`PIN shown on ${nameOf(p)}`);
+    if (!pin) return;
+    const res = await sunshineCall("pair", { pairing_id: p.id, pin: pin.trim(), name: nameOf(p) });
+    if (res) toast(res.status === false || res.status === "false" ? "Sunshine didn't accept that PIN. Try again." : `${nameOf(p)} paired`);
+  };
+  if (list.length === 1) return pair(list[0]);
+  choose("Pair a device", "Which device is asking?", list.map(p => ({ label: nameOf(p), fn: () => pair(p) })), { vertical: true });
+}
+async function pairedDevices() {
+  const r = await sunshineCall("clients");
+  if (!r) return;
+  const devs = r.named_certs || [];
+  choose("Paired devices", devs.length ? "Choose one to remove it. It would need a new PIN to stream again." : "Nothing is paired yet.", [
+    ...devs.map(d => ({ label: d.name || "Unnamed device", icon: "tv",
+      fn: () => confirmAction(`Remove ${d.name || "this device"}?`, "It will need a new PIN to stream again.", "Remove",
+        () => sunshineCall("unpair", { uuid: d.uuid }).then(x => x && toast(`${d.name || "Device"} removed`))) })),
     { label: "Done" },
   ], { vertical: true });
 }
@@ -1538,6 +1589,23 @@ function openSearch() {
   renderSearch();
 }
 function closeSearch() { S = null; closeModal($("#search")); }
+// a text prompt on the same keyboard (the Streaming menu's Sunshine sign-in and pairing PIN): L1/R1 switch lowercase,
+// capitals and symbols, the Space key becomes Done, a secret shows dots. Resolves to the text, or null on ○.
+const LAYERS = ["abcdefghijklmnopqrstuvwxyz", "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "!@#$%^&*()-_=+[]{};:'\",./?"];
+function promptText(title, { secret = false } = {}) {
+  return new Promise(resolve => {
+    openSearch();
+    S.prompt = { title, secret, resolve }; S.layer = 0;
+    modal.layer = d => { S.layer = (S.layer + d + 3) % 3; Sound.move(); labelKeys(); updatePrompts(); };
+    modal.onBack = () => { closeSearch(); resolve(null); };
+    labelKeys(); renderSearch();
+  });
+}
+function labelKeys() {
+  const keys = [...$("#keys").children];
+  for (let i = 0; i < 26; i++) keys[i].textContent = S.prompt ? LAYERS[S.layer][i] : KEYS[i];
+  keys[36].textContent = S.prompt ? "Done" : "Space";
+}
 // ---------- easter eggs from Steel Ball Run
 const EGGS = [
   [/^johnny|^joestar/, "Johnny Joestar. The jockey who got back on the horse."],
@@ -1578,8 +1646,10 @@ function comboPress(a) {
 { const d = new Date(); if (d.getMonth() === 8 && d.getDate() === 25) setTimeout(() => toast(`The Steel Ball Run started ${d.getFullYear() - 1890} years ago today. Giddy up!`), 4000); }
 
 function renderSearch() {
-  $("#sq-text").textContent = S.q;
+  $("#sq-text").textContent = S.prompt?.secret ? "•".repeat(S.q.length) : S.q;
   $("#sq-hint").hidden = !!S.q;
+  $("#sq-hint").textContent = S.prompt ? S.prompt.title : "Search games and apps";
+  if (S.prompt) { S.results = []; $("#results").innerHTML = ""; $("#sr-title").textContent = ""; S.zone = "keys"; return paintSearch(); }
   const q = S.q.trim().toLowerCase();
   const pool = rows.flat().filter(t => t.closest("#apps, #games"));
   const hits = q ? pool.filter(t => (t.dataset.title || "").toLowerCase().includes(q)) : [];
@@ -1628,6 +1698,11 @@ function searchActivate() {
   const k = KEYS[S.k];
   if (k === "del") return searchDelete();
   Sound.select();
+  if (S.prompt) {
+    if (k === "space") { const text = S.q, done = S.prompt.resolve; closeSearch(); return done(text); }  // Done
+    S.q = (S.q + (S.k < 26 ? LAYERS[S.layer][S.k] : k)).slice(0, 64);
+    return renderSearch();
+  }
   S.q = (S.q + (k === "space" ? " " : k)).slice(0, 30);
   renderSearch();
 }
@@ -1642,8 +1717,8 @@ function searchDelete() {
 let padSeen = false;
 addEventListener("keydown", e => {
   Sound.unlock();
-  if (modal?.search && e.key.length === 1 && /[a-z0-9 ]/i.test(e.key)) {  // typing into the search
-    e.preventDefault(); S.q = (S.q + e.key.toUpperCase()).slice(0, 30); renderSearch(); return;
+  if (modal?.search && e.key.length === 1 && (S?.prompt || /[a-z0-9 ]/i.test(e.key))) {  // typing into the search or a prompt
+    e.preventDefault(); S.q = S.prompt ? (S.q + e.key).slice(0, 64) : (S.q + e.key.toUpperCase()).slice(0, 30); renderSearch(); return;
   }
   if (modal?.search && e.key === "Backspace") { e.preventDefault(); S.q ? searchDelete() : back(); return; }
   const k = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" }[e.key];
@@ -1678,6 +1753,7 @@ function onPad(a) {
   if (wake()) return;
   if (a === "a") activate();
   else if (a === "b") back();
+  else if ((a === "l1" || a === "r1") && modal?.layer) modal.layer(a === "l1" ? -1 : 1);  // a text prompt's letters/symbols
   else if (a === "l1" || a === "r1") { comboPress(a); category(a === "l1" ? -1 : 1); }
   else if (a === "x") { if (modal?.del) modal.del(); else gameDetails(); }
   else if (a === "y") { if (modal) back(); else { Sound.select(); openSearch(); } }
