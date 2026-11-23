@@ -1,5 +1,7 @@
 #Requires -RunAsAdministrator
 <#
+  MAIN PC ONLY: old one-off Windows tuning from before Couch (restore point, startup apps, auto sign-in).
+  To set up Couch on another PC, use install-couch.ps1 instead (see README.md).
   Couch gaming setup for this PC (Steam Big Picture + Epic via BoilR, PS5 controller).
   Run ONCE from an *administrator* PowerShell:
       powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\Documents\CouchSetup\couch-setup.ps1"
