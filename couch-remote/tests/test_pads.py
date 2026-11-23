@@ -16,6 +16,9 @@ class PadLevels(unittest.TestCase):
         # Sunshine's virtual Xbox pad reports wired/unknown: never "empty" or "low"
         self.assertEqual(server.pad_status_for([server.sdl_power_level(-1)]), "pad:max")
 
+    def test_bluetooth_dualsense_reading_empty_doesnt_alarm(self):
+        self.assertEqual(server.pad_status_for(["empty", "low"]), "pad:max,low")
+
 
 if __name__ == "__main__":
     unittest.main()
