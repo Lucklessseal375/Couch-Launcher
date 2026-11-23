@@ -43,5 +43,29 @@ class Stream(unittest.TestCase):
         self.assertIsNone(server.audio_replaced(*args))
 
 
+class SunshineLog(unittest.TestCase):
+    def setUp(self):
+        server.STREAM.update(on=False, device="")
+        self.addCleanup(server.STREAM.update, on=False, device="")
+        p = mock.patch.object(server, "emit")
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_disconnect_ends_the_stream(self):
+        server.set_stream(True, "Apple TV")
+        server.sunshine_events("[2026-11-22 20:08:38.094]: Info: CLIENT DISCONNECTED\n")
+        self.assertIs(server.STREAM["on"], False)
+
+    def test_reconnect_to_open_session_brings_back_last_device(self):
+        server.set_stream(True, "Apple TV")
+        server.sunshine_events("Info: CLIENT DISCONNECTED\nWarning: ControllerNumber already allocated [0]\n")
+        server.sunshine_events("[x]: Info: CLIENT CONNECTED\n")
+        self.assertEqual(server.STREAM, {"on": True, "device": "Apple TV"})
+
+    def test_other_lines_change_nothing(self):
+        server.sunshine_events("Info: Gamepad 0 will be Xbox 360 controller (default)\n")
+        self.assertIs(server.STREAM["on"], False)
+
+
 if __name__ == "__main__":
     unittest.main()

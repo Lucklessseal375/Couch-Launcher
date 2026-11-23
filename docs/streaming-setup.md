@@ -32,7 +32,9 @@ On the Apple TV: Moonlight → your PC → **Couch**. Use the controller as usua
 
 On the living-room TV, Couch's PC row has a **Streaming** tile: it shows whether Sunshine is running and what it's streaming to, opens Sunshine's settings page on that screen (use a mouse and keyboard there), and has **End stream** for when Couch still thinks a stream is on. Sunshine itself starts with Windows; restart it from its own page (Troubleshooting) if ever needed.
 
-**When you're done, quit Couch in Moonlight**: in Moonlight's app list, hold select on **Couch** and choose **Quit App**. Just leaving Moonlight keeps the session open on the PC, so Couch keeps showing "Streaming to Apple TV" and keeps its hands off the sound until the session is quit.
+**When you're done**, just leave Moonlight: Couch reads Sunshine's log and notices the disconnect within a few seconds (and notices when you rejoin). Choosing **Quit App** in Moonlight also closes the session on the PC.
+
+**Only one controller at a time:** games listen to the first controller. Turn the living-room PS5 controller off (Couch's PC row → Turn off controller) while you play from the other room, and in Moonlight's settings give each controller its own slot (multi-controller "Auto"), so the Siri Remote doesn't flatten your sticks.
 
 ## Known limits
 - If Couch restarts during a stream, it forgets that a stream is on until the next one starts (the header pill and the audio stand-down come back then).

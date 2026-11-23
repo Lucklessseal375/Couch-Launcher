@@ -287,12 +287,49 @@ def set_audio(device_id):
 STREAM = {"on": False, "device": ""}  # a Moonlight stream through Sunshine, as told by stream.cmd (Sunshine prep commands)
 
 
+LAST_DEVICE = ["another screen"]  # the device the last stream went to, for a reconnect Sunshine doesn't announce
+
+
 def set_stream(on, device=""):
     """Sunshine says a stream started or ended. The page shows it, and the audio-keeper stands down meanwhile."""
     STREAM.update(on=bool(on), device=(device.strip() or "another screen")[:40] if on else "")
+    if on:
+        LAST_DEVICE[0] = STREAM["device"]
     log.info("stream: %s", f"on ({STREAM['device']})" if on else "off")
     emit("stream:" + (STREAM["device"] if on else "off"))
     return dict(STREAM)
+
+
+SUNSHINE_LOG = Path(r"C:\Program Files\Sunshine\config\sunshine.log")
+
+
+def sunshine_events(text):
+    """New lines of Sunshine's log: Moonlight leaving without Quit App runs no Undo command, and rejoining a session
+    that's still open runs no Do command, so the connect/disconnect lines keep the stream state right."""
+    for line in text.splitlines():
+        if "CLIENT DISCONNECTED" in line and STREAM["on"]:
+            set_stream(False)
+        elif "CLIENT CONNECTED" in line and not STREAM["on"]:
+            set_stream(True, LAST_DEVICE[0])
+
+
+def watch_sunshine():
+    """Read Sunshine's log as it grows (read-only), from its end at start-up; a new, shorter log is read from the top."""
+    pos = None
+    while True:
+        time.sleep(3)
+        try:
+            size = SUNSHINE_LOG.stat().st_size
+            if pos is None or size < pos:
+                pos = size if pos is None else 0
+            if size > pos:
+                with open(SUNSHINE_LOG, "rb") as f:
+                    f.seek(pos)
+                    chunk = f.read()
+                pos += len(chunk)
+                sunshine_events(chunk.decode("utf-8", errors="ignore"))
+        except OSError:
+            pass  # no Sunshine (yet): keep checking
 
 
 def parse_sc(out):
@@ -1319,6 +1356,11 @@ def emit(action):
             LISTENERS[-1].put(action)
 
 
+def sdl_power_level(n):
+    """SDL_JoystickPowerLevel -> the names pygame uses (-1 unknown ... 5 max)."""
+    return {0: "empty", 1: "low", 2: "medium", 3: "full", 4: "wired", 5: "max"}.get(n, "unknown")
+
+
 def pad_status_for(levels):
     """pad:none, or each controller's battery from SDL power levels, comma-separated (the launcher shows one each)."""
     order = ["empty", "low", "medium", "full", "max", "wired"]
@@ -1406,6 +1448,11 @@ def _controller_loop():
     sdl = ctypes.CDLL(os.path.join(os.path.dirname(pygame.__file__), "SDL2.dll"))
     sdl.SDL_GameControllerFromInstanceID.argtypes, sdl.SDL_GameControllerFromInstanceID.restype = (ctypes.c_int,), ctypes.c_void_p
     sdl.SDL_GameControllerSetLED.argtypes = (ctypes.c_void_p, ctypes.c_uint8, ctypes.c_uint8, ctypes.c_uint8)
+    # battery and rumble go through SDL too, looking each controller up by id every time: pygame's Controller
+    # objects crashed the server (access violation, 2026-11-22) once a Bluetooth pad was dropped and came back
+    sdl.SDL_GameControllerGetJoystick.argtypes, sdl.SDL_GameControllerGetJoystick.restype = (ctypes.c_void_p,), ctypes.c_void_p
+    sdl.SDL_JoystickCurrentPowerLevel.argtypes, sdl.SDL_JoystickCurrentPowerLevel.restype = (ctypes.c_void_p,), ctypes.c_int
+    sdl.SDL_GameControllerRumble.argtypes = (ctypes.c_void_p, ctypes.c_uint16, ctypes.c_uint16, ctypes.c_uint32)
     lit = None  # the colour last put on the light bars
     pads = {}
     for i in range(pygame.joystick.get_count()):  # already plugged in (matters after a restart)
@@ -1427,13 +1474,11 @@ def _controller_loop():
     PAD_READER = True
     next_status = 0.0
 
+    def live():  # SDL's own handles for the controllers still open; a dropped one is simply not there
+        return [p for p in map(sdl.SDL_GameControllerFromInstanceID, pads) if p]
+
     def pad_status():
-        levels = []
-        for c in pads.values():
-            try:
-                levels.append(c.as_joystick().get_power_level())
-            except pygame.error:
-                continue
+        levels = [sdl_power_level(sdl.SDL_JoystickCurrentPowerLevel(sdl.SDL_GameControllerGetJoystick(p))) for p in live()]
         return pad_status_for(levels)
 
     def act(action):
@@ -1499,11 +1544,8 @@ def _controller_loop():
                 due = [r for r in RUMBLES if r[0] <= now]
                 RUMBLES[:] = [r for r in RUMBLES if r[0] > now]
             for _, lo, hi, ms in due:
-                for c in pads.values():
-                    try:
-                        c.rumble(lo, hi, ms)
-                    except (pygame.error, AttributeError):
-                        pass
+                for p in live():
+                    sdl.SDL_GameControllerRumble(p, int(lo * 65535), int(hi * 65535), int(ms))
         dirs = set(dpad)
         dz = 0.6 * 32767
         if stick["x"] < -dz: dirs.add("left")
@@ -1971,6 +2013,7 @@ def main():
     WATCHER.start()
     threading.Thread(target=controller_loop, daemon=True).start()
     threading.Thread(target=keep_audio, daemon=True).start()
+    threading.Thread(target=watch_sunshine, daemon=True).start()
     log.info("listening on port %s; LAN: %s", port, lan_ips())
     print(f"Couch Remote on http://127.0.0.1:{port}  (phone: {', '.join(lan_ips()) or 'no LAN IP'})")
     if want_open:
