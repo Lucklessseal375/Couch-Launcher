@@ -991,8 +991,11 @@ function streamMenu() {
   ], { vertical: true });
 }
 // Sunshine by controller: the server holds its login (encrypted for this Windows account) and makes the calls
+let sunBusy = 0;  // a Sunshine call in flight: presses wait, so none lands on a tile behind a closing dialog
 async function sunshineCall(action, extra = {}) {
-  const r = await api("/api/sunshine", { action, ...extra }).catch(() => ({ error: "Couch isn't responding. Try again in a moment." }));
+  sunBusy++;
+  const r = await api("/api/sunshine", { action, ...extra }).catch(() => ({ error: "Couch isn't responding. Try again in a moment." }))
+    .finally(() => sunBusy--);
   if (r.error === "login") { info.sunshineLogin = false; toast("Sunshine needs its login again: Streaming → Connect to Sunshine"); return null; }
   if (r.error) { toast(r.error); return null; }
   return r.result ?? r;
@@ -1005,12 +1008,14 @@ async function connectSunshine() {
   toast("Checking with Sunshine…");
   if ((await sunshineCall("login", { user, password }))?.ok) { info.sunshineLogin = true; toast("Connected to Sunshine"); streamMenu(); }
 }
-async function pairDevice() {
+async function pairDevice(again) {
   const r = await sunshineCall("pending");
-  if (!r) return;
+  if (!r) return again && closeModal($("#dialog"));
   const list = r.pairings || [], nameOf = p => p.name || p.client_name || p.device_name || "Moonlight device";
-  if (!list.length) return choose("Pair a device", "On the new device, open Moonlight and choose this PC. When it shows a PIN, come back here.",
-    [{ label: "It shows a PIN now", fn: pairDevice }, { label: "Done" }], { vertical: true });
+  if (!list.length && again) return toast("Nothing is asking to pair yet. Keep the PIN on the other screen and try again.");
+  if (!list.length) return choose("Pair a device", "On the new device, open Moonlight and choose this PC. While it shows a PIN, press below.",
+    [{ label: "It shows a PIN now", stay: true, fn: () => pairDevice(true) }, { label: "Done" }], { vertical: true });
+  if (again) closeModal($("#dialog"));
   const pair = async p => {
     const pin = await promptText(`PIN shown on ${nameOf(p)}`);
     if (!pin) return;
@@ -1200,6 +1205,7 @@ function category(step) {
   focus(r, lastCol[r] ?? 0); Sound.tab();
 }
 function activate() {
+  if (sunBusy) return Sound.bump();  // waiting on Sunshine (see sunshineCall)
   if (modal) {
     if (modal.activate) return modal.activate();
     const e = modal.els[modal.i]; if (e) { Sound.select(); e.onactivate(); } return;
