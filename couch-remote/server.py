@@ -74,14 +74,34 @@ def load_config():
 CONFIG = load_config()
 
 
+def installed(entry):
+    """Whether an apps.json tile belongs on this PC (one apps.json for every PC at home): an "exe" needs its program,
+    a "url" a program registered for its link type, and any entry with "needs" that path. Anything else is shown."""
+    needs = entry.get("needs")
+    if needs and not os.path.exists(os.path.expandvars(needs)):
+        return False
+    target = os.path.expandvars(entry.get("target", ""))
+    if entry.get("kind") == "exe" and target:
+        return os.path.exists(target)
+    if entry.get("kind") == "url" and ":" in target:
+        scheme = target.split(":", 1)[0]
+        if scheme.lower() in ("http", "https"):
+            return True
+        try:
+            winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, scheme).Close()
+        except OSError:
+            return False
+    return True
+
+
 def load_apps():
     data = json.loads(APPS_FILE.read_text(encoding="utf-8"))
-    return data.get("apps", []), set(int(x) for x in data.get("hide_steam_apps", []))
+    return [a for a in data.get("apps", []) if installed(a)], set(int(x) for x in data.get("hide_steam_apps", []))
 
 
 def load_games():
-    """Non-Steam games from apps.json (e.g. Epic); their last-played time is kept in choices.json."""
-    return json.loads(APPS_FILE.read_text(encoding="utf-8")).get("games", [])
+    """Non-Steam games from apps.json (e.g. Epic) that this PC has; their last-played time is kept in choices.json."""
+    return [g for g in json.loads(APPS_FILE.read_text(encoding="utf-8")).get("games", []) if installed(g)]
 
 
 # ---------------------------------------------------------------- Steam library
