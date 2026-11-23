@@ -79,6 +79,7 @@
   #idle { position: fixed; inset: 0; background: #05060a; opacity: 0; pointer-events: none; transition: opacity 1.2s; z-index: 30; }
   body.idle #idle { opacity: 1; }
   #idle-clock { position: absolute; font: 600 6vh/1 var(--ui); color: #aab2c8; font-variant-numeric: tabular-nums; text-shadow: 0 .3vh 2vh #000c; }
+  #idle-clock small { display: block; margin-top: 1.2vh; font: 500 2.4vh/1.2 var(--ui); color: #8a92a8; }  /* the weather, like Apple TV's screensaver */
   /* the show's art, dimmed, a new picture each minute and always drifting so nothing sits still on the TV */
   #idle-art { position: absolute; inset: 0; background: center 25% / cover no-repeat; filter: brightness(.5); opacity: 0; transition: opacity 1.2s;
     animation: idle-pan 60s ease-in-out infinite alternate; }
@@ -746,11 +747,13 @@ const Intro = {
 };
 
 // ---------- clock
+let wxLine = "";  // the weather in words ("58° Clear"), set by renderWeather, shown under the screensaver clock
 function tick() {
   const d = new Date();
   $("#clock").textContent = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   $("#date").textContent = d.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
-  $("#idle-clock").textContent = $("#clock").textContent;
+  const c = $("#idle-clock"); c.textContent = $("#clock").textContent;  // runs at startup: nothing defined further down
+  if (wxLine) c.append(Object.assign(document.createElement("small"), { textContent: wxLine }));
 }
 tick(); setInterval(tick, 10000);
 
@@ -828,7 +831,8 @@ function showPad(levels) {  // "none", or one level per controller: "full,low"
 
 // ---------- toast
 let toastTimer;
-const notes = []; let unseen = 0;  // what toasts said, newest first, so a missed one can be read later
+// what toasts said, newest first, so a missed one can be read later; kept in this browser profile across restarts
+const notes = (() => { try { return JSON.parse(store.get("couchNotes")) || []; } catch { return []; } })(); let unseen = 0;
 function bell() {
   const b = $("#bell"); b.hidden = !unseen; b.innerHTML = `${icon("bell")}<span>${unseen}</span>`;
   const t = $("#system .notes"); if (t) t.dataset.meta = notes[0] ? `Latest: ${notes[0].msg}` : "Nothing yet";
@@ -841,6 +845,7 @@ function showNotes() {
 }
 function toast(msg) {
   notes.unshift({ msg, t: Date.now() }); notes.length = Math.min(notes.length, 20); unseen++; bell();
+  if (!PREVIEW) store.set("couchNotes", JSON.stringify(notes));  // a test copy mustn't write into the TV's list
   const t = $("#toast"); t.textContent = msg; t.classList.add("show");
   clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), Math.max(2800, msg.length * 65));  // long enough to read
 }
@@ -901,6 +906,7 @@ function renderWeather(w) {
   const b = $("#weather"); b.hidden = !w;
   if (!w) return;
   const [ic, label] = WX(w.code);
+  wxLine = `${w.temp}° ${label}`;
   b.innerHTML = `${icon(!w.day && ic === "sun" ? "moon" : ic)}<div><b>${w.temp}°</b><small>${label} · H ${w.hi}° L ${w.lo}°</small></div>`;
   b.title = w.city;
 }
@@ -1307,7 +1313,7 @@ function gameDetails() {
   const t = !modal && chosen && rows[pos.r][pos.c], g = t && t.game;
   if (!g) return Sound.bump();
   const gb = n => `${(n / 1e9).toFixed(n > 1e10 ? 0 : 1)} GB`;
-  const lines = [ago(g.lastPlayed), g.playtime ? playtime(g.playtime).replace(" in total", " played") : "",
+  const lines = [ago(g.lastPlayed), g.took && `Starts in about ${g.took} seconds`, g.playtime ? playtime(g.playtime).replace(" in total", " played") : "",
                  [g.size && `${gb(g.size)} on disk`, g.free && `${gb(g.free)} free`].filter(Boolean).join(", "),
                  g.appid ? "Steam" : g.meta || ""].filter(Boolean);
   choose(g.name, "", [
