@@ -966,9 +966,24 @@ function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 // The PC row and the Options menu share these
+// Streaming (Sunshine on this PC, Moonlight on another TV): status, Sunshine's settings page, ending a leftover stream
+const streamStatus = () => !info.sunshine ? "Play on another TV with Sunshine and Moonlight"
+  : info.sunshine !== "running" ? "Sunshine isn't running. Restart the PC to start it"
+  : info.stream ? `Streaming to ${info.stream}` : "Ready: open Moonlight on the other TV and pick Couch";
+function streamMenu() {
+  if (!info.sunshine) return choose("Streaming", "Install Sunshine on this PC and Moonlight on the other TV first. The steps are in docs/streaming-setup.md.", [{ label: "Done" }]);
+  choose("Streaming", streamStatus(), [
+    { label: "Open Sunshine settings", icon: "tv", sub: "Opens on this screen. Use a mouse and keyboard",
+      fn: () => { toast("Opening Sunshine…"); api("/api/sunshine", { action: "open" }).catch(() => {}); } },
+    ...(info.stream ? [{ label: "End stream", icon: "close", sub: "If you left Moonlight without quitting Couch",
+      fn: () => api("/api/stream", { on: false }).then(() => toast("Stream ended")).catch(() => {}) }] : []),
+    { label: "Done" },
+  ], { vertical: true });
+}
 function pcItems() {
   return [
     { icon: "bell", label: "Notifications", meta: notes[0] ? `Latest: ${notes[0].msg}` : "Nothing yet", cta: "Show", fn: showNotes, live: "notes" },
+    { icon: "tv", label: "Streaming", meta: streamStatus(), cta: "Open", fn: streamMenu },
     { icon: "phone", label: "Phone remote", meta: "Scan a code to control the PC from your phone", cta: "Show code", fn: showPhone },
     { icon: deviceIcon(info.audio?.name || ""), label: "Audio output", meta: info.audio ? `Playing on ${deviceName(info.audio.name)[0]}` : "Choose where games and videos play", cta: "Change", fn: pickAudio },
     { icon: Sound.on ? "sound" : "mute", label: "Sound", meta: Sound.on ? `Effects on, playing on the ${Out.where}` : "Effects off", cta: "Settings", fn: () => soundSettings() },
@@ -1654,6 +1669,7 @@ function onPad(a) {
   if (a.startsWith("stream:")) {  // a Sunshine stream started or ended; keep info in step so a rebuild shows the same
     const d = a === "stream:off" ? null : a.slice(7);
     if (info) info.stream = d;
+    document.querySelectorAll("#system .sys").forEach(t => { if (t.dataset.title === "Streaming") t.dataset.meta = streamStatus(); });
     return showStream(d);
   }
   if (a === "shot") return toast("Screenshot saved. See it in Media gallery");

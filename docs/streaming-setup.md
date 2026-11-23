@@ -30,6 +30,8 @@ When a stream starts, Couch comes to the front, shows **Streaming to Apple TV** 
 ## 4. Play
 On the Apple TV: Moonlight → your PC → **Couch**. Use the controller as usual.
 
+On the living-room TV, Couch's PC row has a **Streaming** tile: it shows whether Sunshine is running and what it's streaming to, opens Sunshine's settings page on that screen (use a mouse and keyboard there), and has **End stream** for when Couch still thinks a stream is on. Sunshine itself starts with Windows; restart it from its own page (Troubleshooting) if ever needed.
+
 **When you're done, quit Couch in Moonlight**: in Moonlight's app list, hold select on **Couch** and choose **Quit App**. Just leaving Moonlight keeps the session open on the PC, so Couch keeps showing "Streaming to Apple TV" and keeps its hands off the sound until the session is quit.
 
 ## Known limits

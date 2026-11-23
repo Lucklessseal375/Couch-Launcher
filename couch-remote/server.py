@@ -295,6 +295,23 @@ def set_stream(on, device=""):
     return dict(STREAM)
 
 
+def parse_sc(out):
+    """`sc query SunshineService` output -> "running", "stopped", or None when Sunshine isn't installed."""
+    if "FAILED 1060" in out or "SERVICE_NAME" not in out:
+        return None
+    return "running" if "RUNNING" in out else "stopped"
+
+
+def sunshine_status():
+    """Sunshine (the streaming host) is a Windows service that starts with Windows; Couch only reads its state
+    (starting or stopping a service needs admin)."""
+    try:
+        return parse_sc(subprocess.run(["sc.exe", "query", "SunshineService"], capture_output=True, text=True,
+                                       timeout=5, creationflags=0x08000000).stdout)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
 def audio_replaced(want, ids, names):
     """The outputs to switch away from so `want` is the default again (names), or None to leave it as is:
     a stream is on (its sound goes where Sunshine puts it), the chosen output is off (TV asleep), or Steam Remote
@@ -1778,7 +1795,7 @@ class Handler(BaseHTTPRequestHandler):
                 games, hidden = library()
                 info = {"name": socket.gethostname(), "apps": apps, "games": games, "hidden": hidden,
                         "padReader": PAD_READER, "intro": bool(intro_file()), "sounds": sound_clips(),
-                        "stream": STREAM["device"] if STREAM["on"] else None}
+                        "stream": STREAM["device"] if STREAM["on"] else None, "sunshine": sunshine_status()}
                 try:
                     info["audio"] = audio_state()["current"]
                 except Exception:  # noqa: BLE001  (optional extra: never lose the library over it)
@@ -1873,6 +1890,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"ok": True, "name": set_audio(str(b.get("id", "")))})
             elif path == "/api/stream" and kind == "local":  # from stream.cmd: {"on": bool, "device": "Apple TV"}
                 return self.send_json({"ok": True, "stream": set_stream(bool(b.get("on")), str(b.get("device", "")))})
+            elif path == "/api/sunshine" and kind == "local":  # {"action": "open"}: Sunshine's settings page on this screen
+                if b.get("action") != "open":
+                    return self.send_json({"error": "unknown action"}, 400)
+                log.info("opening Sunshine's settings page")
+                subprocess.Popen([CONFIG["edge"], "--new-window", "https://localhost:47990"],
+                                 creationflags=0x00000008 | 0x00000200)
             elif path == "/api/light" and kind == "local":  # the controllers' light bar: {"rgb": [r, g, b]}
                 r, g, bl = (max(0, min(255, int(v))) for v in b["rgb"])
                 LIGHT[0] = (r, g, bl)
