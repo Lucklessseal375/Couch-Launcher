@@ -1,81 +1,68 @@
 # Session Handoff
 
-_Session of 2026-11-22, afternoon (second session that day). Repo: `C:\Users\eli\Documents\CouchSetup` (branch `main`, all work committed; last code commit `79a4443`). Read `PICKUP.md` §6 gotchas and `CLAUDE.md` too. The morning session's handoff is in git history (`59af84f`)._
+_Sessions of 2026-11-22/23. Repo: `C:\Users\eli\Documents\CouchSetup`, branch `main`, everything committed and pushed to the private GitHub repo **https://github.com/Lucklessseal375/Couch-Launcher** (remote `origin`). Read `PICKUP.md` §6 and `CLAUDE.md` too. Older handoffs are in git history (`59af84f` morning 2026-11-22, `50666d9` afternoon)._
 
 ## 1. Primary Objective
-A PS5-style, controller-driven TV launcher ("Couch") for a Windows PC: a Python stdlib server (`couch-remote/server.py`, port 8765, started at login by the scheduled task "Couch Launcher" with `--open`) plus a full-screen Edge page (`couch-remote/web/launcher.html`) and a phone remote (`web/remote.html`), themed after JoJo Part 7, Steel Ball Run. This session's focus: make GTA V (Epic + Rockstar) launch reliably and quickly from the TV.
+**Couch**: a PS5-style, controller-driven TV launcher for a Windows PC, themed after JoJo Part 7, Steel Ball Run. Python stdlib server (`couch-remote/server.py`, port 8765, + pygame for the controller, ctypes Win32/COM) started at sign-in by the scheduled task **"Couch Launcher"**; a full-screen Edge page (`couch-remote/web/launcher.html`); a phone remote (`web/remote.html`). Now also: stream to an Apple TV in another room (Sunshine + Moonlight) and install on the user's other home PCs from the private GitHub repo.
 
 ## 2. Current State & Completed Work
-**Verified by the user on the TV this session**
-- Morning features all work: Create → screenshot, mute button, PS back to game, Volume, Storage, one battery per controller.
-- New **Claude** tile (`apps.json` id `claude`): `explorer.exe shell:AppsFolder\Claude_pzs8sxrjxfjjc!Claude` (Store app, its folder changes with updates). Opens the Claude desktop app.
-- **GTA V from fully closed launchers** (15:30): Couch started Rockstar, the user signed in, Couch started Epic, sent the link, the game ran.
+**Install on other PCs** (user: "private, for my other computers at home"; art + history included on purpose)
+- `install-couch.ps1`: winget Python 3.13 + `pip install --user pygame`, task "Couch Launcher" (`conhost --headless python.exe server.py --open`, at logon), firewall rule "Couch (phone remote)" via an elevated child (continues if declined), desktop shortcut. **Syntax-checked only; never run on another PC.**
+- Root `README.md`: 5-step setup. `couch-setup.ps1` = old main-PC-only tuning.
+- One `apps.json` for all PCs: `installed(entry)` hides exe tiles whose program is missing, url tiles with no registered handler, and any entry whose `"needs"` path is missing (GTA: `D:\GTAVEnhanced`). Tests `tests/test_installed.py`.
 
-**GTA launch path (server.py)**
-- `apps.json` GTA entry has `"rockstar": true`. `launch_app`: if `exe_running("Launcher.exe")` is false, a thread runs `start_then([ROCKSTAR_EXE], ROCKSTAR_LOG, "is now signed in", lambda: open_url(target), 60)`.
-- `open_url` (registry command, unchanged otherwise): for `com.epicgames.launcher` links when `EpicGamesLauncher.exe` isn't running, a thread runs `start_then([exe, "-silent"], EPIC_LOG, "OnLoginComplete", send_link, 30)`.
-- `start_then(cmd, log_file, signed_in, then, limit)`: starts the launcher, polls its log (both write a fresh log per run, so only a log newer than the start counts), calls `then()` on sign-in or after `limit` seconds.
-- `exe_running(name)` (tasklist) replaced the unused `steam_running`.
-- **Covering, not minimizing** (`focus_what_opens` + `keep_behind`): during a game launch, Epic/Rockstar windows (new *and* already open; not Steam) stay behind Couch; Couch refocuses itself if one takes the screen, until the game window appears. A window still titled sign-in/log-in after 15 s comes forward; no game window after 90 s → newest launcher comes forward. App tiles unchanged.
-- **Warm start** `warm_rockstar()`: 5 s after the server starts with `--open`, starts Rockstar's launcher if it isn't running and keeps its window behind Couch for 90 s (stops early if a launch begins). Epic already starts at login by its own setting (HKCU Run: `EpicGamesLauncher.exe -silent -launchcontext=boot`).
-- Tests: `tests/test_epic.py` (start_then, Rockstar-first launch), `tests/test_cover.py` (covering, warm start). 33 tests, all pass (`python -m unittest discover -s tests` from `couch-remote`).
+**Streaming to the Apple TV (working, verified by the user)**
+- Sunshine 2026.914.233613 + ViGEmBus 1.22.0 installed via winget (with the user's OK). Sunshine service auto-starts ~45 s after login. The Apple TV controller arrives as a virtual "Xbox 360 Controller"; Couch reads it unchanged.
+- Sunshine app "Couch": prep commands `couch-remote\stream.cmd on "Apple TV"` / `off` → local-only `POST /api/stream` → `STREAM`, header pill "Streaming to …", `audio_replaced` stands down. `watch_sunshine()` tails `C:\Program Files\Sunshine\config\sunshine.log` (CLIENT CONNECTED/DISCONNECTED).
+- PC row **Streaming** tile (all by controller): Connect to Sunshine (one-time login typed on the search keyboard's prompt mode: L1/R1 lowercase/capitals/symbols, Done, dots for secrets; checked against Sunshine, stored DPAPI-encrypted in `couch-remote/cache/sunshine.cred`, forgotten on 401), Pair a device (`GET/POST /api/pin`, PIN by controller; **verified**), Paired devices (unpair), Restart Sunshine, **End stream** (`POST /api/apps/close`; **verified**), Open Sunshine settings, Restart the PC when Sunshine was quit. Sunshine actions: `SUNSHINE_ACTIONS` in server.py. Setup guide: `docs/streaming-setup.md`.
 
-**Unchanged from the morning (see `59af84f` SESSION.md for detail)**: SBR look, screensaver, easter eggs, PC row (Power, Volume, Storage, Media gallery, Task manager, Controls), YouTube TV app via CDP (`edge_tv`), task manager endpoints, controller map, `audio.py` volume/mic.
+**GTA V (works)**: Couch opens Rockstar's launcher (`warm_rockstar` at login, `start_then` before a launch) and starts Epic first if closed, then sends the Epic link; store launchers are kept behind Couch (covered, never minimized); Starting screen survives brief focus loss; "Starts in about N s" from recorded launch times (`choices.json` `took`). Windows now uses all 32 threads (user unticked msconfig "Number of processors"). Parked notes: `.scratch/couch-launcher/issues/10-gta-launch-speed-and-vanishing.md`.
 
-**UI round (2026-11-22 evening, PS5/Apple references used as inspiration, SBR kept)**: live PC tiles (battery ring per controller, fullest drive ring + GB free, newest screenshot), focus lift + one gold glint (tvOS), focus tinted by game cover / app brand colour (iOS tinted icons), time-of-day greeting, game line "Last played · Starts in about N s" (choices.json `took`), Now playing adds Volume + Microphone (PS5 Control Center), notifications bell + PC-row list (kept in localStorage `couchNotes`), weather in header + screensaver (Open-Meteo, config.json `weather.city` = El Paso, °F; nothing fetched without a city), staggered details motion, filling rings, prompt bar only animates on change. Claude tile: no explorer.exe icon. Commits `0fc7b6a`..`a528306`.
+**UI (PS5/Apple as inspiration, SBR kept)**: live PC tiles (battery ring per controller, fullest-drive ring, newest screenshot), focus tinted by cover/brand colour with a soft PS5-style glow that follows focus, tvOS lift + one gold glint, tvOS edge nudge, time-of-day greeting, weather in header + screensaver (Open-Meteo, `config.json` `weather.city` = El Paso, °F), notifications bell + list (localStorage `couchNotes`), Now playing adds Volume + Microphone, Claude tile, no outlines around words or tiles (titles use soft shadow + glow; title descenders no longer clipped), toasts under the header, Reduce Transparency / Increase Contrast / reduced-motion respected.
 
-**Streaming to the Apple TV (Sunshine, approach A; design `docs/superpowers/specs/2026-11-22-sunshine-streaming-design.md`, plan `docs/superpowers/plans/2026-11-22-sunshine-streaming.md`)**: Sunshine prep commands call `couch-remote/stream.cmd on "Apple TV"` / `off` → local-only `POST /api/stream` → `STREAM`, `stream:` push, `/api/info.stream`, header pill "Streaming to …", and `audio_replaced` stands down while on. Chosen over reading Sunshine's log (testable now, nothing to guess). User setup steps: `docs/streaming-setup.md`. Verified with `stream.cmd` against the live server and on the TV; **Working on the Apple TV (user, 2026-11-22 20:07):** Sunshine 2026.914.233613 and ViGEmBus 1.22.0 installed via winget with the user's OK (the quiet Sunshine install skipped ViGEmBus: "No gamepad input is available" until it was added and Sunshine restarted from its web UI). The Apple TV controller arrives as a virtual "Xbox 360 Controller" that Couch reads without changes. As the review predicted, leaving Moonlight without Quit App keeps STREAM on (pill + audio stand-down). Seen once: a "screenshot (Create button)" logged the moment the virtual pad connected. **Sticks over Moonlight (fixed by the user 2026-11-22 20:25):** buttons worked but sticks were dead in Couch and games; an XInput probe on the PC showed sticks pinned at 0 (only d-pad/○ arrived, i.e. the Siri Remote). Fix was on the Apple TV: PS5 controller properly paired (Settings → Remotes and Devices → Bluetooth), Moonlight multi-controller "Auto", living-room DualSense off (games take the first controller). Probe script idea: sample `xinput1_4.XInputGetState` for 15 s.
+**Server fixes**: battery + rumble go through SDL lookups (pygame Controller objects crashed the server once); Create ignored 3 s after a controller connects (stray screenshots on Moonlight connect); tests never touch real `choices.json`, `server.log`, launchers or Sunshine.
 
-**Sunshine by controller (2026-11-22, verified by the user):** Streaming tile → Connect to Sunshine (one-time login typed with the controller on the search keyboard's new prompt mode: L1/R1 lowercase/capitals/symbols, Done, dots for secrets) → server checks it against Sunshine (`GET /api/clients/list`, Basic auth) and keeps it DPAPI-encrypted in `couch-remote/cache/sunshine.cred` (git-ignored; forgotten on a 401). Then Pair a device (`GET/POST /api/pin` with `pairing_id`, PIN by controller), Paired devices (`/api/clients/list`, `/api/clients/unpair`), Restart Sunshine (`POST /api/restart`). Sunshine API names were read from its own web assets (`C:\Program Files\Sunshine\assets\web\assets\*.js`). Couch can't change Sunshine's settings files or service (read-only/admin). Presses wait while a Sunshine call is in flight (`sunBusy`). Pairing a device verified by the user; Restart and unpair not yet tried for real.
-
-**On GitHub (2026-11-23):** private repo https://github.com/Lucklessseal375/Couch-Launcher (remote `origin`, branch `main`; the user signs in via Git Credential Manager). For the PCs at home only: art and history included by the user's choice. New PCs: `install-couch.ps1` (Python + pygame, "Couch Launcher" task, firewall rule "Couch (phone remote)", desktop shortcut; not yet run on another PC) and `README.md`. One `apps.json` for all PCs: `installed()` hides tiles a PC lacks (`needs` path for GTA). Create is ignored for 3 s after a controller connects (stray screenshots on Moonlight connect).
+Tests: `python -m unittest discover -s tests` from `couch-remote` → 61 pass.
 
 ## 3. Architectural & Key Decisions
-- Stack stays Python stdlib + pygame/SDL + ctypes Win32/COM. No new server dependencies.
-- SBR identity; PS5 layout/behaviour only. PS button wins over Steam (user must turn off Steam's guide-button action; never change Steam settings ourselves).
-- **GTA needs Epic and Rockstar both up and signed in** (user's own finding). Couch starts whichever is missing and waits for its log's sign-in line before sending the link. Don't auto-close Rockstar's launcher.
-- **Hide store launchers by covering them with Couch, never by minimizing** (user wanted "just the GTA loading screen").
-- **Warm start at login: Rockstar only, kept behind Couch, sign-in left until a GTA press** (user accepted all four recommendations in a grilling round).
-- Ponytail mode; commit when work completes. Restart the server only (not the launcher page) when only `server.py`/`apps.json` changed: the page's `/api/events` loop reconnects by itself, and reloading the launcher would cover a running game.
-- Restart: kill `python …server.py`, then `Start-ScheduledTask -TaskName 'Couch Launcher'` (runs `--open`, so `open_launcher` focuses Couch: don't restart while the user is in a game).
+- Stack stays Python stdlib + pygame/SDL + ctypes. No new server dependencies.
+- SBR identity; PS5/Apple used as inspiration only. Boldness in one place (focus glow/tint).
+- Couch can't change Windows services/settings or Sunshine's files (no admin); it reads them and asks the user.
+- Hide store launchers by **covering** them with Couch, never minimizing.
+- GTA needs Epic and Rockstar up and signed in; Couch starts whichever is missing.
+- Ponytail mode is on (user chose **ultra**: push back on scope, smallest complete change). Commit when work completes; push to `origin main` (GCM sign-in cached).
+- Restart the server only when no game runs (`--open` focuses Couch); reload the TV page only when launcher.html changed; the page's `/api/events` loop reconnects by itself.
 
 ## 4. Failed Attempts & Gotchas (Do Not Repeat)
-- `/api/key`, phone, PS and controller input all hit the real TV. Never activate tiles in `/launcher?preview`; never send `enter`; ask before pressing keys on the TV. **Tests must never reach the real `open_url`/`Popen`**: a test once called a deferred step after its mocks ended and sent `com.epicgames.launcher://x` to the real Epic. Patch in `setUp` with `addCleanup`. Tests also log into the real `server.log` (e.g. "x.exe didn't report signing in"): those lines aren't real launches.
-- **Don't minimize Epic/Rockstar windows during a launch** (6b4eadc/d9867c4, reverted): every GTA launch hung (sign-in stuck loading, "Game launch validation timed out").
-- **Don't open store links through `explorer.exe`** (daaa5ec, reverted e8db8a6): it can't parse the Epic GTA link and opens Documents. After reverting server code, restart the server (the user hit the old code once because I didn't).
-- **The server's job object isn't why cold Epic failed.** Epic started cold from a job I made and from the server (Epic tile). `CREATE_BREAKAWAY_FROM_JOB` is refused (WinError 5) even outside a job; don't use it. What fails is sending a game link while Epic starts from closed; start Epic first instead.
-- **Rockstar cache:** a black sign-in window (log says "Finished loading Social Club UI") was fixed by deleting `%LOCALAPPDATA%\Rockstar Games\Social Club\Launcher\Renderer`, but that also wiped Rockstar's auto sign-in. GTA then stuck on the sign-in logo (log stops at "Client is ready to attempt a launch") until the user signed in once in the standalone launcher.
-- **A leftover Rockstar launcher from a failed try blocks the next launch**: Epic holds the link until it's closed. "Game launch validation timed out" (14:52, 15:24, Nov 20) each followed another Rockstar run.
-- `exe_running("Launcher.exe")` matches any program named Launcher.exe (marked `shortcut:` in code).
-- The `Starting…` overlay change that waited for a server "opened" event (d9867c4) was reverted: with hiding gone it ended on Epic's window anyway and could stick 3 min when no window opened.
-- RAM is not the slowness: 32 GB @ 3600, ~12.6 GB free, page file 0%. GTA is on an NVMe SSD (D:). Time goes to Rockstar sign-in (40 s when it asks for a password), Epic start (~3 s), Rockstar → game (~14 s warm), then GTA's own load.
-- Playwright (plugin installed this session) can't drive Rockstar's window; it only controls browsers it starts. Capture windows with `SetProcessDPIAware` + `ImageGrab` (4K at 300%).
-- The Ruflo AI-team connector is present but needs the user to authenticate; its tools only record plans, they don't run agents.
-- Older gotchas (YouTube CDP, Edge lingering, Steam elevation, heredoc escapes, hooks opening file:// tabs): see `PICKUP.md` §6 and the morning SESSION.md.
-
-- **launcher.html startup order:** `tick()` (clock) and other top-level code run before later `const`s exist (`esc` is defined ~line 960). Using one there throws a TDZ error that silently stops the rest of the script (it happened once with `esc` in `tick`). Check new top-level calls with a headless probe of late names (e.g. `IDLE_ART`, `notes`).
+- `/api/key`, phone and controller input hit the real TV; never activate tiles in `/launcher?preview`, never send `enter`. Tests: patch in `setUp` with `addCleanup`, `server.log.disabled = True`.
+- Don't minimize Epic/Rockstar windows (GTA hung). Don't open store links via `explorer.exe` (opens Documents). `CREATE_BREAKAWAY_FROM_JOB` is refused; the job object wasn't the cause.
+- Deleting Rockstar's `Renderer` cache fixes a black sign-in window but wipes auto sign-in.
+- Moonlight: sticks dead = Siri Remote, not the PS5 controller (pair it on the Apple TV, multi-controller "Auto", living-room DualSense off). Quitting Sunshine from its tray stops the service until reboot.
+- launcher.html startup order: top-level code (e.g. `tick()`) runs before later `const`s exist (`esc` ~line 960); using one there kills the page silently. Probe late names headless after such changes.
+- Backslashes: Python heredocs through Bash mangle `\a`, `\P`… (garbled SESSION.md once, broke `apps.json` once). Use the Edit tool or a script file for strings with backslashes, and `json.load` after editing JSON.
+- Hooks open `launcher.html` as a `file://` tab in the browser pane; close it.
+- Screenshots: `python couch-remote/dev/shoot.py <steps.json> <out_dir>` (headless 1920×1080). It finishes animations before shots; stub only POSTs (`o.method === 'POST'`), never all fetches (breaks `info`).
 
 ## 5. Immediate Next Steps
-0. **GTA work is parked** (user, 16:15): see `.scratch/couch-launcher/issues/10-gta-launch-speed-and-vanishing.md` for the full state, the open "GTA vanished at 16:12:28" question, and what to try next. Windows now uses all 32 threads (msconfig limit removed). Since then: Starting screen survives brief focus loss (`02d4513`), shows "Last time it took about N s" (`9841626`), and game launches ignore windows of already-running apps (`3d5c181`).
-1. **Watch the first GTA press after the next login/reboot**: Epic silent + Rockstar warm-started behind Couch → should take the fast path (~14 s to game start) with only Couch's screen, then GTA. `warm_rockstar` hasn't run for real yet (Rockstar was already open when the server restarted at 15:47). If anything hangs, revert `79a4443`, then `121f64e`/`1873803` (covering), in that order.
-2. Covering during a launch (`121f64e`, `1873803`) is unit-tested; the user saw Rockstar once before `1873803` (an already-open window). Confirm it stays hidden now.
-3. Ask the user to keep **Auto Sign In** ticked in Rockstar's launcher; it asked for a password again at 15:30.
-4. Still unconfirmed: Steam's guide-button action turned off; Now playing shows GTA and clears on quit.
-5. Optional, offered earlier: Game clips (hold Create), Downloads row, in-game quick menu. Leftovers: `profiles/web-youtube` sign-in location (issue 03), `Screenshot (2).png` test capture.
+1. Run `install-couch.ps1` on the next home PC and fix whatever it hits (Python PATH, firewall prompt, task user).
+2. Not yet tried for real: Restart Sunshine and removing a paired device from the Streaming menu.
+3. Still unconfirmed: Steam's guide-button action off; Now playing tracks and clears GTA.
+4. Cosmetic: the virtual (Moonlight) pad shows "Charging" in the header; a device named "off" in `stream.cmd` would hide the pill.
+5. Ideas offered earlier, not built: Game clips (hold Create), Downloads row.
 
 ## 6. Reference Context / Code Snippets
 ```powershell
-# restart server only (don't while a game is running: --open focuses Couch)
+# restart the server (no game running)
 Get-CimInstance Win32_Process -Filter "Name like 'python%'" | ? { $_.CommandLine -like '*server.py*' } | % { Stop-Process -Id $_.ProcessId -Force }
 Start-ScheduledTask -TaskName 'Couch Launcher'
 ```
 ```bash
-# reload TV launcher page (only when launcher.html changed)
+# reload the TV page (needs header X-Couch: 1)
 H='-H X-Couch:1 -H Content-Type:application/json'
 curl -s -X POST $H -d '{"action":"close-launcher"}' http://127.0.0.1:8765/api/window; sleep 2
 curl -s -X POST $H -d '{"action":"launcher"}' http://127.0.0.1:8765/api/window
 ```
-- Logs: Couch `couch-remote/server.log` (`launch … asked by`, `opened … link`, `… started and signed in after N s`, `Rockstar's launcher is closed`, `Epic is closed`, `no game window after 90 s`). Epic `%LOCALAPPDATA%\EpicGamesLauncher\Saved\Logs\EpicGamesLauncher.log` (UTC timestamps, local = UTC−7; `LogUriHandler`, `OnLoginComplete`). Rockstar `Documents\Rockstar Games\Launcher\launcher.log` (`is now signed in`, `Client is ready to attempt a launch`, `[gla]`, `gamelaunch`) and `Documents\Rockstar Games\Social Club\socialclub_launcher.log` (UTF-16: `iconv -f UTF-16LE`).
-- Paths: Epic `C:\Program Files (x86)\Epic Games\Launcher\Portal\Binaries\Win64\EpicGamesLauncher.exe`; Rockstar `C:\Program Files\Rockstar Games\Launcher\Launcher.exe`; GTA `D:\GTAVEnhanced\` (`PlayGTAV.exe` → `GTA5_Enhanced_BE.exe` → `GTA5_Enhanced.exe`).
-- Config: `couch-remote/apps.json` (apps/games; `kind` url|exe|web, `tv: true`, `rockstar: true`, `args` for exe), `choices.json`, `config.json`.
-- Controller map (`server.py` `buttons`): A=a(✕), B=b(○), X=x(□), Y=y(△), L1/R1, START=options, BACK=create, GUIDE=guide, 15=mic.
+- Logs: Couch `couch-remote/server.log`; Sunshine `C:\Program Files\Sunshine\config\sunshine.log`; Epic `%LOCALAPPDATA%\EpicGamesLauncher\Saved\Logs\EpicGamesLauncher.log` (UTC, local = UTC−7); Rockstar `Documents\Rockstar Games\Launcher\launcher.log`.
+- Sunshine API (Basic auth, https://localhost:47990): `/api/pin` (GET pending, POST `{pairing_id, pin, name}`), `/api/clients/list`, `/api/clients/unpair {uuid}`, `/api/restart`, `/api/apps/close`. Names read from `C:\Program Files\Sunshine\assets\web\assets\*.js`.
+- Config: `couch-remote/apps.json` (`kind` url|exe|web, `tv`, `rockstar`, `needs`, `args`), `config.json` (`port`, `edge`, `weather`), `choices.json` (git-ignored).
+- Controller map: A=✕, B=○, X=□, Y=△, L1/R1, START=options, BACK=create, GUIDE=PS, 15=mic.
