@@ -63,8 +63,8 @@
   /* ---------- header */
   header { display: flex; align-items: center; justify-content: space-between; height: 11vh; padding: 2.8vh var(--pad) 0; }
   .brand { display: flex; align-items: center; gap: 1.2vw; }
-  .brand h1 { margin: 0; font: 400 5.8vh/1 var(--logo); color: var(--pink); -webkit-text-stroke: .18vh #fff;
-              text-shadow: .35vh .35vh 0 var(--johnny), .7vh .7vh 1.6vh rgba(0,0,0,.5); transform: rotate(-4deg); }
+  .brand h1 { margin: 0; font: 400 5.8vh/1 var(--logo); color: var(--pink);
+              text-shadow: 0 .4vh 1.6vh rgba(0,0,0,.55), 0 0 2.4vh color-mix(in srgb, var(--pink) 35%, transparent); transform: rotate(-4deg); }
   .brand .mark { width: 4.6vh; height: 4.6vh; filter: drop-shadow(0 .3vh .4vh rgba(0,0,0,.5)); }
   .status { display: flex; align-items: center; gap: 2.6vw; text-shadow: 0 .2vh 1.2vh rgba(0,0,0,.85); }
   .time { text-align: right; }
@@ -109,13 +109,15 @@
 
   /* ---------- details of the focused tile (PS5 game hub) */
   .details { position: relative; height: 23vh; padding: .4vh var(--pad) 0; }  /* room under the Play pill before the row title */
-  #d-title { margin: 0; font: 400 7.4vh/1.08 var(--serif); letter-spacing: -.01em; max-width: 64vw; padding-bottom: .5vh;
-             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: .45vh .45vh 0 var(--johnny), 0 .6vh 2.4vh rgba(0,0,0,.7); }
+  /* no outline copy behind the letters: a soft drop shadow and a faint glow in the focused item's colour; room below for g, y, p */
+  #d-title { margin: 0 0 -1.2vh; font: 400 7.4vh/1.08 var(--serif); letter-spacing: -.01em; max-width: 64vw; padding-bottom: 1.7vh;
+             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+             text-shadow: 0 .5vh 2.4vh rgba(0,0,0,.75), 0 0 4vh color-mix(in srgb, var(--focus, var(--gold)) 22%, transparent); }
   #d-meta { color: var(--dim); font-size: 2.6vh; margin-top: .7vh; min-height: 1.3em; max-width: 64vw;
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .cta { display: inline-flex; align-items: center; gap: 1.2vh; margin-top: 1.3vh; padding: 1vh 3.2vh 1vh 1.2vh; border-radius: 1vh;
          background: var(--bib); color: #fff; font: 400 2.6vh/1 var(--serif); transform: rotate(-1.5deg);
-         box-shadow: inset 0 0 0 .25vh rgba(255,255,255,.85), inset 0 0 0 .55vh var(--bib), 0 .8vh 2vh rgba(0,0,0,.45),
+         box-shadow: inset 0 1px 0 rgba(255,255,255,.28), 0 .8vh 2vh rgba(0,0,0,.45),
                      0 0 3.2vh color-mix(in srgb, var(--bib) 55%, transparent); }  /* a soft PS5-style glow */
   .cta .glyph { background: var(--obsidian); box-shadow: none; }
   body:not(.chosen) .cta { visibility: hidden; } /* ✕ does nothing until a tile is selected */
