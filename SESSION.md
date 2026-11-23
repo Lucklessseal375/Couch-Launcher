@@ -22,6 +22,8 @@ A PS5-style, controller-driven TV launcher ("Couch") for a Windows PC: a Python 
 
 **Unchanged from the morning (see `59af84f` SESSION.md for detail)**: SBR look, screensaver, easter eggs, PC row (Power, Volume, Storage, Media gallery, Task manager, Controls), YouTube TV app via CDP (`edge_tv`), task manager endpoints, controller map, `audio.py` volume/mic.
 
+**UI round (2026-11-22 evening, PS5/Apple references used as inspiration, SBR kept)**: live PC tiles (battery ring per controller, fullest drive ring + GB free, newest screenshot), focus lift + one gold glint (tvOS), focus tinted by game cover / app brand colour (iOS tinted icons), time-of-day greeting, game line "Last played · Starts in about N s" (choices.json `took`), Now playing adds Volume + Microphone (PS5 Control Center), notifications bell + PC-row list (kept in localStorage `couchNotes`), weather in header + screensaver (Open-Meteo, config.json `weather.city` = El Paso, °F; nothing fetched without a city), staggered details motion, filling rings, prompt bar only animates on change. Claude tile: no explorer.exe icon. Commits `0fc7b6a`..`a528306`.
+
 ## 3. Architectural & Key Decisions
 - Stack stays Python stdlib + pygame/SDL + ctypes Win32/COM. No new server dependencies.
 - SBR identity; PS5 layout/behaviour only. PS button wins over Steam (user must turn off Steam's guide-button action; never change Steam settings ourselves).
@@ -44,6 +46,8 @@ A PS5-style, controller-driven TV launcher ("Couch") for a Windows PC: a Python 
 - Playwright (plugin installed this session) can't drive Rockstar's window; it only controls browsers it starts. Capture windows with `SetProcessDPIAware` + `ImageGrab` (4K at 300%).
 - The Ruflo AI-team connector is present but needs the user to authenticate; its tools only record plans, they don't run agents.
 - Older gotchas (YouTube CDP, Edge lingering, Steam elevation, heredoc escapes, hooks opening file:// tabs): see `PICKUP.md` §6 and the morning SESSION.md.
+
+- **launcher.html startup order:** `tick()` (clock) and other top-level code run before later `const`s exist (`esc` is defined ~line 960). Using one there throws a TDZ error that silently stops the rest of the script (it happened once with `esc` in `tick`). Check new top-level calls with a headless probe of late names (e.g. `IDLE_ART`, `notes`).
 
 ## 5. Immediate Next Steps
 0. **GTA work is parked** (user, 16:15): see `.scratch/couch-launcher/issues/10-gta-launch-speed-and-vanishing.md` for the full state, the open "GTA vanished at 16:12:28" question, and what to try next. Windows now uses all 32 threads (msconfig limit removed). Since then: Starting screen survives brief focus loss (`02d4513`), shows "Last time it took about N s" (`9841626`), and game launches ignore windows of already-running apps (`3d5c181`).
