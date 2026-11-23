@@ -1579,8 +1579,12 @@ def _controller_loop():
         levels = [sdl_power_level(sdl.SDL_JoystickCurrentPowerLevel(sdl.SDL_GameControllerGetJoystick(p))) for p in live()]
         return pad_status_for(levels)
 
+    added = [0.0]  # when a controller last connected
+
     def act(action):
         if action == "create":  # anywhere, in games too
+            if time.time() - added[0] < 3:  # a streamed (virtual) pad reports Back as it connects: not a press
+                return log.info("ignored Create right after a controller connected")
             take_screenshot()
         elif action == "mic":  # anywhere: the PC's microphone, like a PS5's mute button
             toggle_mic()
@@ -1601,6 +1605,7 @@ def _controller_loop():
                 try:
                     c = gc.Controller(e.device_index)
                     pads[c.as_joystick().get_instance_id()] = c
+                    added[0] = time.time()
                     lit = None  # give it the current colour too
                     log.info("controller connected: %s", c.name)
                 except pygame.error:
