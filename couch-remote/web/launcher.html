@@ -61,7 +61,7 @@
   @keyframes enter { from { opacity: 0; transform: translateY(2vh); } }
 
   /* ---------- header */
-  header { display: flex; align-items: center; justify-content: space-between; height: 11vh; padding: 2.8vh var(--pad) 0; }
+  header { display: flex; align-items: center; justify-content: space-between; height: 11vh; padding: 4vh var(--pad) 0; }
   .brand { display: flex; align-items: center; gap: 1.2vw; }
   .brand h1 { margin: 0; font: 400 5.8vh/1 var(--logo); color: var(--pink);
               text-shadow: 0 .4vh 1.6vh rgba(0,0,0,.55), 0 0 2.4vh color-mix(in srgb, var(--pink) 35%, transparent); transform: rotate(-4deg); }
@@ -78,9 +78,9 @@
   #weather[hidden] { display: none; }
   #weather svg { width: 4.6vh; height: 4.6vh; color: var(--gold); flex: none; }
   #weather b { display: block; font: 650 3.4vh/1 var(--ui); font-variant-numeric: tabular-nums; }
-  #weather small { display: block; margin-top: .6vh; font-size: 1.8vh; color: var(--dim); white-space: nowrap; }
+  #weather small { display: block; margin-top: .6vh; font-size: 2.15vh; color: var(--dim); white-space: nowrap; }
   /* while Sunshine streams this screen to another TV (stream.cmd tells the server) */
-  #stream { padding: .9vh 1.8vh; border-radius: 1vh; background: var(--bib); color: #fff; font: 700 2vh/1 var(--ui); white-space: nowrap;
+  #stream { padding: .9vh 1.8vh; border-radius: 1vh; background: var(--bib); color: #fff; font: 700 2.15vh/1 var(--ui); white-space: nowrap;
             box-shadow: 0 .6vh 1.6vh rgba(0,0,0,.4); }
   #stream[hidden] { display: none; }
   #search.prompt .sq > svg { display: none; }  /* a sign-in or PIN, not a search */
@@ -182,14 +182,14 @@
   /* with the app's real icon: a dark card tinted by the brand colour, the icon centred, the name as a caption */
   .app.logo { justify-content: center; align-items: center; background: color-mix(in srgb, var(--c) 24%, #10131a); }
   .app.logo .appicon { width: 9vh; height: 9vh; object-fit: contain; margin-bottom: 2.4vh; filter: drop-shadow(0 .6vh 1.2vh rgba(0,0,0,.4)); }
-  .app.logo .name { position: absolute; left: 1vh; right: 1vh; bottom: 1.5vh; text-align: center; font: 700 1.9vh/1.1 var(--ui); font-stretch: 80%; color: var(--dim);
+  .app.logo .name { position: absolute; left: 1vh; right: 1vh; bottom: 1.5vh; text-align: center; font: 700 2.15vh/1.1 var(--ui); font-stretch: 80%; color: var(--dim);
                     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .app.logo.focus .name { color: #fff; }
 
   .poster { width: calc(var(--poster-h) * 2 / 3); height: var(--poster-h); background: #161a24; }
   .poster .art { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: inherit; opacity: 0; transition: opacity .5s ease; }
   .poster.loaded .art { opacity: 1; }
-  .poster .name { position: absolute; inset: auto 0 0 0; padding: 4vh 1.3vh 1.3vh; font: 700 2vh/1.15 var(--ui);
+  .poster .name { position: absolute; inset: auto 0 0 0; padding: 4vh 1.3vh 1.3vh; font: 700 2.15vh/1.15 var(--ui);
                   background: linear-gradient(transparent, rgba(21,15,11,.94)); border-radius: 0 0 1.4vh 1.4vh; }
   .poster.loaded .name { display: none; }  /* the name shows until the art arrives, or if there is none */
   .poster.noart .art { display: none; }
@@ -208,7 +208,7 @@
   @keyframes fill { from { --v: 0; } }
   footer .p.new { animation: rise .35s var(--spring) both; }
   .sys .glance .ring:not(:only-child) { width: 4.4vh; height: 4.4vh; }
-  .sys small { display: block; margin-top: -.6vh; font: 500 1.7vh/1 var(--ui); color: var(--dim); white-space: nowrap; }
+  .sys small { display: block; margin-top: -.6vh; font: 500 2.15vh/1 var(--ui); color: var(--dim); white-space: nowrap; }
   .sys.focus small { color: var(--ink); }
   .sys.shot { justify-content: flex-end; padding-bottom: 1.4vh; background: center / cover no-repeat; }
   .sys.shot .glance { display: none; }
@@ -267,7 +267,7 @@
   .card .choices.vertical .choice { gap: 2vh; padding: 1.4vh 2.4vh; border-radius: 1.6vh; text-align: left; transform-origin: center; }
   .card .choices.vertical .choice.focus { transform: scale(1.03); }
   .card .choices.vertical .dev { width: 3.4vh; height: 3.4vh; }
-  .card .choice small { display: block; margin-top: .5vh; font: 500 1.8vh/1.2 var(--ui); color: var(--dim); }
+  .card .choice small { display: block; margin-top: .5vh; font: 500 2.15vh/1.2 var(--ui); color: var(--dim); }
   .card .choice.focus small { color: #6b5a48; }
   .card .choice .bar { margin-left: auto; width: 14vh; height: .8vh; border-radius: 99vh; background: rgba(255,255,255,.14); overflow: hidden; flex: none; }
   .card .choice .bar i { display: block; height: 100%; background: var(--ice); border-radius: inherit; transition: width .3s var(--spring); }
