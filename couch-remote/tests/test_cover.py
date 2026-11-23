@@ -12,7 +12,7 @@ EXE = {EPIC: "epicgameslauncher.exe", SIGNIN: "socialclubhelper.exe", GAME: "gta
 
 
 class CoverStoreLaunchers(unittest.TestCase):
-    def run_launch(self, timeline, titles, is_game=True, foreground=lambda t: COUCH, before=()):
+    def run_launch(self, timeline, titles, is_game=True, foreground=lambda t: COUCH, before=(), fullscreen=False):
         """timeline: {second: window that appears then}. Returns [(second, window focused)]."""
         clock, shown, focused = [0.0], [], []
 
@@ -22,7 +22,8 @@ class CoverStoreLaunchers(unittest.TestCase):
                 if clock[0] >= at and h not in shown:
                     shown.append(h)
 
-        server.RUNNING.update(name="GTA", windows=[], game_seen=False, is_game=is_game)
+        server.RUNNING.update(name="GTA", windows=[], game_seen=False, is_game=is_game, fullscreen=fullscreen)
+        self.filled = []
         with mock.patch.object(server.time, "time", lambda: clock[0]), \
                 mock.patch.object(server.time, "sleep", sleep), \
                 mock.patch.object(server, "visible_windows", lambda: list(shown)), \
@@ -31,6 +32,7 @@ class CoverStoreLaunchers(unittest.TestCase):
                 mock.patch.object(server, "find_launcher", lambda: COUCH), \
                 mock.patch.object(server, "focus_window", lambda h: focused.append((round(clock[0]), h))), \
                 mock.patch.object(server.user32, "GetForegroundWindow", lambda: foreground(clock[0])), \
+                mock.patch.object(server, "borderless_fullscreen", self.filled.append), \
                 mock.patch.object(server, "load_choices", return_value={"took": {}}), \
                 mock.patch.object(server, "save_choices") as save:  # never the real choices.json
             server.focus_what_opens(list(before))
@@ -77,6 +79,14 @@ class CoverStoreLaunchers(unittest.TestCase):
         self.assertNotIn(CLAUDE, server.RUNNING["windows"])  # never offered as "Close game"
         self.assertEqual(focused[-1][1], GAME)
         self.assertEqual(self.saved, {"GTA": 40})  # timed by the game's window, not Claude's
+
+    def test_fullscreen_app_fills_the_screen(self):
+        STREMIO = 7
+        focused = self.run_launch({1: STREMIO}, lambda h, t: "Stremio", is_game=False, fullscreen=True)
+        self.assertEqual(self.filled, [STREMIO])
+        self.assertEqual(focused[0][1], STREMIO)
+        self.run_launch({1: STREMIO}, lambda h, t: "Stremio", is_game=False)
+        self.assertEqual(self.filled, [])  # only apps marked "fullscreen"
 
     def test_app_tiles_still_focus_their_windows(self):
         focused = self.run_launch({2: EPIC}, lambda h, t: "Epic Games Launcher", is_game=False)

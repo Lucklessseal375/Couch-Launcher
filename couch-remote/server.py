@@ -649,6 +649,20 @@ user32.AttachThreadInput.argtypes = (wintypes.DWORD, wintypes.DWORD, wintypes.BO
 user32.BringWindowToTop.argtypes = (wintypes.HWND,)
 
 
+class _MONITORINFO(ctypes.Structure):
+    _fields_ = [("cb", wintypes.DWORD), ("rc", wintypes.RECT), ("work", wintypes.RECT), ("flags", wintypes.DWORD)]
+
+
+def borderless_fullscreen(h):
+    """An app that opens in a normal window (Stremio) fills the TV with no title bar or frame, as a game does."""
+    style = user32.GetWindowLongW(h, -16)  # GWL_STYLE
+    user32.SetWindowLongW(h, -16, style & ~0x00CF0000)  # no caption, frame, system menu, min/max boxes
+    mi = _MONITORINFO(cb=ctypes.sizeof(_MONITORINFO))
+    user32.GetMonitorInfoW(user32.MonitorFromWindow(h, 2), ctypes.byref(mi))  # MONITOR_DEFAULTTONEAREST
+    r = mi.rc
+    user32.SetWindowPos(h, None, r.left, r.top, r.right - r.left, r.bottom - r.top, 0x0020 | 0x0040)  # FRAMECHANGED|SHOWWINDOW
+
+
 def focus_window(h):
     user32.ShowWindow(h, 9)  # SW_RESTORE
     _send([_key(0x12), _key(0x12, True)])  # an Alt tap lets us take the foreground
@@ -1153,6 +1167,8 @@ def focus_what_opens(before):
             for h in hide:
                 behind[h] = time.time()
             if show:
+                if RUNNING.get("fullscreen"):  # apps.json "fullscreen": true (Stremio opens in a normal window)
+                    borderless_fullscreen(show[0])
                 focus_window(show[0])
             elif find_launcher():
                 focus_window(find_launcher())
@@ -2147,7 +2163,8 @@ class Handler(BaseHTTPRequestHandler):
                 before = visible_windows()
                 name = launch_game(b["game"]) if "game" in b else launch_app(str(b.get("id")))
                 is_game = "game" in b or any(g.get("id") == b.get("id") for g in load_games())
-                RUNNING.update(name=name, windows=[], game_seen=False, is_game=is_game)
+                fullscreen = any(a.get("id") == b.get("id") and a.get("fullscreen") for a in load_apps()[0])
+                RUNNING.update(name=name, windows=[], game_seen=False, is_game=is_game, fullscreen=fullscreen)
                 rumble("launch")
                 threading.Thread(target=focus_what_opens, args=(before,), daemon=True).start()
                 WATCHER.arm()
