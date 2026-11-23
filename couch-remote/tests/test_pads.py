@@ -16,6 +16,9 @@ class PadLevels(unittest.TestCase):
         # Sunshine's virtual Xbox pad reports wired/unknown: never "empty" or "low"
         self.assertEqual(server.pad_status_for([server.sdl_power_level(-1)]), "pad:max")
 
+    def test_charging_pad_is_marked(self):
+        self.assertEqual(server.pad_status_for(["empty", "wired"], charging=(0,)), "pad:empty+,wired")
+
 
 if __name__ == "__main__":
     unittest.main()

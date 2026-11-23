@@ -819,11 +819,12 @@ addEventListener("mousemove", wake);
 // ---------- controller battery (sent by the server as pad:<level>): a DualSense-style battery icon
 let padLevel = null;
 const PAD_ORDER = ["empty", "low", "medium", "full", "max", "wired"];
-const padSvg = level => {
+const padSvg = level => {  // a level ending in + is on charge
+  const chg = level.endsWith("+"); level = level.replace("+", "");
   const fill = { empty: .08, low: .25, medium: .6 }[level] ?? 1;
   return `<svg viewBox="0 0 34 18" aria-hidden="true"><rect x="1" y="1" width="28" height="16" rx="3.5" fill="none" stroke="currentColor" stroke-width="2"/>`
     + `<rect x="30" y="6" width="3" height="6" rx="1" fill="currentColor"/><rect x="4" y="4" width="${(22 * fill).toFixed(1)}" height="10" rx="1.5" fill="currentColor"/>`
-    + (level === "wired" ? '<path d="M16.5 3l-5 7h4l-2 5 6-8h-4z" fill="#0b0d12"/>' : "") + `</svg>`;
+    + (level === "wired" || chg ? '<path d="M16.5 3l-5 7h4l-2 5 6-8h-4z" fill="#0b0d12"/>' : "") + `</svg>`;
 };
 // live PC tiles: a battery ring per controller, the fullest drive's space, the newest screenshot
 const ring = (v, color) => `<span class="ring" style="--v:${Math.max(.04, Math.min(1, v)).toFixed(2)}${color ? `;--rc:${color}` : ""}"></span>`;
@@ -831,8 +832,8 @@ const PAD_FILL = { empty: .05, low: .2, medium: .55, full: .85, max: 1, wired: 1
 let padList = [];
 function padTile() {
   const g = $("#system .pads .glance");
-  if (g) g.innerHTML = padList.length ? padList.map(lv => ring(PAD_FILL[lv] ?? 1,
-    lv === "wired" ? "var(--ice)" : lv === "low" || lv === "empty" ? "var(--ps-circle)" : null)).join("") : icon("pad");
+  if (g) g.innerHTML = padList.length ? padList.map(lv => ring(PAD_FILL[lv.replace("+", "")] ?? 1,
+    lv === "wired" || lv.endsWith("+") ? "var(--ice)" : lv === "low" || lv === "empty" ? "var(--ps-circle)" : null)).join("") : icon("pad");
 }
 async function liveTiles() {
   const [s, m] = await Promise.all([api("/api/storage").catch(() => null), api("/api/media").catch(() => null)]);
@@ -848,7 +849,8 @@ async function liveTiles() {
 function showPad(levels) {  // "none", or one level per controller: "full,low"
   const list = levels === "none" ? [] : levels.split(",");
   padList = list; padTile();
-  const weakest = list.reduce((a, b) => PAD_ORDER.indexOf(b) < PAD_ORDER.indexOf(a) ? b : a, list[0]) || "none";
+  const eff = list.map(lv => lv.endsWith("+") ? "wired" : lv);  // on charge counts as fine, whatever the level
+  const weakest = eff.reduce((a, b) => PAD_ORDER.indexOf(b) < PAD_ORDER.indexOf(a) ? b : a, eff[0]) || "none";
   const low = weakest === "empty" || weakest === "low", p = $("#pad");
   if (low && padLevel && padLevel !== "low" && padLevel !== "empty") {
     Sound.battery(); toast(list.length > 1 ? "A controller's battery is low. Charge it soon." : "Controller battery low. Charge it soon.");
@@ -856,7 +858,7 @@ function showPad(levels) {  // "none", or one level per controller: "full,low"
   padLevel = weakest;
   p.classList.toggle("low", low);
   if (!list.length) { p.innerHTML = "<span>No controller</span>"; p.title = ""; return; }
-  const label = { empty: "Battery empty", low: "Battery low", wired: "Plugged in" }[weakest] || (list.length > 1 ? `${list.length} controllers` : "");
+  const label = { empty: "Battery empty", low: "Battery low", wired: list.some(lv => lv.endsWith("+")) ? "Charging" : "Plugged in" }[weakest] || (list.length > 1 ? `${list.length} controllers` : "");
   p.innerHTML = list.map(padSvg).join("") + `<span>${label}</span>`;
   p.title = list.map((lv, i) => `Controller ${i + 1}: ${lv}`).join(", ");
 }

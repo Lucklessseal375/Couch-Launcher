@@ -1459,11 +1459,65 @@ def sdl_power_level(n):
     return {0: "empty", 1: "low", 2: "medium", 3: "full", 4: "wired", 5: "max"}.get(n, "unknown")
 
 
-def pad_status_for(levels):
-    """pad:none, or each controller's battery from SDL power levels, comma-separated (the launcher shows one each)."""
+def pad_status_for(levels, charging=()):
+    """pad:none, or each controller's battery from SDL power levels, comma-separated (the launcher shows one each);
+    a level ending in + is on charge."""
     order = ["empty", "low", "medium", "full", "max", "wired"]
-    levels = [lv if lv in order else "max" for lv in levels]  # "unknown": don't alarm anyone
+    levels = [(lv if lv in order else "max") + ("+" if i in charging else "") for i, lv in enumerate(levels)]  # "unknown": don't alarm anyone
     return "pad:" + (",".join(levels) if levels else "none")
+
+
+def dualsense_charging():
+    """True/False: is the Bluetooth DualSense on charge. SDL gives only the level, but the pad's own full report
+    (0x31, which SDL has switched it to once it has rumbled it) carries a status byte: high nibble 1 = charging.
+    None if there is no such pad or no report. shortcut: first Sony HID device only, so two Bluetooth DualSenses
+    would share one answer; revisit if you ever pair two."""
+    k, hid, sa = ctypes.windll.kernel32, ctypes.windll.hid, ctypes.windll.setupapi
+    k.CreateFileW.restype = sa.SetupDiGetClassDevsW.restype = ctypes.c_void_p
+
+    class Guid(ctypes.Structure):
+        _fields_ = [("a", ctypes.c_ulong), ("b", ctypes.c_ushort), ("c", ctypes.c_ushort), ("d", ctypes.c_ubyte * 8)]
+
+    class Iface(ctypes.Structure):
+        _fields_ = [("cb", ctypes.c_ulong), ("g", Guid), ("f", ctypes.c_ulong), ("r", ctypes.c_void_p)]
+
+    class Over(ctypes.Structure):
+        _fields_ = [("a", ctypes.c_void_p), ("b", ctypes.c_void_p), ("o", ctypes.c_ulong * 2), ("e", ctypes.c_void_p)]
+
+    g = Guid()
+    hid.HidD_GetHidGuid(ctypes.byref(g))
+    devs = ctypes.c_void_p(sa.SetupDiGetClassDevsW(ctypes.byref(g), None, None, 0x12))  # present interfaces
+    i = 0
+    while True:
+        d = Iface()
+        d.cb = ctypes.sizeof(Iface)
+        if not sa.SetupDiEnumDeviceInterfaces(devs, None, ctypes.byref(g), i, ctypes.byref(d)):
+            return None
+        i += 1
+        n = wintypes.DWORD()
+        sa.SetupDiGetDeviceInterfaceDetailW(devs, ctypes.byref(d), None, 0, ctypes.byref(n), None)
+        buf = ctypes.create_string_buffer(n.value)
+        ctypes.c_ulong.from_buffer(buf).value = 8  # cbSize of the 64-bit detail struct
+        sa.SetupDiGetDeviceInterfaceDetailW(devs, ctypes.byref(d), buf, n, None, None)
+        path = ctypes.wstring_at(ctypes.addressof(buf) + 4)
+        if "054c" not in path.lower() or "pid&0ce6" not in path.lower() and "pid_0ce6" not in path.lower():
+            continue
+        f = k.CreateFileW(path, 0xC0000000, 3, None, 3, 0x40000000, None)  # read+write, shared, overlapped
+        if f in (None, ctypes.c_void_p(-1).value):
+            continue
+        f, out, ov = ctypes.c_void_p(f), ctypes.create_string_buffer(100), Over()
+        ov.e = k.CreateEventW(None, 1, 0, None)
+        try:
+            k.ReadFile(f, out, 100, None, ctypes.byref(ov))
+            if k.WaitForSingleObject(ctypes.c_void_p(ov.e), 300) != 0:
+                k.CancelIoEx(f, ctypes.byref(ov))
+                return None
+            got = wintypes.DWORD()
+            k.GetOverlappedResult(f, ctypes.byref(ov), ctypes.byref(got), 0)
+            return out.raw[54] >> 4 == 1 if got.value > 54 and out.raw[0] == 0x31 else None
+        finally:
+            k.CloseHandle(ctypes.c_void_p(ov.e))
+            k.CloseHandle(f)
 
 
 def launcher_in_front():
@@ -1550,6 +1604,7 @@ def _controller_loop():
     # objects crashed the server (access violation, 2026-11-22) once a Bluetooth pad was dropped and came back
     sdl.SDL_GameControllerGetJoystick.argtypes, sdl.SDL_GameControllerGetJoystick.restype = (ctypes.c_void_p,), ctypes.c_void_p
     sdl.SDL_JoystickCurrentPowerLevel.argtypes, sdl.SDL_JoystickCurrentPowerLevel.restype = (ctypes.c_void_p,), ctypes.c_int
+    sdl.SDL_GameControllerName.argtypes, sdl.SDL_GameControllerName.restype = (ctypes.c_void_p,), ctypes.c_char_p
     sdl.SDL_GameControllerRumble.argtypes = (ctypes.c_void_p, ctypes.c_uint16, ctypes.c_uint16, ctypes.c_uint32)
     lit = None  # the colour last put on the light bars
     pads = {}
@@ -1576,8 +1631,10 @@ def _controller_loop():
         return [p for p in map(sdl.SDL_GameControllerFromInstanceID, pads) if p]
 
     def pad_status():
-        levels = [sdl_power_level(sdl.SDL_JoystickCurrentPowerLevel(sdl.SDL_GameControllerGetJoystick(p))) for p in live()]
-        return pad_status_for(levels)
+        ps = live()
+        levels = [sdl_power_level(sdl.SDL_JoystickCurrentPowerLevel(sdl.SDL_GameControllerGetJoystick(p))) for p in ps]
+        sony = [i for i, p in enumerate(ps) if b"DualSense" in (sdl.SDL_GameControllerName(p) or b"")]
+        return pad_status_for(levels, sony if sony and levels[sony[0]] != "wired" and dualsense_charging() else ())
 
     added = [0.0]  # when a controller last connected
 
