@@ -166,8 +166,10 @@
       background: linear-gradient(115deg, transparent 38%, color-mix(in srgb, var(--focus, #ffecbe) 45%, rgba(255,255,255,.28)) 50%, transparent 62%)
                   160% 0 / 260% 100% no-repeat; }
     .item.focus::before { animation: glint .9s var(--spring) .08s both; }
+    .item.focus.press { transform: scale(.96); transition-duration: .08s; }  /* pressed, after tvOS "highlighted": dips, then springs back */
     @keyframes glint { from { opacity: 1; background-position: 160% 0; } to { opacity: 1; background-position: -60% 0; } }
   }
+  .item.focus.press, .card .choice.focus.press, .key.focus.press { filter: brightness(1.3); }
   .item.nudge { animation: nudge .32s var(--spring); }  /* `translate`, so the focus lift (transform) stays put */
   @keyframes nudge { 35% { translate: var(--nx) var(--ny); } }
   .item .badge { position: absolute; top: -2vh; right: -2vh; width: 5.8vh; height: 5.8vh; opacity: 0; z-index: 2;
@@ -1247,6 +1249,10 @@ function category(step) {
   if (r < 0 || r >= rows.length) return Sound.bump();
   focus(r, lastCol[r] ?? 0); Sound.tab();
 }
+function pressFx() {  // a quick press look on whatever is focused
+  const e = document.querySelector(".item.focus, .card .choice.focus, .key.focus");
+  if (e) { e.classList.add("press"); setTimeout(() => e.classList.remove("press"), 140); }
+}
 function activate() {
   if (sunBusy) return Sound.bump();  // waiting on Sunshine (see sunshineCall)
   if (modal) {
@@ -1801,7 +1807,7 @@ function onPad(a) {
   if (a.startsWith("mic:")) return toast({ on: "Microphone on", off: "Microphone muted", none: "No microphone found" }[a.slice(4)]);
   padSeen = true; lastPadAt = performance.now(); Sound.unlock();
   if (wake()) return;
-  if (a === "a") activate();
+  if (a === "a") { pressFx(); activate(); }
   else if (a === "b") back();
   else if ((a === "l1" || a === "r1") && modal?.layer) modal.layer(a === "l1" ? -1 : 1);  // a text prompt's letters/symbols
   else if (a === "l1" || a === "r1") { comboPress(a); category(a === "l1" ? -1 : 1); }
