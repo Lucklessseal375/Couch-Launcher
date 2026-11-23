@@ -9,7 +9,7 @@
     {"id": "claude", "meta": "Chat with Claude, and Claude Code", "name": "Claude", "kind": "exe", "target": "C:\\Windows\\explorer.exe", "args": ["shell:AppsFolder\\Claude_pzs8sxrjxfjjc!Claude"], "color": "#d97757"}
   ],
   "games": [
-    {"id": "gta5", "name": "GTA V Enhanced", "kind": "url", "target": "com.epicgames.launcher://apps/b0cd075465c44f87be3b505ac04a2e46%3A122e5e90b7b8424d930be8bc1a7e05fb%3A8769e24080ea413b8ebca3f1b8c50951?action=launch&silent=true", "art": "/img/gta5-poster.jpg", "hero": "/img/gta5-hero.jpg", "meta": "Epic Games", "rockstar": true, "needs": "D:\GTAVEnhanced"}
+    {"id": "gta5", "name": "GTA V Enhanced", "kind": "url", "target": "com.epicgames.launcher://apps/b0cd075465c44f87be3b505ac04a2e46%3A122e5e90b7b8424d930be8bc1a7e05fb%3A8769e24080ea413b8ebca3f1b8c50951?action=launch&silent=true", "art": "/img/gta5-poster.jpg", "hero": "/img/gta5-hero.jpg", "meta": "Epic Games", "rockstar": true, "needs": "D:\\GTAVEnhanced"}
   ],
   "hide_steam_apps": [228980, 250820]
 }
