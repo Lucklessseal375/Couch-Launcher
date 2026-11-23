@@ -975,6 +975,8 @@ function streamMenu() {
   if (!info.sunshine) return choose("Streaming", "Install Sunshine on this PC and Moonlight on the other TV first. The steps are in docs/streaming-setup.md.", [{ label: "Done" }]);
   const signedIn = info.sunshineLogin && info.sunshine === "running";
   choose("Streaming", streamStatus(), [
+    ...(info.sunshine === "stopped" ? [{ label: "Restart the PC", icon: "restart", sub: "Sunshine was quit; it starts again with Windows",
+      fn: () => confirmPower("restart", "Restart", "Restart the PC now to start Sunshine again? Unsaved work in other apps will be lost.") }] : []),
     ...(!info.sunshineLogin ? [{ label: "Connect to Sunshine", icon: "pad", sub: "Once, with the controller: then pairing and restarting work from here", fn: connectSunshine }] : []),
     ...(signedIn ? [
       { label: "Pair a device", icon: "phone", sub: "Type the PIN a new Moonlight device shows", fn: pairDevice },
@@ -985,8 +987,8 @@ function streamMenu() {
     ] : []),
     ...(info.stream ? [{ label: "End stream", icon: "close", sub: "If Couch still thinks a stream is on",
       fn: () => api("/api/stream", { on: false }).then(() => toast("Stream ended")).catch(() => {}) }] : []),
-    { label: "Open Sunshine settings", icon: "exit", sub: "Its full page, on this screen (mouse and keyboard)",
-      fn: () => { toast("Opening Sunshine…"); api("/api/sunshine", { action: "open" }).catch(() => {}); } },
+    ...(info.sunshine === "running" ? [{ label: "Open Sunshine settings", icon: "exit", sub: "Its full page, on this screen (mouse and keyboard)",
+      fn: () => { toast("Opening Sunshine…"); api("/api/sunshine", { action: "open" }).catch(() => {}); } }] : []),
     { label: "Done" },
   ], { vertical: true });
 }
