@@ -1461,10 +1461,8 @@ def sdl_power_level(n):
 
 def pad_status_for(levels):
     """pad:none, or each controller's battery from SDL power levels, comma-separated (the launcher shows one each)."""
-    order = ["low", "medium", "full", "max", "wired"]
-    # "unknown", and "empty" too: a DualSense on Bluetooth reads empty when SDL can't see its battery (one that
-    # truly is empty drops off), so don't alarm anyone
-    levels = [lv if lv in order else "max" for lv in levels]
+    order = ["empty", "low", "medium", "full", "max", "wired"]
+    levels = [lv if lv in order else "max" for lv in levels]  # "unknown": don't alarm anyone
     return "pad:" + (",".join(levels) if levels else "none")
 
 
