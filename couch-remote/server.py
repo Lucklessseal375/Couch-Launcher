@@ -284,9 +284,23 @@ def set_audio(device_id):
     return dev["name"]
 
 
+STREAM = {"on": False, "device": ""}  # a Moonlight stream through Sunshine, as told by stream.cmd (Sunshine prep commands)
+
+
+def set_stream(on, device=""):
+    """Sunshine says a stream started or ended. The page shows it, and the audio-keeper stands down meanwhile."""
+    STREAM.update(on=bool(on), device=(device.strip() or "another screen")[:40] if on else "")
+    log.info("stream: %s", f"on ({STREAM['device']})" if on else "off")
+    emit("stream:" + (STREAM["device"] if on else "off"))
+    return dict(STREAM)
+
+
 def audio_replaced(want, ids, names):
     """The outputs to switch away from so `want` is the default again (names), or None to leave it as is:
-    the chosen output is off (TV asleep), or Steam Remote Play is using its own device."""
+    a stream is on (its sound goes where Sunshine puts it), the chosen output is off (TV asleep), or Steam Remote
+    Play is using its own device."""
+    if STREAM["on"]:
+        return None
     was = {names.get(i, "nothing") for i in ids if i != want["id"]}
     if not was or want["id"] not in names or any("steam streaming" in n.lower() for n in was):
         return None
@@ -1763,7 +1777,8 @@ class Handler(BaseHTTPRequestHandler):
                 apps, _ = load_apps()
                 games, hidden = library()
                 info = {"name": socket.gethostname(), "apps": apps, "games": games, "hidden": hidden,
-                        "padReader": PAD_READER, "intro": bool(intro_file()), "sounds": sound_clips()}
+                        "padReader": PAD_READER, "intro": bool(intro_file()), "sounds": sound_clips(),
+                        "stream": STREAM["device"] if STREAM["on"] else None}
                 try:
                     info["audio"] = audio_state()["current"]
                 except Exception:  # noqa: BLE001  (optional extra: never lose the library over it)
@@ -1856,6 +1871,8 @@ class Handler(BaseHTTPRequestHandler):
                 set_choice(str(b.get("action")), str(b.get("key", "")))
             elif path == "/api/audio":
                 return self.send_json({"ok": True, "name": set_audio(str(b.get("id", "")))})
+            elif path == "/api/stream" and kind == "local":  # from stream.cmd: {"on": bool, "device": "Apple TV"}
+                return self.send_json({"ok": True, "stream": set_stream(bool(b.get("on")), str(b.get("device", "")))})
             elif path == "/api/light" and kind == "local":  # the controllers' light bar: {"rgb": [r, g, b]}
                 r, g, bl = (max(0, min(255, int(v))) for v in b["rgb"])
                 LIGHT[0] = (r, g, bl)
