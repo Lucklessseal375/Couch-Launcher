@@ -166,9 +166,11 @@
       background: linear-gradient(115deg, transparent 38%, color-mix(in srgb, var(--focus, #ffecbe) 45%, rgba(255,255,255,.28)) 50%, transparent 62%)
                   160% 0 / 260% 100% no-repeat; }
     .item.focus::before { animation: glint .9s var(--spring) .08s both; }
+    body.calm .item.focus { transform: translateY(-1.6vh) scale(1.12); }  /* idle, after tvOS: the focused tile grows */
     .item.focus.press { transform: scale(.96); transition-duration: .08s; }  /* pressed, after tvOS "highlighted": dips, then springs back */
     @keyframes glint { from { opacity: 1; background-position: 160% 0; } to { opacity: 1; background-position: -60% 0; } }
   }
+  body.calm .item:not(.focus) { filter: brightness(.45) saturate(.8); transition-duration: .5s, .35s, 1.2s; }  /* ...and the rest dim */
   .item.focus.press, .card .choice.focus.press, .key.focus.press { filter: brightness(1.3); }
   .item.nudge { animation: nudge .32s var(--spring); }  /* `translate`, so the focus lift (transform) stays put */
   @keyframes nudge { 35% { translate: var(--nx) var(--ny); } }
@@ -796,6 +798,7 @@ const IDLE_MS = 10 * 60 * 1000;
 let lastInput = Date.now();
 function wake() {
   lastInput = Date.now();
+  document.body.classList.remove("calm");
   if (!document.body.classList.contains("idle")) return false;
   document.body.classList.remove("idle");
   return true;
@@ -816,6 +819,7 @@ setInterval(() => {
     api("/api/padoff", { idle: true }).catch(() => {});  // like a PS5: save the wireless controller's battery
   }
 }, 60000);
+setInterval(() => { if (!modal && Date.now() - lastInput > 8000) document.body.classList.add("calm"); }, 1000);  // 8 s untouched
 addEventListener("mousemove", wake);
 
 // ---------- controller battery (sent by the server as pad:<level>): a DualSense-style battery icon
