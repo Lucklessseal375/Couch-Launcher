@@ -1,4 +1,8 @@
 {
   "port": 8765,
-  "edge": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe"
+  "edge": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+  "weather": {
+    "city": "El Paso",
+    "unit": "fahrenheit"
+  }
 }
