@@ -856,7 +856,7 @@ function showPad(levels) {  // "none", or one level per controller: "full,low"
   padLevel = weakest;
   p.classList.toggle("low", low);
   if (!list.length) { p.innerHTML = "<span>No controller</span>"; p.title = ""; return; }
-  const label = { empty: "Battery empty", low: "Battery low", wired: "Charging" }[weakest] || (list.length > 1 ? `${list.length} controllers` : "");
+  const label = { empty: "Battery empty", low: "Battery low", wired: "Plugged in" }[weakest] || (list.length > 1 ? `${list.length} controllers` : "");
   p.innerHTML = list.map(padSvg).join("") + `<span>${label}</span>`;
   p.title = list.map((lv, i) => `Controller ${i + 1}: ${lv}`).join(", ");
 }
