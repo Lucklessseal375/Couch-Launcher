@@ -6,7 +6,7 @@
     1. Installs Python 3.13 (through winget) if Python isn't there yet, and pygame for the controller.
     2. Creates the "Couch Launcher" task: Couch starts full screen when you sign in to Windows.
     3. Asks for admin once, then: lets the phone remote reach this PC (one firewall rule), installs Sunshine for
-       streaming to another TV, adds the "Couch" app to Sunshine and sets it to a PS5 controller.
+       streaming to another TV with the controller driver it needs (ViGEmBus), and adds the "Couch" app to Sunshine.
     4. Puts a "Couch" shortcut on the desktop.
   Then it starts Couch. Left for you: Sunshine's login and pairing Moonlight (docs\streaming-setup.md).
 #>
@@ -51,10 +51,19 @@ if ($Admin) {
             $j | ConvertTo-Json -Depth 6 | Set-Content $appsFile -Encoding UTF8
             Say 'Added the Couch app to Sunshine.'; $restart = $true
         }
-        $conf = Join-Path $cfg 'sunshine.conf'
-        if (-not ((Test-Path $conf) -and (Select-String -Path $conf -Pattern '^\s*gamepad\s*=' -Quiet))) {
-            Add-Content $conf 'gamepad = ds5'
-            Say 'Sunshine set to a PS5 controller.'; $restart = $true
+        # Without ViGEmBus, Moonlight's controller never reaches Windows ("No gamepad input is available" in Sunshine's log)
+        if (Get-Service ViGEmBus -ErrorAction SilentlyContinue) {
+            Say 'Controller driver for streaming (ViGEmBus) is already installed.'
+        } else {
+            if (Get-Command winget -ErrorAction SilentlyContinue) {
+                winget install --id ViGEm.ViGEmBus --exact --silent --accept-package-agreements --accept-source-agreements | Out-Null
+            } else {
+                $vig = Join-Path $env:TEMP 'ViGEmBus_1.22.0_x64_x86_arm64.exe'
+                Invoke-WebRequest -UseBasicParsing 'https://github.com/nefarius/ViGEmBus/releases/download/v1.22.0/ViGEmBus_1.22.0_x64_x86_arm64.exe' -OutFile $vig
+                Start-Process $vig -Wait -ArgumentList '/exenoui', '/qn', '/norestart'
+            }
+            if (-not (Get-Service ViGEmBus -ErrorAction SilentlyContinue)) { throw 'The controller driver for streaming (ViGEmBus) did not install.' }
+            Say 'Controller driver for streaming (ViGEmBus) installed.'; $restart = $true
         }
         if ($restart) { Restart-Service SunshineService }  # never interrupts a stream when nothing changed
     } catch {

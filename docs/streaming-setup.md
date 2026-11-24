@@ -3,7 +3,7 @@
 Couch streams to the Apple TV through two free programs: **Sunshine** on the PC sends the picture and sound, **Moonlight** on the Apple TV shows it and sends your controller back. You set this up once; after that you open Moonlight on the Apple TV, pick **Couch**, and play. Home network only.
 
 ## 1. On the PC: done by the installer
-`install-couch.ps1` installs Sunshine, adds the **Couch** app to it (with the commands that tell Couch a stream started or ended), and sets Sunshine to a PS5 controller. The one thing left for you on the PC:
+`install-couch.ps1` installs Sunshine, adds the **Couch** app to it (with the commands that tell Couch a stream started or ended), and installs the controller driver Sunshine needs for Moonlight's controller (ViGEmBus; Windows sees it as an Xbox controller). The one thing left for you on the PC:
 
 - Open Sunshine's settings page at <https://localhost:47990> (or Couch's PC row → **Streaming** → Open Sunshine settings) and create a Sunshine username and password when it asks. Couch never sees or stores them.
 
