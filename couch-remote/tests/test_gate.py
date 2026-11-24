@@ -138,9 +138,9 @@ class AudioNamesPermissionTest(unittest.TestCase):
     def test_grants_the_page_in_its_profile_and_keeps_other_settings(self):
         with tempfile.TemporaryDirectory() as d, mock.patch.object(server, "PROFILES", Path(d)):
             prefs = Path(d) / "launcher" / "Default" / "Preferences"
-            server.allow_audio_names("launcher", "http://127.0.0.1:8765")  # no profile yet: nothing happens
-            self.assertFalse(prefs.exists())
-            prefs.parent.mkdir(parents=True)
+            server.allow_audio_names("launcher", "http://127.0.0.1:8765")  # new PC: no profile yet, Edge never asks
+            self.assertEqual(json.loads(prefs.read_text(encoding="utf-8"))["profile"]["content_settings"]["exceptions"]
+                             ["media_stream_mic"], {"http://127.0.0.1:8765,*": {"setting": 1}})
             prefs.write_text('{"zoom": 1}', encoding="utf-8")
             server.allow_audio_names("launcher", "http://127.0.0.1:8765")
             data = json.loads(prefs.read_text(encoding="utf-8"))

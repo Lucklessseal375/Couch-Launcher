@@ -986,10 +986,12 @@ def pid_window(pid):
 def allow_audio_names(profile, origin):
     """Grants our own page the media permission in its Edge profile, so it can see audio device names (to play
     sounds on the DualSense speaker) with no prompt and no unsupported command-line flag (which shows a warning
-    banner). Edge must not be running on the profile; before its first run there is no file yet and Edge asks once."""
+    banner). Edge must not be running on the profile. Before its first run there is no file yet: a new one holding just
+    this setting is enough, and Edge fills in the rest."""
     prefs = PROFILES / profile / "Default" / "Preferences"
     try:
-        data = json.loads(prefs.read_text(encoding="utf-8"))
+        prefs.parent.mkdir(parents=True, exist_ok=True)
+        data = json.loads(prefs.read_text(encoding="utf-8")) if prefs.exists() else {}
         ex = data.setdefault("profile", {}).setdefault("content_settings", {}).setdefault("exceptions", {})
         ex.setdefault("media_stream_mic", {})[f"{origin},*"] = {"setting": 1}
         prefs.write_text(json.dumps(data), encoding="utf-8")
