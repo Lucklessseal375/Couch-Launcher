@@ -569,14 +569,37 @@ def key_app(exe):
 APP_DEVTOOLS = 9339  # DevTools port Couch opens on WebView2 apps with "back_closes" (Stremio): which page they show
 
 
-def app_page_url():
-    """The address a WebView2 app Couch opened is showing, or "" (opened some other way: no DevTools port)."""
+def app_page():
+    """DevTools' entry for the page a WebView2 app Couch opened shows, or {} (opened some other way: no port)."""
     import urllib.request
     try:
         pages = json.load(urllib.request.urlopen(f"http://127.0.0.1:{APP_DEVTOOLS}/json", timeout=2))
-        return next(p["url"] for p in pages if p.get("type") == "page")
+        return next(p for p in pages if p.get("type") == "page")
     except (OSError, ValueError, StopIteration):
-        return ""
+        return {}
+
+
+def app_page_url():
+    return app_page().get("url", "")
+
+
+def run_page_script(js, limit=30):
+    """apps.json "page_script": run in the app's page, every half second, until it returns true. Stremio's
+    loads every Board row at once: it loads rows only once scrolling stops for 0.3 s, so a held d-pad
+    stuck at the last loaded row."""
+    t0 = time.time()
+    while time.time() - t0 < limit:
+        try:
+            cdp = Cdp(app_page()["webSocketDebuggerUrl"])
+            try:
+                if cdp.send("Runtime.evaluate", expression=js, returnByValue=True).get("result", {}).get("value"):
+                    return log.info("page script ran after %.1f s", time.time() - t0)
+            finally:
+                cdp.s.close()
+        except (OSError, KeyError, RuntimeError, ConnectionError):
+            pass  # not up yet
+        time.sleep(0.5)
+    log.info("page script never ran")
 
 
 def back_or_close(h, key, first_screen):
@@ -701,6 +724,7 @@ def borderless_fullscreen(h):
         # and Stremio then leaves its page at the framed size (a grey strip along the bottom)
         for short in (1, 0):
             user32.SetWindowPos(h, None, r.left, r.top, r.right - r.left, r.bottom - r.top - short, 0x0020 | 0x0040)  # FRAMECHANGED|SHOWWINDOW
+        user32.SetCursorPos(r.right - 1, r.bottom - 1)  # pointer to the corner: resting on a poster it shows a tooltip
     finally:
         user32.SetThreadDpiAwarenessContext(ctypes.c_void_p(old))
 
@@ -1709,6 +1733,13 @@ def start_then(cmd, log_file, signed_in, then, limit):
     then()
 
 
+def repeat_gap(n, in_couch):
+    """Seconds to the next repeat of a held direction, after n repeats. In other apps (Stremio's 37-row Board)
+    it speeds up as it is held, as on a PS5: 9 moves a second at first, 25 within a second. Couch's own
+    rows keep a steady pace for their animations."""
+    return 0.11 if in_couch else max(0.04, 0.11 - 0.01 * n)
+
+
 def controller_loop():
     """Keep the controller reader alive: if it ever crashes, log it and start it again."""
     while True:
@@ -1861,10 +1892,11 @@ def _controller_loop():
                 del held[d]
         for d in dirs:
             if d not in held:
-                held[d] = now + 0.38
+                held[d] = [now + 0.38, 0]  # next repeat, repeats so far
                 act(d)
-            elif now >= held[d]:
-                held[d] = now + 0.11
+            elif now >= held[d][0]:
+                held[d][1] += 1
+                held[d][0] = now + repeat_gap(held[d][1], launcher_in_front())
                 act(d)
         time.sleep(0.01)
 
@@ -1917,10 +1949,12 @@ def launch_app(app_id):
         open_url(target)
     elif kind == "exe":
         env = None
-        if app.get("back_closes"):  # a WebView2 app (Stremio): a DevTools port shows Couch which page it is on
+        if app.get("back_closes") or app.get("page_script"):  # a WebView2 app (Stremio): DevTools reach its page
             env = dict(os.environ, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=f"--remote-debugging-port={APP_DEVTOOLS}")
         subprocess.Popen([target] + list(app.get("args", [])), cwd=str(Path(target).parent), env=env,
                          creationflags=0x00000008 | 0x00000200)
+        if app.get("page_script"):
+            threading.Thread(target=run_page_script, args=(app["page_script"],), daemon=True).start()
     elif kind == "web":
         if app.get("tv"):
             threading.Thread(target=edge_tv, args=(target, f"web-{app['id']}"), daemon=True).start()
