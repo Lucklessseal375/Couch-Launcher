@@ -1,3 +1,4 @@
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -7,29 +8,59 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import server  # noqa: E402
 server.log.disabled = True  # keep test runs out of the real server.log
 
-APPS = [{"id": "stremio", "kind": "exe", "target": "%LOCALAPPDATA%\\Programs\\Stremio\\stremio-shell-ng.exe",
-         "keys": {"a": "enter", "b": "backspace"}},
-        {"id": "epic", "kind": "exe", "target": "C:\\Epic\\EpicGamesLauncher.exe"}]
+STREMIO = {"id": "stremio", "kind": "exe", "target": "%LOCALAPPDATA%\\Programs\\Stremio\\stremio-shell-ng.exe",
+           "keys": {"a": "enter", "b": "backspace"}, "back_closes": True}
+APPS = [STREMIO, {"id": "epic", "kind": "exe", "target": "C:\\Epic\\EpicGamesLauncher.exe"}]
 
 
-class AppKeys(unittest.TestCase):
-    def setUp(self):
-        p = mock.patch.object(server, "load_apps", return_value=(APPS, set()))
-        p.start()
-        self.addCleanup(p.stop)
-
-    def test_app_in_front_gets_its_keys(self):
-        self.assertEqual(server.app_keys("stremio-shell-ng.exe"), {"a": "enter", "b": "backspace"})
-
-    def test_app_without_keys_gets_none(self):
-        self.assertEqual(server.app_keys("epicgameslauncher.exe"), {})
-        self.assertEqual(server.app_keys(""), {})
+class KeyApp(unittest.TestCase):
+    def test_app_in_front_is_found_by_its_program(self):
+        with mock.patch.object(server, "load_apps", return_value=(APPS, set())):
+            self.assertIs(server.key_app("stremio-shell-ng.exe"), STREMIO)
+            self.assertEqual(server.key_app("epicgameslauncher.exe"), {})  # no "keys"
+            self.assertEqual(server.key_app(""), {})
 
     def test_every_key_in_apps_json_exists(self):
-        apps = __import__("json").loads(server.APPS_FILE.read_text(encoding="utf-8"))["apps"]
-        for a in apps:
+        for a in json.loads(server.APPS_FILE.read_text(encoding="utf-8"))["apps"]:
             for button, key in a.get("keys", {}).items():
                 self.assertIn(key, server.KEYS, f"{a['id']}: {button}")
+
+
+HOME = "https://web.stremio.com/#/?streamingServerUrl=http%3A%2F%2F127.0.0.1%3A11470"
+STREMIO_FIRST = next(a for a in json.loads(server.APPS_FILE.read_text(encoding="utf-8"))["apps"]
+                     if a["id"] == "stremio")["back_closes"]
+
+
+class BackOrClose(unittest.TestCase):
+    def run_back(self, url, front=7):
+        with mock.patch.object(server, "app_page_url", return_value=url), \
+                mock.patch.object(server, "press") as press, \
+                mock.patch.object(server.time, "sleep"), \
+                mock.patch.object(server.user32, "GetForegroundWindow", return_value=front), \
+                mock.patch.object(server.user32, "PostMessageW") as post, \
+                mock.patch.object(server, "window_exe", return_value="stremio-shell-ng.exe"), \
+                mock.patch.object(server, "open_launcher") as launcher:
+            server.back_or_close(7, "backspace", STREMIO_FIRST)
+        return press, post, launcher
+
+    def test_back_anywhere_else_just_goes_back(self):
+        for url in ("https://web.stremio.com/#/detail/series/tt9813792/tt9813792%3A4%3A10",
+                    "https://web.stremio.com/#/detail/series/tt9813792?season=4", "https://web.stremio.com/#/settings",
+                    ""):  # opened some other way: Couch can't tell, so never closes it
+            press, post, _ = self.run_back(url)
+            press.assert_called_once_with("backspace")
+            post.assert_not_called()
+
+    def test_back_on_the_board_closes_stremio(self):
+        for url in (HOME, "https://web.stremio.com/#/"):
+            press, post, launcher = self.run_back(url)
+            press.assert_not_called()
+            post.assert_called_once_with(7, 0x0010, 0, 0)
+            launcher.assert_called_once()
+
+    def test_another_window_in_front_is_never_closed(self):
+        _, post, _ = self.run_back(HOME, front=9)
+        post.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -559,11 +559,36 @@ TV_KEYS = {"up": "up", "down": "down", "left": "left", "right": "right", "a": "e
            "x": "playpause", "l1": "prev", "r1": "next"}
 
 
-def app_keys(exe):
-    """apps.json "keys": the keys an app gets for controller buttons while it is in front. Stremio's own
+def key_app(exe):
+    """The apps.json app with "keys" (controller button: key) whose program is exe, else {}. Stremio's own
     gamepad support never sees the controller (its WebView2 gets no gamepads), but it does follow keys."""
-    return next((a["keys"] for a in load_apps()[0]
+    return next((a for a in load_apps()[0]
                  if a.get("keys") and Path(os.path.expandvars(a["target"])).name.lower() == exe), {})
+
+
+APP_DEVTOOLS = 9339  # DevTools port Couch opens on WebView2 apps with "back_closes" (Stremio): which page they show
+
+
+def app_page_url():
+    """The address a WebView2 app Couch opened is showing, or "" (opened some other way: no DevTools port)."""
+    import urllib.request
+    try:
+        pages = json.load(urllib.request.urlopen(f"http://127.0.0.1:{APP_DEVTOOLS}/json", timeout=2))
+        return next(p["url"] for p in pages if p.get("type") == "page")
+    except (OSError, ValueError, StopIteration):
+        return ""
+
+
+def back_or_close(h, key, first_screen):
+    """apps.json "back_closes": like a TV, ○ on an app's first screen (its address matches that pattern)
+    closes it; Stremio has no way out of its own. Anywhere else ○ is its back key."""
+    if not re.search(first_screen, app_page_url()):
+        return press(key)
+    if user32.GetForegroundWindow() == h:
+        log.info("back on %s's first screen; closing it", window_exe(h))
+        user32.PostMessageW(h, 0x0010, 0, 0)  # WM_CLOSE
+        time.sleep(1)
+        open_launcher()  # Windows would put whatever was behind in front
 
 
 def press(name):
@@ -672,7 +697,10 @@ def borderless_fullscreen(h):
         mi = _MONITORINFO(cb=ctypes.sizeof(_MONITORINFO))
         user32.GetMonitorInfoW(user32.MonitorFromWindow(h, 2), ctypes.byref(mi))  # MONITOR_DEFAULTTONEAREST
         r = mi.rc
-        user32.SetWindowPos(h, None, r.left, r.top, r.right - r.left, r.bottom - r.top, 0x0020 | 0x0040)  # FRAMECHANGED|SHOWWINDOW
+        # a pixel short first: a window that already had the screen's size gets no resize from the frame going,
+        # and Stremio then leaves its page at the framed size (a grey strip along the bottom)
+        for short in (1, 0):
+            user32.SetWindowPos(h, None, r.left, r.top, r.right - r.left, r.bottom - r.top - short, 0x0020 | 0x0040)  # FRAMECHANGED|SHOWWINDOW
     finally:
         user32.SetThreadDpiAwarenessContext(ctypes.c_void_p(old))
 
@@ -1765,8 +1793,12 @@ def _controller_loop():
             emit(action)
         elif TV_PIDS and window_pid(user32.GetForegroundWindow()) in TV_PIDS and action in TV_KEYS:
             press(TV_KEYS[action])  # a TV site reads remote keys, not the controller
-        elif action in (keys := app_keys(window_exe(user32.GetForegroundWindow()))):
-            press(keys[action])
+        elif action in (app := key_app(window_exe(fg := user32.GetForegroundWindow()))).get("keys", {}):
+            if action == "b" and app.get("back_closes"):
+                threading.Thread(target=back_or_close, args=(fg, app["keys"]["b"], app["back_closes"]),
+                                 daemon=True).start()
+            else:
+                press(app["keys"][action])
 
     while True:
         for e in pygame.event.get():
@@ -1884,7 +1916,10 @@ def launch_app(app_id):
     elif kind == "url":
         open_url(target)
     elif kind == "exe":
-        subprocess.Popen([target] + list(app.get("args", [])), cwd=str(Path(target).parent),
+        env = None
+        if app.get("back_closes"):  # a WebView2 app (Stremio): a DevTools port shows Couch which page it is on
+            env = dict(os.environ, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=f"--remote-debugging-port={APP_DEVTOOLS}")
+        subprocess.Popen([target] + list(app.get("args", [])), cwd=str(Path(target).parent), env=env,
                          creationflags=0x00000008 | 0x00000200)
     elif kind == "web":
         if app.get("tv"):
