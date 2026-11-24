@@ -536,7 +536,7 @@ KEYUP, UNICODE, EXTENDED = 0x2, 0x4, 0x1
 KEYS = {  # name: (virtual key, extended)
     "up": (0x26, True), "down": (0x28, True), "left": (0x25, True), "right": (0x27, True),
     "enter": (0x0D, False), "escape": (0x1B, False),
-    "backspace": (0x08, False),
+    "backspace": (0x08, False), "space": (0x20, False),
     "volup": (0xAF, True), "voldown": (0xAE, True), "mute": (0xAD, True),
     "playpause": (0xB3, True), "next": (0xB0, True), "prev": (0xB1, True),
 }
@@ -557,6 +557,13 @@ def _key(vk, up=False, ext=False):
 # □ play/pause, L1/R1 previous/next.
 TV_KEYS = {"up": "up", "down": "down", "left": "left", "right": "right", "a": "enter", "b": "escape",
            "x": "playpause", "l1": "prev", "r1": "next"}
+
+
+def app_keys(exe):
+    """apps.json "keys": the keys an app gets for controller buttons while it is in front. Stremio's own
+    gamepad support never sees the controller (its WebView2 gets no gamepads), but it does follow keys."""
+    return next((a["keys"] for a in load_apps()[0]
+                 if a.get("keys") and Path(os.path.expandvars(a["target"])).name.lower() == exe), {})
 
 
 def press(name):
@@ -1758,6 +1765,8 @@ def _controller_loop():
             emit(action)
         elif TV_PIDS and window_pid(user32.GetForegroundWindow()) in TV_PIDS and action in TV_KEYS:
             press(TV_KEYS[action])  # a TV site reads remote keys, not the controller
+        elif action in (keys := app_keys(window_exe(user32.GetForegroundWindow()))):
+            press(keys[action])
 
     while True:
         for e in pygame.event.get():
