@@ -6,7 +6,7 @@
     1. Installs Python 3.13 (through winget) if Python isn't there yet, and pygame for the controller.
     2. Creates the "Couch Launcher" task: Couch starts full screen when you sign in to Windows.
     3. Asks for admin once, then: lets the phone remote reach this PC (one firewall rule), installs Sunshine for
-       streaming to another TV with the controller driver it needs (ViGEmBus), and adds the "Couch" app to Sunshine.
+       streaming to another TV with the controller driver it needs (ViGEmBus, as a PS4 controller), and adds the "Couch" app to Sunshine.
     4. Puts a "Couch" shortcut on the desktop.
   Then it starts Couch. Left for you: Sunshine's login and pairing Moonlight (docs\streaming-setup.md).
 #>
@@ -64,6 +64,13 @@ if ($Admin) {
             }
             if (-not (Get-Service ViGEmBus -ErrorAction SilentlyContinue)) { throw 'The controller driver for streaming (ViGEmBus) did not install.' }
             Say 'Controller driver for streaming (ViGEmBus) installed.'; $restart = $true
+        }
+        # A PS4 controller: the closest ViGEmBus can make (PS5 needs Sunshine's paid driver; without this it's Xbox)
+        $conf = Join-Path $cfg 'sunshine.conf'
+        $lines = @(if (Test-Path $conf) { Get-Content $conf })
+        if (-not ($lines -match '^\s*gamepad\s*=\s*ds4\s*$')) {
+            Set-Content $conf (@($lines | Where-Object { $_ -notmatch '^\s*gamepad\s*=' }) + 'gamepad = ds4')
+            Say 'Sunshine set to a PS4 controller (PlayStation buttons in games).'; $restart = $true
         }
         if ($restart) { Restart-Service SunshineService }  # never interrupts a stream when nothing changed
     } catch {
