@@ -1776,6 +1776,8 @@ def warm_rockstar():
     a GTA press, whose launch shows it after 15 s."""
     if exe_running("Launcher.exe") or not Path(ROCKSTAR_EXE).exists():
         return
+    if not any(a.get("rockstar") for a in load_apps()[0]):  # no Rockstar game on this PC: nothing to warm up for
+        return
     log.info("starting Rockstar's launcher in the background")
     subprocess.Popen([ROCKSTAR_EXE], cwd=str(Path(ROCKSTAR_EXE).parent), creationflags=0x00000008 | 0x00000200)
     t0, name = time.time(), RUNNING["name"]

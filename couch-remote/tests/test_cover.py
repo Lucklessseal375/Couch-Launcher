@@ -103,7 +103,7 @@ class CoverStoreLaunchers(unittest.TestCase):
 
 
 class WarmRockstar(unittest.TestCase):
-    def run_warm(self, running, fg_exe, launch_at=None):
+    def run_warm(self, running, fg_exe, launch_at=None, apps=({"id": "gta5", "rockstar": True},)):
         clock, focused = [0.0], []
         server.RUNNING.update(name=None)
 
@@ -113,6 +113,7 @@ class WarmRockstar(unittest.TestCase):
                 server.RUNNING["name"] = "GTA"
 
         with mock.patch.object(server, "exe_running", return_value=running), \
+                mock.patch.object(server, "load_apps", return_value=(list(apps), set())), \
                 mock.patch.object(server.subprocess, "Popen") as popen, \
                 mock.patch.object(server.time, "time", lambda: clock[0]), \
                 mock.patch.object(server.time, "sleep", sleep), \
@@ -132,6 +133,10 @@ class WarmRockstar(unittest.TestCase):
         popen, focused = self.run_warm(False, lambda t: "socialclubhelper.exe" if 3 <= t < 6 else "msedge.exe")
         self.assertEqual(popen.call_args[0][0], [server.ROCKSTAR_EXE])
         self.assertTrue(focused and all(3 <= t <= 6 for t in focused), focused)  # times are rounded
+
+    def test_pc_without_a_rockstar_game_leaves_it_closed(self):
+        popen, _ = self.run_warm(False, lambda t: "msedge.exe", apps=({"id": "youtube"},))
+        popen.assert_not_called()
 
     def test_stops_when_a_game_launch_takes_over(self):
         _, focused = self.run_warm(False, lambda t: "socialclubhelper.exe", launch_at=10)
