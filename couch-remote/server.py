@@ -2014,6 +2014,9 @@ def open_url(url):
             return os.startfile(url)
         log.info("opened %s link with %s", scheme, Path(exe).name)
 
+    if url.startswith("steam://open/bigpicture") and not exe_running("steam.exe"):  # a closed Steam drops the link
+        log.info("Steam is closed; starting it in Big Picture")
+        return subprocess.Popen([exe, "-gamepadui"], cwd=str(Path(exe).parent), creationflags=0x00000008 | 0x00000200)
     if scheme == "com.epicgames.launcher" and not exe_running("EpicGamesLauncher.exe"):
         log.info("Epic is closed; starting it before sending the link")
         return threading.Thread(target=start_then, args=([exe, "-silent"], EPIC_LOG, "OnLoginComplete", send_link, 30),

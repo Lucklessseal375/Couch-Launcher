@@ -91,3 +91,19 @@ class KeepAwake(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SteamBigPicture(unittest.TestCase):
+    def open_bp(self, steam_running):
+        with mock.patch.object(server, "exe_running", return_value=steam_running), \
+                mock.patch.object(server.winreg, "OpenKey", mock.MagicMock()), \
+                mock.patch.object(server.winreg, "QueryValueEx", return_value=(r'"C:\Steam\steam.exe" -- "%1"', 1)), \
+                mock.patch.object(server.subprocess, "Popen") as popen:
+            server.open_url("steam://open/bigpicture")
+        return popen.call_args[0][0]
+
+    def test_closed_steam_starts_straight_in_big_picture(self):
+        self.assertEqual(self.open_bp(False), [r"C:\Steam\steam.exe", "-gamepadui"])
+
+    def test_running_steam_gets_the_link(self):
+        self.assertEqual(self.open_bp(True), [r"C:\Steam\steam.exe", "--", "steam://open/bigpicture"])
