@@ -1,6 +1,6 @@
 # Couch updates itself on every PC
 
-Status: ready-for-agent
+Status: resolved
 
 Asked 2026-11-24 ("Save this for later can you make it auto update on computers?"), parked for later.
 
@@ -20,3 +20,7 @@ Every PC at home gets new Couch versions from GitHub by itself: no re-downloadin
 
 ## Sketch
 At sign-in the logon task first runs a small updater. It compares the local commit with GitHub's `main` (API or `git fetch`). If they differ, it downloads `main`, swaps the files in (keeping the ignored per-PC files), then starts Couch. Couch could also show "Updated to <commit>" as a toast.
+
+## Comments
+
+2026-11-24: built in `couch-remote/update.py` (commit 755df1c). Checks at sign-in and every 6 h while idle; applies only if the new server.py imports; keeps config.json and ignored per-PC files; restarts through the "Couch Launcher" task; the TV page reloads on a version change. Shortcut: files deleted upstream stay on the PC.
