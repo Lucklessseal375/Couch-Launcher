@@ -72,6 +72,8 @@
           next = ways.filter(w => w.gap <= band).sort((p, q) => p.off - q.off || p.gap - q.gap)[0].e;
         }
       }
+      // Right at the end of a Board row: its See All (it sits above the row's end, out of the d-pad's way)
+      if (!next && d[0] > 0 && a) next = a.closest('[class*=board-row]')?.querySelector('[class*=see-all]');
       ev.preventDefault();
       ev.stopImmediatePropagation();
       if (!next) {  // nothing that way: up and down glide the page (long text), sideways stays put
@@ -95,6 +97,14 @@
       if (ev.target.tagName === 'INPUT' || ev.target.closest('#couch-kb')) return;  // the search box and keyboard aren't places to come back to
       left[location.hash] ={i: [...document.querySelectorAll(FOCUSABLE)].indexOf(ev.target), sig: sig(ev.target)};
     }, true);
+    // Anything selected off screen comes into view: Stremio selects the source you used last once its add-on
+    // answers, seconds after the page opens, without scrolling to it (it was 13,000 px down a long list).
+    addEventListener('focusin', ev => requestAnimationFrame(() => {
+      const r = ev.target.getBoundingClientRect();
+      if (document.activeElement === ev.target && r.height && (r.bottom < 0 || r.top > innerHeight)) {
+        ev.target.scrollIntoView({block: 'center', inline: 'nearest'});
+      }
+    }), true);
     const settle = () => {
       let tries = 0, stable = 0, shape = '';
       const old = document.activeElement;  // the item pressed on the page being left; it lingers a moment
@@ -103,8 +113,13 @@
         // something is selected, unless it's only the search box Stremio selects by itself, back on a page
         // where you had picked a result
         // (the player needs nothing selected; an empty search page keeps its box, for the keyboard)
-        if (++tries > 30 || location.hash.startsWith('#/player') || location.hash === '#/search' ||
-            (a && a !== document.body && a !== old && a.isConnected && !(m && a.tagName === 'INPUT'))) return clearInterval(t);
+        if (++tries > 30 || location.hash.startsWith('#/player') || location.hash === '#/search') return clearInterval(t);
+        if (a && a !== document.body && a !== old && a.isConnected && !(m && a.tagName === 'INPUT')) {
+          // Stremio's own pick (the source you used last) can be far down a long list: bring it into view
+          const r = a.getBoundingClientRect();
+          if (r.top < 0 || r.bottom > innerHeight) a.scrollIntoView({block: 'center', inline: 'nearest'});
+          return clearInterval(t);
+        }
         const every = [...document.querySelectorAll(FOCUSABLE)], all = every.filter(usable);
         let e = m && every[m.i] && sig(every[m.i]) === m.sig && usable(every[m.i]) ? every[m.i] : m && all.find(x => sig(x) === m.sig);
         if (!e) {
@@ -128,6 +143,22 @@
     let page = location.hash;  // Stremio opens pages with pushState, which fires no event: watch the address
     setInterval(() => { if (location.hash !== page) { page = location.hash; settle(); } }, 150);
     settle();
+  }
+
+  // ○ (Backspace) goes back on every page. Stremio's own Backspace does nothing on some (See All lists),
+  // so you were stuck there; an open menu or dialog still gets it first, to close. The keyboard, open,
+  // takes it before this.
+  if (!window.couchBack) {
+    window.couchBack = true;
+    addEventListener('keydown', ev => {
+      if (ev.key !== 'Backspace' || !ev.isTrusted || document.getElementById('couch-kb')) return;
+      const layer = [...document.querySelectorAll('[role=dialog], [class*=modal-container], [class*=menu-layer]')]
+        .some(e => e.getBoundingClientRect().height > 0);
+      if (layer) return;
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      history.back();
+    }, true);
   }
 
   // In the player, △ turns subtitles on and off and R1 plays the next episode: Couch sends F13 and F14 for
