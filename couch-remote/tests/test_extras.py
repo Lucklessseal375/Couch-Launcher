@@ -1,6 +1,7 @@
 import json
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -107,3 +108,30 @@ class SteamBigPicture(unittest.TestCase):
 
     def test_running_steam_gets_the_link(self):
         self.assertEqual(self.open_bp(True), [r"C:\Steam\steam.exe", "--", "steam://open/bigpicture"])
+
+
+class RemoteKeys(unittest.TestCase):
+    def run_key(self, key, in_couch, exe="msedge.exe"):
+        with mock.patch.object(server, "launcher_in_front", return_value=in_couch), \
+                mock.patch.object(server, "window_exe", return_value=exe), \
+                mock.patch.object(server, "emit") as emit, mock.patch.object(server, "press") as press, \
+                mock.patch.object(server, "back_or_close") as boc:
+            server.remote_key(key)
+            time.sleep(0.05)  # back_or_close runs on a thread
+        return emit, press, boc
+
+    def test_back_in_couch_is_the_controller_circle(self):
+        emit, press, _ = self.run_key("escape", True)
+        emit.assert_called_once_with("b")
+        press.assert_not_called()
+
+    def test_back_in_stremio_goes_back_like_the_controller(self):
+        _, press, boc = self.run_key("escape", False, "stremio-shell-ng.exe")
+        self.assertEqual(boc.call_args[0][1], "backspace")
+        press.assert_not_called()
+
+    def test_other_keys_and_other_apps_get_the_real_key(self):
+        _, press, _ = self.run_key("escape", False)
+        press.assert_called_once_with("escape")
+        _, press, _ = self.run_key("volup", True)
+        press.assert_called_once_with("volup")

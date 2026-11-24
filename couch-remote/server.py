@@ -1761,6 +1761,22 @@ def launcher_in_front():
     return bool(fg) and window_title(fg).startswith(LAUNCHER_TITLE)
 
 
+REMOTE_PAD = {"up": "up", "down": "down", "left": "left", "right": "right", "enter": "a", "escape": "b"}
+
+
+def remote_key(key):
+    """A phone-remote key. In Couch and in apps with their own controller keys it acts as the controller button would:
+    Couch ignores keyboard copies of pad keys once a controller has been used, and Stremio's Back isn't Escape."""
+    action = REMOTE_PAD.get(key)
+    if action and launcher_in_front():
+        return emit(action)
+    fg = user32.GetForegroundWindow()
+    app = key_app(window_exe(fg))
+    if action == "b" and app.get("back_closes"):
+        return threading.Thread(target=back_or_close, args=(fg, app["keys"]["b"], app["back_closes"]), daemon=True).start()
+    press(app.get("keys", {}).get(action) or key)
+
+
 def exe_running(name):
     out = subprocess.run(["tasklist", "/fi", f"imagename eq {name}", "/nh"], capture_output=True,
                          text=True, creationflags=0x08000000).stdout
@@ -2389,7 +2405,7 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/key":
                 if b.get("key") not in KEYS:
                     return self.send_json({"error": "unknown key"}, 400)
-                press(b["key"])
+                remote_key(b["key"])
             elif path == "/api/text":
                 type_text(str(b.get("text", "")))
             elif path == "/api/mouse":
