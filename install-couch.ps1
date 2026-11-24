@@ -5,20 +5,75 @@
   It does only this, and is safe to run again:
     1. Installs Python 3.13 (through winget) if Python isn't there yet, and pygame for the controller.
     2. Creates the "Couch Launcher" task: Couch starts full screen when you sign in to Windows.
-    3. Lets the phone remote reach this PC on your home network (one firewall rule; Windows asks for admin).
+    3. Asks for admin once, then: lets the phone remote reach this PC (one firewall rule), installs Sunshine for
+       streaming to another TV, adds the "Couch" app to Sunshine and sets it to a PS5 controller.
     4. Puts a "Couch" shortcut on the desktop.
-  Then it starts Couch.
+  Then it starts Couch. Left for you: Sunshine's login and pairing Moonlight (docs\streaming-setup.md).
 #>
+param([switch]$Admin, [string]$Py)  # -Admin: the part step 3 runs elevated
 $ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'  # Windows PowerShell's progress bar makes downloads crawl
 $repo = Split-Path -Parent $MyInvocation.MyCommand.Path
 $server = Join-Path $repo 'couch-remote\server.py'
 if (-not (Test-Path $server)) { throw "Can't find couch-remote\server.py next to this script ($repo)." }
 function Step($msg) { Write-Host "`n== $msg" -ForegroundColor Cyan }
+$adminLog = Join-Path $repo 'couch-remote\install-admin.log'
+
+if ($Admin) {
+    function Say($m) { Add-Content $adminLog "  $m" }
+    Set-Content $adminLog $null
+    try {
+        Remove-NetFirewallRule -DisplayName 'Couch (phone remote)' -ErrorAction SilentlyContinue
+        New-NetFirewallRule -DisplayName 'Couch (phone remote)' -Direction Inbound -Action Allow -Program $Py -Profile Private,Public | Out-Null
+        Say 'Firewall rule for the phone remote added.'
+        if (Get-Service SunshineService -ErrorAction SilentlyContinue) {
+            Say 'Sunshine is already installed.'
+        } elseif (Get-Command winget -ErrorAction SilentlyContinue) {
+            winget install --id LizardByte.Sunshine --exact --scope machine --silent --accept-package-agreements --accept-source-agreements | Out-Null
+            Say 'Sunshine installed.'
+        } else {
+            $msi = Join-Path $env:TEMP 'Sunshine-Windows-AMD64-installer.msi'
+            Invoke-WebRequest -UseBasicParsing 'https://github.com/LizardByte/Sunshine/releases/latest/download/Sunshine-Windows-AMD64-installer.msi' -OutFile $msi
+            Start-Process msiexec.exe -Wait -ArgumentList '/i', "`"$msi`"", '/qn'
+            Say 'Sunshine installed (from its GitHub releases).'
+        }
+        if (-not (Get-Service SunshineService -ErrorAction SilentlyContinue)) { throw 'Sunshine did not install.' }
+        $cfg = Join-Path $env:ProgramFiles 'Sunshine\config'
+        New-Item -ItemType Directory -Force $cfg | Out-Null
+        $appsFile = Join-Path $cfg 'apps.json'
+        $j = if (Test-Path $appsFile) { Get-Content $appsFile -Raw | ConvertFrom-Json } else { [pscustomobject]@{ apps = @(@{ name = 'Desktop'; 'image-path' = 'desktop.png' }); env = @{} } }
+        if (@($j.apps | Where-Object { $_.name -eq 'Couch' }).Count) {
+            Say 'Sunshine already has the Couch app.'
+        } else {
+            $cmd = '"' + (Join-Path $repo 'couch-remote\stream.cmd') + '"'
+            $j.apps = @($j.apps) + [pscustomobject]@{ name = 'Couch'; cmd = ''; 'auto-detach' = $true; 'wait-all' = $true
+                'prep-cmd' = @(@{ do = "$cmd on `"Apple TV`""; undo = "$cmd off"; elevated = $false }) }
+            $j | ConvertTo-Json -Depth 6 | Set-Content $appsFile -Encoding UTF8
+            Say 'Added the Couch app to Sunshine.'; $restart = $true
+        }
+        $conf = Join-Path $cfg 'sunshine.conf'
+        if (-not ((Test-Path $conf) -and (Select-String -Path $conf -Pattern '^\s*gamepad\s*=' -Quiet))) {
+            Add-Content $conf 'gamepad = ds5'
+            Say 'Sunshine set to a PS5 controller.'; $restart = $true
+        }
+        if ($restart) { Restart-Service SunshineService }  # never interrupts a stream when nothing changed
+    } catch {
+        Say "FAILED: $_"
+    }
+    exit
+}
 
 Step '1. Python and pygame'
 $py = (Get-Command python.exe -ErrorAction SilentlyContinue | Where-Object { $_.Source -notmatch 'WindowsApps' } | Select-Object -First 1).Source
 if (-not $py) {
-    winget install --id Python.Python.3.13 --exact --scope user --accept-package-agreements --accept-source-agreements
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        winget install --id Python.Python.3.13 --exact --scope user --accept-package-agreements --accept-source-agreements
+    } else {  # a brand-new Windows may not have winget yet
+        $setup = Join-Path $env:TEMP 'python-3.13.17-amd64.exe'
+        Write-Host '  winget not found; downloading Python from python.org'
+        Invoke-WebRequest -UseBasicParsing 'https://www.python.org/ftp/python/3.13.17/python-3.13.17-amd64.exe' -OutFile $setup
+        Start-Process $setup -Wait -ArgumentList '/quiet', 'InstallAllUsers=0', 'PrependPath=1', 'Include_test=0', 'Include_launcher=0'
+    }
     $py = Join-Path $env:LOCALAPPDATA 'Programs\Python\Python313\python.exe'
     if (-not (Test-Path $py)) { throw 'Python was installed, but python.exe was not found. Open a new PowerShell window and run this script again.' }
 }
@@ -34,14 +89,12 @@ $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) 
 Register-ScheduledTask -TaskName 'Couch Launcher' -Action $action -Trigger $trigger -Settings $settings -RunLevel Limited -Force | Out-Null
 Write-Host '  Task created (replaced if it was there).'
 
-Step '3. Phone remote: allow Python through the firewall (asks for admin)'
-$rule = "Remove-NetFirewallRule -DisplayName 'Couch (phone remote)' -ErrorAction SilentlyContinue; " +
-        "New-NetFirewallRule -DisplayName 'Couch (phone remote)' -Direction Inbound -Action Allow -Program '$py' -Profile Private,Public | Out-Null"
+Step '3. Phone remote and streaming (asks for admin once)'
 try {
-    Start-Process powershell.exe -Verb RunAs -Wait -ArgumentList '-NoProfile', '-Command', $rule
-    Write-Host '  Firewall rule added.'
+    Start-Process powershell.exe -Verb RunAs -Wait -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", '-Admin', '-Py', "`"$py`""
+    Get-Content $adminLog
 } catch {
-    Write-Warning '  Skipped (admin not given). Couch works on the TV; the phone remote may not connect until you run this script again and allow it.'
+    Write-Warning '  Skipped (admin not given). Couch works on the TV; the phone remote and streaming need this step: run the script again and allow it.'
 }
 
 Step '4. Desktop shortcut'
@@ -58,3 +111,4 @@ Step 'Starting Couch'
 Start-ScheduledTask -TaskName 'Couch Launcher'
 Write-Host "`nDone. Couch opens full screen in a few seconds, and from now on whenever you sign in." -ForegroundColor Green
 Write-Host 'Your games: Steam games appear by themselves. Other apps and games come from couch-remote\apps.json; tiles for programs this PC does not have are hidden.'
+Write-Host 'Streaming to another TV, left for you: open https://localhost:47990 and create a Sunshine login, then pair Moonlight (docs\streaming-setup.md, step 3).'

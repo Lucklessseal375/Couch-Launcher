@@ -2,22 +2,15 @@
 
 Couch streams to the Apple TV through two free programs: **Sunshine** on the PC sends the picture and sound, **Moonlight** on the Apple TV shows it and sends your controller back. You set this up once; after that you open Moonlight on the Apple TV, pick **Couch**, and play. Home network only.
 
-## 1. On the PC: install Sunshine
-1. Download the Windows installer from Sunshine's official releases page: <https://github.com/LizardByte/Sunshine/releases> (the `.exe` for Windows, from LizardByte).
-2. Run it and accept its prompts (it asks for admin rights and adds a firewall rule for your home network).
-3. Open Sunshine's settings page at <https://localhost:47990> and create a Sunshine username and password when it asks. Couch never sees or stores them.
-4. Start with **1080p, 60 FPS**: the PC is on Wi-Fi, and a lower resolution keeps the stream smooth. You can raise it later.
+## 1. On the PC: done by the installer
+`install-couch.ps1` installs Sunshine, adds the **Couch** app to it (with the commands that tell Couch a stream started or ended), and sets Sunshine to a PS5 controller. The one thing left for you on the PC:
 
-## 2. In Sunshine: add Couch as an app
-In Sunshine's page, go to **Applications → Add New**:
-- **Application Name:** `Couch`
-- **Command:** leave empty (it streams the screen Couch is on).
-- **Command Preparations:** add one row:
-  - **Do:** `"C:\Users\eli\Documents\CouchSetup\couch-remote\stream.cmd" on "Apple TV"`
-  - **Undo:** `"C:\Users\eli\Documents\CouchSetup\couch-remote\stream.cmd" off`
-- Save.
-- Keep the name in quotes plain: letters, numbers and spaces only.
-- If Couch doesn't react when a stream starts, change both commands to the `cmd /C` form, for example Do: `cmd /C ""C:\Users\eli\Documents\CouchSetup\couch-remote\stream.cmd" on "Apple TV""`.
+- Open Sunshine's settings page at <https://localhost:47990> (or Couch's PC row → **Streaming** → Open Sunshine settings) and create a Sunshine username and password when it asks. Couch never sees or stores them.
+
+Start with **1080p, 60 FPS** in Moonlight: on Wi-Fi a lower resolution keeps the stream smooth. You can raise it later.
+
+## 2. If you set Sunshine up by hand instead
+In Sunshine's page, **Applications → Add New**: name `Couch`, leave **Command** empty, and add one **Command Preparations** row: Do `"<Couch folder>\couch-remote\stream.cmd" on "Apple TV"`, Undo `"<Couch folder>\couch-remote\stream.cmd" off`. If Couch doesn't react when a stream starts, wrap both in `cmd /C "..."`.
 
 When a stream starts, Couch comes to the front, shows **Streaming to Apple TV** in its header, and stops moving the sound back to the living-room TV. When it ends, everything goes back to normal.
 

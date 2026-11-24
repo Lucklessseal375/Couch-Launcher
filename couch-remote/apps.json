@@ -6,7 +6,7 @@
     {"id": "ea", "meta": "Your EA library and store", "name": "EA app", "kind": "exe", "target": "C:\\Program Files\\Electronic Arts\\EA Desktop\\EA Desktop\\EALauncher.exe", "color": "#ff4747"},
     {"id": "youtube", "meta": "Videos and music, in YouTube's TV app", "name": "YouTube", "kind": "web", "target": "https://www.youtube.com/tv", "tv": true, "color": "#e62117"},
     {"id": "ubisoft", "meta": "Your Ubisoft library and store", "name": "Ubisoft Connect", "kind": "exe", "target": "C:\\Program Files (x86)\\Ubisoft\\Ubisoft Game Launcher\\UbisoftConnect.exe", "color": "#0070ff"},
-    {"id": "claude", "meta": "Chat with Claude, and Claude Code", "name": "Claude", "kind": "exe", "target": "C:\\Windows\\explorer.exe", "args": ["shell:AppsFolder\\Claude_pzs8sxrjxfjjc!Claude"], "color": "#d97757"},
+    {"id": "claude", "meta": "Chat with Claude, and Claude Code", "name": "Claude", "kind": "exe", "target": "C:\\Windows\\explorer.exe", "args": ["shell:AppsFolder\\Claude_pzs8sxrjxfjjc!Claude"], "needs": "%LOCALAPPDATA%\\Packages\\Claude_pzs8sxrjxfjjc", "color": "#d97757"},
     {"id": "stremio", "meta": "Movies and shows", "name": "Stremio", "kind": "exe", "target": "%LOCALAPPDATA%\\Programs\\Stremio\\stremio-shell-ng.exe", "fullscreen": true, "keys": {"up": "up", "down": "down", "left": "left", "right": "right", "a": "enter", "b": "backspace", "x": "space", "y": "f13", "r1": "f14"}, "back_closes": "#/($|\\?)", "page_script": "stremio.js", "color": "#7b5bf5"}
   ],
   "games": [
