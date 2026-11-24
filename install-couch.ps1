@@ -100,8 +100,10 @@ try {
 Step '4. Desktop shortcut'
 $lnk = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Couch.lnk'
 $s = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk)
-$s.TargetPath = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
-$s.Arguments = "-NoProfile -WindowStyle Hidden -Command Start-ScheduledTask -TaskName 'Couch Launcher'"
+# same command as the task: starts Couch, or brings it to the front if it's already running; no terminal window
+$s.TargetPath = "$env:SystemRoot\System32\conhost.exe"
+$s.Arguments = "--headless `"$py`" `"$server`" --open"
+$s.WorkingDirectory = Split-Path $server
 $icon = Join-Path $repo 'couch-remote\icon.ico'
 if (Test-Path $icon) { $s.IconLocation = $icon }
 $s.Save()
