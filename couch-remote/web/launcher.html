@@ -1979,6 +1979,7 @@ async function load() {
     if (info.padReader === false) gamepadLoop();  // null = the server's reader is still starting
     const clipsReady = Sound.loadClips(info.sounds || []);  // decoded in the background; nothing waits on it
     padLight();  // gold while you're in the menu
+    if (info.installerChanged) toast("Couch updated. Run Install Couch.cmd once on this PC to finish");
     if (!PREVIEW) {
       await Out.detect(); await clipsReady;
       if (Sound.has("bgm") && Sound.musicOn) Sound.startBgm(); else Intro.play("startup");
@@ -2003,6 +2004,7 @@ async function refresh(toResume) {
 setInterval(async () => {
   if (!info || document.hidden || modal) return;
   let r; try { r = await api("/api/running"); } catch { return; }
+  if (r.version && info.version && r.version !== info.version) return location.reload();  // Couch updated itself
   if (!!r.running !== !!info.running || r.running?.name !== info.running?.name) refresh();
 }, 3000);
 addEventListener("focus", () => { wake(); refresh(true); Out.detect(); padLight(); if (!PREVIEW) Sound.startBgm(); });

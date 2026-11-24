@@ -27,8 +27,10 @@ from urllib.parse import unquote, urlparse
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # audio.py and padspeaker.py sit next to this file
 import audio  # noqa: E402
 import padspeaker  # noqa: E402
+import update  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent
+VERSION = update.installed_sha(ROOT.parent)[:7] or "dev"  # dev: a git checkout, never auto-updated
 WEB = ROOT / "web"
 CONFIG_FILE = ROOT / "config.json"
 APPS_FILE = ROOT / "apps.json"
@@ -2148,6 +2150,23 @@ def sleep_due(now, idle, idle_rule, streaming, game_running):
         bool(idle_rule and idle >= idle_rule * 60 and not streaming and not game_running)
 
 
+def restart_couch():
+    """Ends this server and has the "Couch Launcher" task start the new one a few seconds later (after the port is
+    free). The TV page notices the new version and reloads itself."""
+    subprocess.Popen(["powershell", "-NoProfile", "-Command", "Start-Sleep 4; Start-ScheduledTask -TaskName 'Couch Launcher'"],
+                     creationflags=0x08000000 | 0x00000008)
+    log.info("restarting for the update")
+    os._exit(0)
+
+
+def update_watch():
+    """Every 6 hours, while nothing is playing or streaming and nobody has touched the PC for 30 minutes."""
+    while True:
+        time.sleep(6 * 3600)
+        if not running_window() and not STREAM["on"] and idle_seconds() > 1800 and update.check(ROOT.parent):
+            restart_couch()
+
+
 def sleep_watch():
     last = time.time()
     while True:
@@ -2317,7 +2336,8 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/network":
                 return self.send_json(network())
             if path == "/api/running":  # cheap: the launcher polls it to keep Now playing current
-                return self.send_json({"running": {"name": RUNNING["name"]} if running_window() else None})
+                return self.send_json({"running": {"name": RUNNING["name"]} if running_window() else None,
+                                       "version": VERSION})
             if path == "/api/info":
                 apps, _ = load_apps()
                 games, hidden = library()
@@ -2325,7 +2345,8 @@ class Handler(BaseHTTPRequestHandler):
                         "padReader": PAD_READER, "intro": bool(intro_file()), "sounds": sound_clips(),
                         "stream": STREAM["device"] if STREAM["on"] else None, "sunshine": sunshine_status(),
                         "sunshineLogin": SUNSHINE_CRED.exists(), "sleepAt": int(SLEEP["at"]),
-                        "sleepIdle": load_choices()["sleep_idle"], "swap": SWAP[0]}
+                        "sleepIdle": load_choices()["sleep_idle"], "swap": SWAP[0], "version": VERSION,
+                        "installerChanged": (ROOT / "cache" / "installer-changed").exists()}
                 try:
                     info["audio"] = audio_state()["current"]
                 except Exception:  # noqa: BLE001  (optional extra: never lose the library over it)
@@ -2527,10 +2548,13 @@ def main():
             urllib.request.urlopen(req, timeout=10).read()
         print("Already running.")
         return
+    if update.check(ROOT.parent):  # at sign-in, before anything starts
+        restart_couch()
     srv = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     WATCHER.start()
     threading.Thread(target=controller_loop, daemon=True).start()
     threading.Thread(target=sleep_watch, daemon=True).start()
+    threading.Thread(target=update_watch, daemon=True).start()
     threading.Thread(target=keep_audio, daemon=True).start()
     threading.Thread(target=watch_sunshine, daemon=True).start()
     log.info("listening on port %s; LAN: %s", port, lan_ips())

@@ -8,6 +8,7 @@
     3. Asks for admin once, then: lets the phone remote reach this PC (one firewall rule), installs Sunshine for
        streaming to another TV with the controller driver it needs (ViGEmBus, as a PS4 controller), and adds the "Couch" app to Sunshine.
     4. Puts a "Couch" shortcut on the desktop.
+  From then on Couch updates itself from GitHub (couch-remote\update.py): at sign-in, and every 6 hours while idle.
   Then it starts Couch. Left for you: Sunshine's login and pairing Moonlight (docs\streaming-setup.md).
 #>
 param([switch]$Admin, [string]$Py)  # -Admin: the part step 3 runs elevated
@@ -125,6 +126,7 @@ if (Test-Path $icon) { $s.IconLocation = $icon }
 $s.Save()
 Write-Host "  $lnk"
 
+Remove-Item (Join-Path $repo 'couch-remote\cache\installer-changed') -ErrorAction SilentlyContinue  # an update asked for this run
 Step 'Starting Couch'
 Start-ScheduledTask -TaskName 'Couch Launcher'
 Write-Host "`nDone. Couch opens full screen in a few seconds, and from now on whenever you sign in." -ForegroundColor Green
