@@ -530,6 +530,7 @@ class INPUT(ctypes.Structure):
 
 user32.SendInput.argtypes = (wintypes.UINT, ctypes.POINTER(INPUT), ctypes.c_int)
 user32.SendInput.restype = wintypes.UINT
+user32.SetThreadDpiAwarenessContext.restype = ctypes.c_void_p
 
 KEYUP, UNICODE, EXTENDED = 0x2, 0x4, 0x1
 KEYS = {  # name: (virtual key, extended)
@@ -655,12 +656,18 @@ class _MONITORINFO(ctypes.Structure):
 
 def borderless_fullscreen(h):
     """An app that opens in a normal window (Stremio) fills the TV with no title bar or frame, as a game does."""
-    style = user32.GetWindowLongW(h, -16)  # GWL_STYLE
-    user32.SetWindowLongW(h, -16, style & ~0x00CF0000)  # no caption, frame, system menu, min/max boxes
-    mi = _MONITORINFO(cb=ctypes.sizeof(_MONITORINFO))
-    user32.GetMonitorInfoW(user32.MonitorFromWindow(h, 2), ctypes.byref(mi))  # MONITOR_DEFAULTTONEAREST
-    r = mi.rc
-    user32.SetWindowPos(h, None, r.left, r.top, r.right - r.left, r.bottom - r.top, 0x0020 | 0x0040)  # FRAMECHANGED|SHOWWINDOW
+    # Real pixels: DPI-scaled sizes round (4096 px came out 4095), and a window a pixel short of the
+    # screen isn't full screen to Windows, so the taskbar stays on top of it.
+    old = user32.SetThreadDpiAwarenessContext(ctypes.c_void_p(-4))  # PER_MONITOR_AWARE_V2
+    try:
+        style = user32.GetWindowLongW(h, -16)  # GWL_STYLE
+        user32.SetWindowLongW(h, -16, style & ~0x00CF0000)  # no caption, frame, system menu, min/max boxes
+        mi = _MONITORINFO(cb=ctypes.sizeof(_MONITORINFO))
+        user32.GetMonitorInfoW(user32.MonitorFromWindow(h, 2), ctypes.byref(mi))  # MONITOR_DEFAULTTONEAREST
+        r = mi.rc
+        user32.SetWindowPos(h, None, r.left, r.top, r.right - r.left, r.bottom - r.top, 0x0020 | 0x0040)  # FRAMECHANGED|SHOWWINDOW
+    finally:
+        user32.SetThreadDpiAwarenessContext(ctypes.c_void_p(old))
 
 
 def focus_window(h):
