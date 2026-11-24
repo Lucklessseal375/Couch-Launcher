@@ -13,7 +13,7 @@ Every PC at home gets new Couch versions from GitHub by itself: no re-downloadin
 - Per-PC files that must survive an update are all git-ignored: `couch-remote/choices.json`, `cache/`, `profiles/`, logs, `install-admin.log`.
 
 ## Open questions
-- **How a PC reads a private repo without the user's password on it:** a read-only GitHub fine-grained token (the user creates it and pastes it in themselves), Git for Windows plus a one-time sign-in, or making the repo public.
+- ~~How a PC reads a private repo~~ **Decided 2026-11-24: the user made the repo public.** `https://github.com/<repo>/archive/refs/heads/main.zip` and the GitHub API now work with no sign-in, so the updater needs no token and no git.
 - **When to update:** at sign-in, before Couch starts, is simplest. Never during a game or a stream.
 - **Installer changes:** re-run the installer's admin part only when `install-couch.ps1` changed, since it asks for admin.
 - **Bad update:** keep the previous copy and fall back to it if the new `server.py` fails to start.
