@@ -72,7 +72,7 @@ if (-not $py) {
         $setup = Join-Path $env:TEMP 'python-3.13.17-amd64.exe'
         Write-Host '  winget not found; downloading Python from python.org'
         Invoke-WebRequest -UseBasicParsing 'https://www.python.org/ftp/python/3.13.17/python-3.13.17-amd64.exe' -OutFile $setup
-        Start-Process $setup -Wait -ArgumentList '/quiet', 'InstallAllUsers=0', 'PrependPath=1', 'Include_test=0', 'Include_launcher=0'
+        Start-Process $setup -Wait -ArgumentList '/quiet', 'InstallAllUsers=0', 'PrependPath=1', 'Include_test=0', 'Include_launcher=0', 'Include_doc=0', 'Include_tcltk=0', 'Include_dev=0'
     }
     $py = Join-Path $env:LOCALAPPDATA 'Programs\Python\Python313\python.exe'
     if (-not (Test-Path $py)) { throw 'Python was installed, but python.exe was not found. Open a new PowerShell window and run this script again.' }
