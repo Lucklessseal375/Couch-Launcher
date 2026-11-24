@@ -64,6 +64,11 @@ class BackOrClose(unittest.TestCase):
 
 
 class PageScript(unittest.TestCase):
+    def test_every_page_script_in_apps_json_exists(self):
+        for a in json.loads(server.APPS_FILE.read_text(encoding="utf-8"))["apps"]:
+            if a.get("page_script"):
+                self.assertTrue((server.ROOT / a["page_script"]).is_file(), a["page_script"])
+
     def test_runs_until_the_page_says_it_worked(self):
         answers = iter([None, False, True])  # page not up, script says not yet, then done
         cdp = mock.Mock()

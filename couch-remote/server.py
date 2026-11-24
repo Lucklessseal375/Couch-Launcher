@@ -584,9 +584,8 @@ def app_page_url():
 
 
 def run_page_script(js, limit=30):
-    """apps.json "page_script": run in the app's page, every half second, until it returns true. Stremio's
-    loads every Board row at once: it loads rows only once scrolling stops for 0.3 s, so a held d-pad
-    stuck at the last loaded row."""
+    """apps.json "page_script" (a .js file next to this one): run in the app's page every half second
+    until it returns true. stremio.js loads every Board row and restyles the selection."""
     t0 = time.time()
     while time.time() - t0 < limit:
         try:
@@ -1954,7 +1953,8 @@ def launch_app(app_id):
         subprocess.Popen([target] + list(app.get("args", [])), cwd=str(Path(target).parent), env=env,
                          creationflags=0x00000008 | 0x00000200)
         if app.get("page_script"):
-            threading.Thread(target=run_page_script, args=(app["page_script"],), daemon=True).start()
+            js = (ROOT / app["page_script"]).read_text(encoding="utf-8")
+            threading.Thread(target=run_page_script, args=(js,), daemon=True).start()
     elif kind == "web":
         if app.get("tv"):
             threading.Thread(target=edge_tv, args=(target, f"web-{app['id']}"), daemon=True).start()
