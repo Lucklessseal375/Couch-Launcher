@@ -537,6 +537,7 @@ KEYS = {  # name: (virtual key, extended)
     "up": (0x26, True), "down": (0x28, True), "left": (0x25, True), "right": (0x27, True),
     "enter": (0x0D, False), "escape": (0x1B, False),
     "backspace": (0x08, False), "space": (0x20, False),
+    "f13": (0x7C, False), "f14": (0x7D, False),  # no keyboard has them: an app's page script gives them a meaning
     "volup": (0xAF, True), "voldown": (0xAE, True), "mute": (0xAD, True),
     "playpause": (0xB3, True), "next": (0xB0, True), "prev": (0xB1, True),
 }

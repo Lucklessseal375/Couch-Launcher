@@ -48,7 +48,9 @@
       if (!d || ev.altKey || ev.ctrlKey || location.hash.startsWith('#/player')) return;
       const a = document.activeElement && document.activeElement !== document.body ? document.activeElement : null;
       if (a && d[0] && /^(INPUT|TEXTAREA)$/.test(a.tagName)) return;
-      const all = [...((a && a.closest(LAYER)) || document).querySelectorAll(FOCUSABLE)].filter(e => e !== a && usable(e));
+      const NAV = '[class*=nav-tab-button]';  // the side menu: reached with Left only, never by falling into it
+      const all = [...((a && a.closest(LAYER)) || document).querySelectorAll(FOCUSABLE)]
+        .filter(e => e !== a && usable(e) && (d[0] < 0 || !e.matches(NAV) || (a && a.matches(NAV))));
       let next;
       if (!a) {  // nothing selected yet: the first title
         next = all.find(e => e.matches('[class*=meta-item-link]')) || all[0];
@@ -100,7 +102,8 @@
         const a = document.activeElement, m = left[location.hash];
         // something is selected, unless it's only the search box Stremio selects by itself, back on a page
         // where you had picked a result
-        if (++tries > 30 || location.hash.startsWith('#/player') ||
+        // (the player needs nothing selected; an empty search page keeps its box, for the keyboard)
+        if (++tries > 30 || location.hash.startsWith('#/player') || location.hash === '#/search' ||
             (a && a !== document.body && a !== old && a.isConnected && !(m && a.tagName === 'INPUT'))) return clearInterval(t);
         const every = [...document.querySelectorAll(FOCUSABLE)], all = every.filter(usable);
         let e = m && every[m.i] && sig(every[m.i]) === m.sig && usable(every[m.i]) ? every[m.i] : m && all.find(x => sig(x) === m.sig);
@@ -125,6 +128,22 @@
     let page = location.hash;  // Stremio opens pages with pushState, which fires no event: watch the address
     setInterval(() => { if (location.hash !== page) { page = location.hash; settle(); } }, 150);
     settle();
+  }
+
+  // In the player, △ turns subtitles on and off and R1 plays the next episode: Couch sends F13 and F14 for
+  // them (apps.json keys), and they become Stremio's own shortcuts, C and Shift+N.
+  if (!window.couchPlayerKeys) {
+    window.couchPlayerKeys = true;
+    const PLAYER = {F13: {key: 'c', code: 'KeyC', keyCode: 67}, F14: {key: 'N', code: 'KeyN', keyCode: 78, shiftKey: true}};
+    addEventListener('keydown', ev => {
+      const k = PLAYER[ev.key];
+      if (!k) return;
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      if (location.hash.startsWith('#/player')) {
+        (document.activeElement || document.body).dispatchEvent(new KeyboardEvent('keydown', {...k, bubbles: true}));
+      }
+    }, true);
   }
 
   // An on-screen keyboard for text boxes (search), PS5-style: ✕ on a text box opens it (an empty search
@@ -169,10 +188,15 @@
       box.focus({preventScroll: true});
     };
     const submit = () => {
-      const b = box;
+      const b = box, q = b.value.trim();
       close();
-      b.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true}));
       b.blur();  // the results get the selection
+      if (location.hash.startsWith('#/search')) {
+        // in place of the search page, not on top of it: one ○ from the results goes back where you came from
+        location.replace('#/search?search=' + encodeURIComponent(q));
+      } else {  // another text box: as Enter would
+        b.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true}));
+      }
     };
     const press = k => {
       if (k === 'space') setValue(box.value + ' ');
