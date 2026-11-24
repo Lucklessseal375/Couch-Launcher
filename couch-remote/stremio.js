@@ -36,7 +36,9 @@
     window.couchNav = true;
     const DIRS = {ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0]};
     // not the invisible file drop zone that covers the page (Enter there opens a file picker)
-    const FOCUSABLE = 'a[href], button, input:not([type=file]), textarea, select, [tabindex]:not([tabindex="-1"])';
+    // nor links out to websites (the IMDb rating, store sources): they open a web browser over the TV
+    const FOCUSABLE = 'a[href]:not([href^="http"]), button, input:not([type=file]), textarea, select, ' +
+      '[tabindex]:not([tabindex="-1"]):not([href^="http"])';
     const LAYER = '[role=dialog], [role=menu], [class*=modal-container], [class*=menu-container]';  // open menus keep the selection in
     const usable = e => {
       const r = e.getBoundingClientRect();
@@ -49,8 +51,9 @@
       const a = document.activeElement && document.activeElement !== document.body ? document.activeElement : null;
       if (a && d[0] && /^(INPUT|TEXTAREA)$/.test(a.tagName)) return;
       const NAV = '[class*=nav-tab-button]';  // the side menu: reached with Left only, never by falling into it
+      const inNav = a && a.matches(NAV);  // up and down in the side menu stay in it
       const all = [...((a && a.closest(LAYER)) || document).querySelectorAll(FOCUSABLE)]
-        .filter(e => e !== a && usable(e) && (d[0] < 0 || !e.matches(NAV) || (a && a.matches(NAV))));
+        .filter(e => e !== a && usable(e) && (inNav ? !d[1] || e.matches(NAV) : d[0] < 0 || !e.matches(NAV)));
       let next;
       if (!a) {  // nothing selected yet: the first title
         next = all.find(e => e.matches('[class*=meta-item-link]')) || all[0];
@@ -66,7 +69,7 @@
         }).filter(w => w.gap >= -4);  // wholly on that side
         // stay in this row or column if anything that way is in it, else the nearest item not far out of line
         // (up from the first row reaches the search bar, which sits well to the side)
-        ways = ways.some(w => w.inline) ? ways.filter(w => w.inline) : ways.filter(w => w.off < (d[0] ? innerHeight / 3 : innerWidth * 0.6));
+        ways = ways.some(w => w.inline) ? ways.filter(w => w.inline) : ways.filter(w => w.off < (d[0] ? innerHeight / 2 : innerWidth * 0.6));
         if (ways.length) {  // the nearest row or column that way, then the item in it most in line
           const band = Math.min(...ways.map(w => w.gap)) + (d[0] ? r.width : r.height) / 2;
           next = ways.filter(w => w.gap <= band).sort((p, q) => p.off - q.off || p.gap - q.gap)[0].e;
@@ -140,8 +143,18 @@
         e.scrollIntoView({block: 'center', inline: 'nearest'});
       }, 100);
     };
-    let page = location.hash;  // Stremio opens pages with pushState, which fires no event: watch the address
-    setInterval(() => { if (location.hash !== page) { page = location.hash; settle(); } }, 150);
+    let page = location.hash, pageAt = 0, keyAt = 0;  // Stremio opens pages with pushState, which fires no event: watch the address
+    addEventListener('keydown', ev => { if (ev.isTrusted) keyAt = performance.now(); }, true);
+    setInterval(() => {
+      if (location.hash !== page) { page = location.hash; pageAt = performance.now(); settle(); }
+      // while a page fills in, before you press anything, the selection stays in view: sources arriving
+      // above Stremio's pick (the one you used last) pushed it off screen
+      const a = document.activeElement, now = performance.now();
+      if (a && a !== document.body && keyAt < pageAt && now - pageAt < 8000) {
+        const r = a.getBoundingClientRect();
+        if (r.height && (r.bottom < 0 || r.top > innerHeight)) a.scrollIntoView({block: 'center', inline: 'nearest'});
+      }
+    }, 150);
     settle();
   }
 
@@ -150,6 +163,12 @@
   // takes it before this.
   if (!window.couchBack) {
     window.couchBack = true;
+    // ✕ never opens a website (a browser would cover the TV, out of the controller's reach), even on a
+    // link Stremio selected itself
+    addEventListener('keydown', ev => {
+      const a = document.activeElement;
+      if (ev.key === 'Enter' && a && a.closest('a[href^="http"]')) { ev.preventDefault(); ev.stopImmediatePropagation(); }
+    }, true);
     addEventListener('keydown', ev => {
       if (ev.key !== 'Backspace' || !ev.isTrusted || document.getElementById('couch-kb')) return;
       const layer = [...document.querySelectorAll('[role=dialog], [class*=modal-container], [class*=menu-layer]')]
@@ -157,7 +176,10 @@
       if (layer) return;
       ev.preventDefault();
       ev.stopImmediatePropagation();
+      const from = location.hash;
       history.back();
+      // nothing to go back to (Stremio can open a side-menu page in place of the last one): the Board
+      setTimeout(() => { if (location.hash === from) location.replace('#/'); }, 400);
     }, true);
   }
 
