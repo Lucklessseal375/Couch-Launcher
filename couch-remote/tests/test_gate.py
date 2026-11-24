@@ -89,7 +89,7 @@ class ChoicesTest(unittest.TestCase):
             server.set_choice("hide", "gta5")
             shown, hidden = server.library()
             self.assertEqual([g["name"] for g in shown], ["B", "A"])
-            self.assertEqual(hidden, ["GTA"])
+            self.assertEqual(hidden, [{"name": "GTA", "key": "gta5"}])
             server.set_choice("unpin", "steam:2")
             server.set_choice("unhide-all")
             self.assertEqual([g["name"] for g in server.library()[0]], ["A", "B", "GTA"])  # never played: last

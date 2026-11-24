@@ -12,7 +12,7 @@ EXE = {EPIC: "epicgameslauncher.exe", SIGNIN: "socialclubhelper.exe", GAME: "gta
 
 
 class CoverStoreLaunchers(unittest.TestCase):
-    def run_launch(self, timeline, titles, is_game=True, foreground=lambda t: COUCH, before=(), fullscreen=False):
+    def run_launch(self, timeline, titles, is_game=True, foreground=lambda t: COUCH, before=(), fullscreen=False, exe=""):
         """timeline: {second: window that appears then}. Returns [(second, window focused)]."""
         clock, shown, focused = [0.0], [], []
 
@@ -22,7 +22,7 @@ class CoverStoreLaunchers(unittest.TestCase):
                 if clock[0] >= at and h not in shown:
                     shown.append(h)
 
-        server.RUNNING.update(name="GTA", windows=[], game_seen=False, is_game=is_game, fullscreen=fullscreen)
+        server.RUNNING.update(name="GTA", windows=[], game_seen=False, is_game=is_game, fullscreen=fullscreen, exe=exe)
         self.filled = []
         with mock.patch.object(server.time, "time", lambda: clock[0]), \
                 mock.patch.object(server.time, "sleep", sleep), \
@@ -87,6 +87,15 @@ class CoverStoreLaunchers(unittest.TestCase):
         self.assertEqual(focused[0][1], STREMIO)
         self.run_launch({1: STREMIO}, lambda h, t: "Stremio", is_game=False)
         self.assertEqual(self.filled, [])  # only apps marked "fullscreen"
+
+    def test_app_already_open_comes_back_full_screen(self):
+        STREMIO = 7  # open before the press; a second launch opens no window
+        EXE[STREMIO] = "stremio-shell-ng.exe"
+        self.addCleanup(EXE.pop, STREMIO)
+        focused = self.run_launch({}, lambda h, t: "Stremio", is_game=False, before=[STREMIO], fullscreen=True,
+                                  exe="stremio-shell-ng.exe")
+        self.assertEqual(focused, [(0, STREMIO)])  # right away, not after waiting for a new window
+        self.assertEqual(self.filled, [STREMIO])
 
     def test_app_tiles_still_focus_their_windows(self):
         focused = self.run_launch({2: EPIC}, lambda h, t: "Epic Games Launcher", is_game=False)

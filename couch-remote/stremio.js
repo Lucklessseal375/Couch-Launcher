@@ -1,6 +1,8 @@
 // Couch runs this in Stremio's page (apps.json "page_script") every half second until it returns true.
 (() => {
   if (!window.core || !document.querySelector('[class*=board-row]')) return false;  // not loaded yet
+  if (window.couchReady) return true;  // already set up (its tile pressed again while it was open)
+  window.couchReady = true;
   // Stremio loads a Board row only once scrolling rests for 0.3 s, so a held d-pad stopped at the last
   // loaded row. Load them all now.
   core.dispatch({action: 'CatalogsWithExtra', args: {action: 'LoadRange', args: {start: 0, end: 1000}}}, 'board');

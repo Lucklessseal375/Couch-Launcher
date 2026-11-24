@@ -212,7 +212,9 @@ def load_choices():
     except (OSError, ValueError):
         d = {}  # none yet, or unreadable: show everything
     return {"hidden": list(d.get("hidden", [])), "pinned": list(d.get("pinned", [])), "audio": d.get("audio"),
-            "played": dict(d.get("played", {})), "took": dict(d.get("took", {}))}
+            "played": dict(d.get("played", {})), "took": dict(d.get("took", {})),
+            "names": dict(d.get("names", {})), "art": dict(d.get("art", {})),  # your own titles and art, by game key
+            "sleep_idle": int(d.get("sleep_idle", 0) or 0), "swap": bool(d.get("swap", False))}
 
 
 def save_choices(c):
@@ -246,6 +248,10 @@ def library():
         g["key"] = game_key(g)
         g["pinned"] = g["key"] in c["pinned"]
         g["took"] = c["took"].get(g["name"])  # seconds its window took to appear last time (the details line says it)
+        if g["key"] in c["names"]:  # your own title: shown in the launcher; "name" stays the real one (Now playing)
+            g["title"] = c["names"][g["key"]]
+        if g["key"] in c["art"]:  # a screenshot you chose as its backdrop
+            g["hero"] = c["art"][g["key"]]
         if "appid" in g:
             g["playtime"] = played.get(g["appid"], 0)
         else:  # Steam keeps its own LastPlayed; other stores' games get the time we launched them
@@ -253,24 +259,33 @@ def library():
     games.sort(key=lambda g: -g["lastPlayed"])  # most recently played first, across stores (stable: names stay sorted)
     shown = [g for g in games if g["key"] not in c["hidden"]]
     shown.sort(key=lambda g: c["pinned"].index(g["key"]) if g["pinned"] else len(c["pinned"]))  # stable: rest keep order
-    return shown, [g["name"] for g in games if g["key"] in c["hidden"]]
+    return shown, [{"name": g.get("title", g["name"]), "key": g["key"]} for g in games if g["key"] in c["hidden"]]
 
 
-def set_choice(action, key=""):
-    """The launcher's □ menu: hide, pin or unpin one game, or show every hidden game again."""
+def set_choice(action, key="", value=""):
+    """The launcher's □ menu: hide, unhide, pin or unpin one game, rename it or give it a screenshot as art
+    (an empty value puts the original back), or show every hidden game again."""
     with CHOICES_LOCK:
         c = load_choices()
         if action == "unhide-all":
             c["hidden"] = []
-        elif action in ("hide", "pin", "unpin"):
+        elif action in ("hide", "unhide", "pin", "unpin", "rename", "art"):
             if key not in {game_key(g) for g in load_games() + steam_games()}:
                 raise KeyError(key)
-            for k in ("hidden", "pinned"):
-                c[k] = [x for x in c[k] if x != key]
-            if action == "hide":
-                c["hidden"].append(key)
-            elif action == "pin":
-                c["pinned"].insert(0, key)
+            if action in ("rename", "art"):
+                value = str(value).strip()[:60]
+                if action == "art" and value and not re.fullmatch(r"/media/[\w .()%-]+\.(png|jpe?g)", value, re.I):
+                    raise ValueError("art must be one of your screenshots")
+                (c["names"] if action == "rename" else c["art"]).pop(key, None)
+                if value:
+                    (c["names"] if action == "rename" else c["art"])[key] = value
+            else:
+                for k in ("hidden", "pinned"):
+                    c[k] = [x for x in c[k] if x != key]
+                if action == "hide":
+                    c["hidden"].append(key)
+                elif action == "pin":
+                    c["pinned"].insert(0, key)
         else:
             raise ValueError(f"unknown action {action!r}")
         save_choices(c)
@@ -310,11 +325,38 @@ STREAM = {"on": False, "device": ""}  # a Moonlight stream through Sunshine, as 
 LAST_DEVICE = ["another screen"]  # the device the last stream went to, for a reconnect Sunshine doesn't announce
 
 
+class _POWER_REASON(ctypes.Structure):
+    _fields_ = [("Version", wintypes.ULONG), ("Flags", wintypes.DWORD), ("Reason", wintypes.LPWSTR)]
+
+
+AWAKE = [None]  # the open power request while a stream runs
+
+
+def keep_awake(on, why=""):
+    """While a stream runs, the PC and its screen stay on: Moonlight's controller arrives as a virtual pad, which
+    Windows' sleep timer doesn't count as input, so a long film could sleep the PC mid-stream. Shows in
+    `powercfg /requests` with the reason."""
+    k = ctypes.windll.kernel32
+    if on and not AWAKE[0]:
+        k.PowerCreateRequest.restype = wintypes.HANDLE
+        h = k.PowerCreateRequest(ctypes.byref(_POWER_REASON(0, 1, why)))  # POWER_REQUEST_CONTEXT_SIMPLE_STRING
+        if h and h != wintypes.HANDLE(-1).value:
+            for t in (0, 1):  # PowerRequestDisplayRequired, PowerRequestSystemRequired
+                k.PowerSetRequest(wintypes.HANDLE(h), t)
+            AWAKE[0] = h
+    elif not on and AWAKE[0]:
+        for t in (0, 1):
+            k.PowerClearRequest(wintypes.HANDLE(AWAKE[0]), t)
+        k.CloseHandle(wintypes.HANDLE(AWAKE[0]))
+        AWAKE[0] = None
+
+
 def set_stream(on, device=""):
     """Sunshine says a stream started or ended. The page shows it, and the audio-keeper stands down meanwhile."""
     STREAM.update(on=bool(on), device=(device.strip() or "another screen")[:40] if on else "")
     if on:
         LAST_DEVICE[0] = STREAM["device"]
+    keep_awake(bool(on), f"Streaming to {STREAM['device']}")
     log.info("stream: %s", f"on ({STREAM['device']})" if on else "off")
     emit("stream:" + (STREAM["device"] if on else "off"))
     return dict(STREAM)
@@ -1206,6 +1248,14 @@ def focus_what_opens(before):
     # store-launcher window -> since when Couch covers it (already-open ones too: Rockstar's comes forward when the
     # game starts); None once Couch stops covering for this launch
     behind = {h: t0 for h in before if keep_behind(window_exe(h), RUNNING.get("is_game"), False)}
+    # its tile pressed while it's already open (Stremio allows one copy, so no new window comes): bring that one back
+    mine = [h for h in before if RUNNING.get("exe") and window_exe(h) == RUNNING["exe"]]
+    if mine:
+        RUNNING["windows"] += mine
+        if RUNNING.get("fullscreen"):
+            borderless_fullscreen(mine[0])
+        focus_window(mine[0])
+        return
     while time.time() - t0 < 180 and RUNNING["name"] == name:  # a newer launch takes over
         time.sleep(0.5)
         if behind:
@@ -1479,6 +1529,7 @@ PAD_STATUS = "pad:none"  # last controller/battery state sent to the launcher; n
 # True once the server reads the controller, False if it can't (then the page uses the Gamepad API).
 # None while it's still starting: the page must not fall back then, or both read the pad (seen at logon).
 PAD_READER = None
+SWAP = [load_choices()["swap"]]  # ✕ and ○ swapped, set in the launcher's Controls menu
 RUMBLES = []  # (when, low, high, ms): haptic pulses waiting for the controller loop
 RUMBLE_LOCK = threading.Lock()
 LIGHT = [None]  # (r, g, b) the launcher wants on the controllers' light bar; the controller loop applies it
@@ -1573,6 +1624,27 @@ def fixed_drives():
             except OSError:
                 pass
     return out
+
+
+def parse_wlan(out):
+    """`netsh wlan show interfaces` -> {"kind": "wifi", "signal": %, "name": ssid} when on Wi-Fi, else wired.
+    shortcut: English field names; on another Windows language it says wired. Match the localized labels if needed."""
+    state = re.search(r"^\s*State\s*:\s*(\w+)", out, re.M)
+    signal = re.search(r"^\s*Signal\s*:\s*(\d+)%", out, re.M)
+    ssid = re.search(r"^\s*SSID\s*:\s*(.+?)\s*$", out, re.M)
+    if state and state.group(1).lower() == "connected" and signal:
+        return {"kind": "wifi", "signal": int(signal.group(1)), "name": ssid.group(1) if ssid else ""}
+    return {"kind": "wired"}
+
+
+def network():
+    """How the PC is connected, for the Streaming menu: Moonlight's picture depends on it."""
+    try:
+        out = subprocess.run(["netsh", "wlan", "show", "interfaces"], capture_output=True, text=True, timeout=5,
+                             creationflags=0x08000000).stdout
+    except (OSError, subprocess.SubprocessError):
+        out = ""
+    return parse_wlan(out)
 
 
 def media_list():
@@ -1791,6 +1863,7 @@ def _controller_loop():
                15: "mic"}  # DualSense mute button (SDL's MISC1)
     held = {}  # direction -> time of next repeat
     stick = {"x": 0, "y": 0}
+    pulled = set()  # L2/R2 held past halfway: one press each pull
     dpad = set()
     log.info("controller support on")
     PAD_READER = True
@@ -1808,6 +1881,9 @@ def _controller_loop():
     added = [0.0]  # when a controller last connected
 
     def act(action):
+        LAST_PAD[0] = time.time()
+        if SWAP[0] and action in ("a", "b"):  # ✕ and ○ swapped (Controls menu): in the launcher and apps alike
+            action = "b" if action == "a" else "a"
         if action == "create":  # anywhere, in games too
             if time.time() - added[0] < 3:  # a streamed (virtual) pad reports Back as it connects: not a press
                 return log.info("ignored Create right after a controller connected")
@@ -1859,6 +1935,13 @@ def _controller_loop():
                     stick["x"] = e.value
                 elif e.axis == B.CONTROLLER_AXIS_LEFTY:
                     stick["y"] = e.value
+                elif e.axis in (B.CONTROLLER_AXIS_TRIGGERLEFT, B.CONTROLLER_AXIS_TRIGGERRIGHT):
+                    t = "l2" if e.axis == B.CONTROLLER_AXIS_TRIGGERLEFT else "r2"
+                    if e.value > 20000 and t not in pulled:
+                        pulled.add(t)
+                        act(t)
+                    elif e.value < 8000:
+                        pulled.discard(t)
         # directions from d-pad or left stick, repeating while held
         now = time.time()
         if now >= next_status:  # battery changes slowly; check every 5 s, tell the page only on change
@@ -2020,6 +2103,42 @@ def power(action):
     threading.Thread(target=later, daemon=True).start()
 
 
+SLEEP = {"at": 0}  # the sleep timer: when to sleep (0: off). The idle rule lives in choices.json ("sleep_idle", minutes)
+LAST_PAD = [time.time()]  # the controller's last press: Windows' own idle time doesn't count controllers
+
+
+class _LASTINPUT(ctypes.Structure):
+    _fields_ = [("cbSize", wintypes.UINT), ("dwTime", wintypes.DWORD)]
+
+
+def idle_seconds():
+    """Seconds since the last keyboard, mouse or controller input."""
+    li = _LASTINPUT(ctypes.sizeof(_LASTINPUT), 0)
+    ctypes.windll.user32.GetLastInputInfo(ctypes.byref(li))
+    since_keys = ((ctypes.windll.kernel32.GetTickCount() - li.dwTime) & 0xFFFFFFFF) / 1000
+    return min(since_keys, time.time() - LAST_PAD[0])
+
+
+def sleep_due(now, idle, idle_rule, streaming, game_running):
+    """The sleep timer ran out, or (idle rule) nobody has touched anything for that long and nothing is playing."""
+    return bool(SLEEP["at"] and now >= SLEEP["at"]) or \
+        bool(idle_rule and idle >= idle_rule * 60 and not streaming and not game_running)
+
+
+def sleep_watch():
+    last = time.time()
+    while True:
+        time.sleep(30)
+        now = time.time()
+        if now - last > 120:  # the PC was asleep: waking it is the newest input (the power button isn't one)
+            LAST_PAD[0] = now
+        last = now
+        if sleep_due(now, idle_seconds(), load_choices().get("sleep_idle", 0), STREAM["on"], bool(running_window())):
+            log.info("sleep: %s", "timer" if SLEEP["at"] and now >= SLEEP["at"] else "idle")
+            SLEEP["at"] = 0
+            power("sleep")
+
+
 # ---------------------------------------------------------------- network helpers
 
 def lan_ips():
@@ -2172,6 +2291,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"drives": fixed_drives()})
             if path == "/api/media":
                 return self.send_json({"shots": media_list()})
+            if path == "/api/network":
+                return self.send_json(network())
             if path == "/api/running":  # cheap: the launcher polls it to keep Now playing current
                 return self.send_json({"running": {"name": RUNNING["name"]} if running_window() else None})
             if path == "/api/info":
@@ -2180,7 +2301,8 @@ class Handler(BaseHTTPRequestHandler):
                 info = {"name": socket.gethostname(), "apps": apps, "games": games, "hidden": hidden,
                         "padReader": PAD_READER, "intro": bool(intro_file()), "sounds": sound_clips(),
                         "stream": STREAM["device"] if STREAM["on"] else None, "sunshine": sunshine_status(),
-                        "sunshineLogin": SUNSHINE_CRED.exists()}
+                        "sunshineLogin": SUNSHINE_CRED.exists(), "sleepAt": int(SLEEP["at"]),
+                        "sleepIdle": load_choices()["sleep_idle"], "swap": SWAP[0]}
                 try:
                     info["audio"] = audio_state()["current"]
                 except Exception:  # noqa: BLE001  (optional extra: never lose the library over it)
@@ -2249,8 +2371,10 @@ class Handler(BaseHTTPRequestHandler):
                 before = visible_windows()
                 name = launch_game(b["game"]) if "game" in b else launch_app(str(b.get("id")))
                 is_game = "game" in b or any(g.get("id") == b.get("id") for g in load_games())
-                fullscreen = any(a.get("id") == b.get("id") and a.get("fullscreen") for a in load_apps()[0])
-                RUNNING.update(name=name, windows=[], game_seen=False, is_game=is_game, fullscreen=fullscreen)
+                app = next((a for a in load_apps()[0] if a.get("id") == b.get("id")), {})
+                fullscreen = bool(app.get("fullscreen"))
+                exe = Path(os.path.expandvars(app["target"])).name.lower() if app.get("kind") == "exe" else ""
+                RUNNING.update(name=name, windows=[], game_seen=False, is_game=is_game, fullscreen=fullscreen, exe=exe)
                 rumble("launch")
                 threading.Thread(target=focus_what_opens, args=(before,), daemon=True).start()
                 WATCHER.arm()
@@ -2269,9 +2393,23 @@ class Handler(BaseHTTPRequestHandler):
                 mouse_scroll(max(-1200, min(1200, float(b.get("dy", 0)))))
             elif path == "/api/power":
                 log.info("power %s asked by %s (%s)", b.get("action"), self.client_address[0], self.headers.get("User-Agent"))
-                power(str(b.get("action")))
+                a = str(b.get("action"))
+                if a == "timer":  # {"minutes": n}: sleep in n minutes, 0 cancels
+                    SLEEP["at"] = time.time() + 60 * max(0, min(600, int(b.get("minutes", 0)))) if b.get("minutes") else 0
+                elif a == "idle":  # {"minutes": n}: sleep after n minutes untouched with nothing playing, 0 off
+                    with CHOICES_LOCK:
+                        c = load_choices()
+                        c["sleep_idle"] = max(0, min(600, int(b.get("minutes", 0))))
+                        save_choices(c)
+                else:
+                    power(a)
             elif path == "/api/games":
-                set_choice(str(b.get("action")), str(b.get("key", "")))
+                set_choice(str(b.get("action")), str(b.get("key", "")), str(b.get("value", "")))
+            elif path == "/api/settings":  # {"swap": bool}: ✕ and ○ swapped
+                with CHOICES_LOCK:
+                    c = load_choices()
+                    c["swap"] = SWAP[0] = bool(b.get("swap"))
+                    save_choices(c)
             elif path == "/api/audio":
                 return self.send_json({"ok": True, "name": set_audio(str(b.get("id", "")))})
             elif path == "/api/stream" and kind == "local":  # from stream.cmd: {"on": bool, "device": "Apple TV"}
@@ -2369,6 +2507,7 @@ def main():
     srv = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     WATCHER.start()
     threading.Thread(target=controller_loop, daemon=True).start()
+    threading.Thread(target=sleep_watch, daemon=True).start()
     threading.Thread(target=keep_audio, daemon=True).start()
     threading.Thread(target=watch_sunshine, daemon=True).start()
     log.info("listening on port %s; LAN: %s", port, lan_ips())

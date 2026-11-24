@@ -69,8 +69,8 @@
   .status { display: flex; align-items: center; gap: 2.6vw; text-shadow: 0 .2vh 1.2vh rgba(0,0,0,.85); }
   .time { text-align: right; }
   #clock { font: 650 4.2vh/1 var(--ui); font-variant-numeric: tabular-nums; }
-  #date { color: var(--dim); font-size: 2.1vh; margin-top: .7vh; }
-  #pad { display: flex; align-items: center; gap: 1vh; color: var(--dim); font-size: 2.1vh; }
+  #date { color: var(--dim); font-size: 2.3vh; margin-top: .7vh; }  /* 2.3vh: Apple's 23 pt floor on a TV, plus a little */
+  #pad { display: flex; align-items: center; gap: 1vh; color: var(--dim); font-size: 2.3vh; }
   #pad svg { width: 5.2vh; height: 2.8vh; color: var(--ink); }
   #pad.low, #pad.low svg { color: var(--ps-circle); }
   /* weather, after iOS's widget: icon, temperature, then the day in one quiet line */
@@ -78,7 +78,7 @@
   #weather[hidden] { display: none; }
   #weather svg { width: 4.6vh; height: 4.6vh; color: var(--gold); flex: none; }
   #weather b { display: block; font: 650 3.4vh/1 var(--ui); font-variant-numeric: tabular-nums; }
-  #weather small { display: block; margin-top: .6vh; font-size: 2.15vh; color: var(--dim); white-space: nowrap; }
+  #weather small { display: block; margin-top: .6vh; font-size: 2.3vh; color: var(--dim); white-space: nowrap; }
   /* while Sunshine streams this screen to another TV (stream.cmd tells the server) */
   #stream { padding: .9vh 1.8vh; border-radius: 1vh; background: var(--bib); color: #fff; font: 700 2.15vh/1 var(--ui); white-space: nowrap;
             box-shadow: 0 .6vh 1.6vh rgba(0,0,0,.4); }
@@ -197,6 +197,12 @@
                   background: linear-gradient(transparent, rgba(21,15,11,.94)); border-radius: 0 0 1.4vh 1.4vh; }
   .poster.loaded .name { display: none; }  /* the name shows until the art arrives, or if there is none */
   .poster.noart .art { display: none; }
+  /* a game with no cover, and Surprise me: the steel ball on the race's dusk, not a blank card */
+  .poster.noart, .poster.surprise { background: radial-gradient(circle at 50% 36%, rgba(242,184,68,.3), transparent 50%),
+    url(/steelball.png) 50% 34% / 42% no-repeat, linear-gradient(165deg, #3a2716, #120d09 70%); }
+  .poster.surprise .name { display: block; text-align: center; }
+  .poster .running { position: absolute; top: 1.2vh; left: 1.2vh; padding: .4vh 1vh; border-radius: 99vh; z-index: 1;
+                     font: 700 2.2vh/1.2 var(--ui); color: #120d09; background: var(--gold); box-shadow: 0 .3vh 1vh #0008; }
 
   .sys { width: 15vh; height: 15vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.4vh;
          font: 700 2.1vh/1.1 var(--ui); text-align: center; background: var(--glass); backdrop-filter: blur(18px) saturate(1.2); }
@@ -372,6 +378,7 @@
     <!-- interface icons -->
     <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20.5 20.5l-4.6-4.6"/></symbol>
     <symbol id="i-del" viewBox="0 0 24 24"><path d="M21 5H8l-6 7 6 7h13a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1z"/><path d="M17 9l-6 6M11 9l6 6"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/></symbol>
     <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 16v6M8 3h8l-1.5 6 3.5 3.5V16H6v-3.5L9.5 9z"/></symbol>
     <symbol id="i-speaker" viewBox="0 0 24 24"><rect x="5" y="2.5" width="14" height="19" rx="2.5"/><circle cx="12" cy="14.5" r="3.5"/><path d="M12 7h.01"/></symbol>
     <symbol id="i-tv" viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
@@ -801,13 +808,29 @@ function wake() {
   document.body.classList.remove("calm");
   if (!document.body.classList.contains("idle")) return false;
   document.body.classList.remove("idle");
+  // woken on one of your games: it's selected (this press only wakes; the next plays it)
+  const r = idleGame && !modal ? rows.findIndex(row => row.some(t => t.game?.key === idleGame)) : -1;
+  if (r >= 0) focus(r, rows[r].findIndex(t => t.game?.key === idleGame));
+  idleGame = null;
   return true;
 }
-let idleN = 0;
+let idleN = 0, idleGame = null, idleShots = [];
+// the screensaver's slides: the show's art, your recent games' art (waking it selects the game shown) and your
+// newest screenshots, in turn
+function idleSlides() {
+  const games = (info?.games || []).filter(g => g.hero || g.appid).slice(0, 4)
+    .map(g => ({ url: g.hero || `/art/${g.appid}/hero`, game: g.key, label: g.title || g.name }));
+  const shots = idleShots.slice(0, 4).map(s => ({ url: "/media/" + encodeURIComponent(s.name) }));
+  const out = [], n = Math.max(IDLE_ART.length, games.length, shots.length);
+  for (let i = 0; i < n; i++) for (const list of [IDLE_ART.map(url => ({ url })), games, shots]) if (list[i]) out.push(list[i]);
+  return out;
+}
 function placeIdleClock() {
   const a = $("#idle-art"), c = $("#idle-clock");
   a.classList.remove("on");
-  setTimeout(() => { a.style.backgroundImage = `url("${IDLE_ART[idleN++ % IDLE_ART.length]}")`; a.classList.add("on"); }, 1200);
+  const slides = idleSlides(), s = slides[idleN++ % slides.length];
+  setTimeout(() => { a.style.backgroundImage = `url("${s.url}")`; a.classList.add("on"); idleGame = s.game || null; tick();
+    if (s.label) c.append(Object.assign(document.createElement("small"), { textContent: s.label })); }, 1200);
   const b = $("#idle-ball"); b.classList.remove("roll");
   if (Math.random() < .25) { void b.offsetWidth; b.classList.add("roll"); }
   c.style.left = 5 + Math.random() * 75 + "vw"; c.style.top = 5 + Math.random() * 80 + "vh";
@@ -815,6 +838,7 @@ function placeIdleClock() {
 setInterval(() => {
   if (document.body.classList.contains("idle")) placeIdleClock();
   else if (!modal && Date.now() - lastInput > IDLE_MS) {
+    api("/api/media").then(r => { idleShots = r.shots || []; }).catch(() => {});  // your newest screenshots join in
     placeIdleClock(); document.body.classList.add("idle");
     api("/api/padoff", { idle: true }).catch(() => {});  // like a PS5: save the wireless controller's battery
   }
@@ -978,11 +1002,12 @@ function showDetails(e) {
 // ---------- context-aware prompt bar (PS5 style)
 let promptsWere = "";
 function setPrompts(items) {
-  const key = JSON.stringify(items) + Sound.on + Out.where;
+  const key = JSON.stringify(items) + Sound.on + Out.where + info?.swap;
   if (key === promptsWere) return;  // unchanged: leave it still, so only real changes move
   const fresh = promptsWere !== "";
   promptsWere = key;
-  $("#prompts").innerHTML = items.map(([g, label]) => `<span class="p${fresh ? " new" : ""}">${[].concat(g).map(x => GLYPH[x]).join("")}<span>${esc(label)}</span></span>`).join("")
+  const swap = x => info?.swap ? { cross: "circle", circle: "cross" }[x] || x : x;  // ✕ and ○ swapped (Controls)
+  $("#prompts").innerHTML = items.map(([g, label]) => `<span class="p${fresh ? " new" : ""}">${[].concat(g).map(x => GLYPH[swap(x)]).join("")}<span>${esc(label)}</span></span>`).join("")
     + `<span class="p sound">${icon(Sound.on ? "sound" : "mute")}<span>${Sound.on ? `Menu sounds on the ${Out.where}` : "Menu sounds off"}</span></span>`;
 }
 function updatePrompts() {
@@ -1007,10 +1032,15 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;",
 const streamStatus = () => !info.sunshine ? "Play on another TV with Sunshine and Moonlight"
   : info.sunshine !== "running" ? "Sunshine isn't running. Restart the PC to start it"
   : info.stream ? `Streaming to ${info.stream}` : "Ready: open Moonlight on the other TV and pick Couch";
-function streamMenu() {
+async function streamMenu() {
   if (!info.sunshine) return choose("Streaming", "Install Sunshine on this PC and Moonlight on the other TV first. The steps are in docs/streaming-setup.md.", [{ label: "Done" }]);
   const signedIn = info.sunshineLogin && info.sunshine === "running";
-  choose("Streaming", streamStatus(), [
+  // the stream's picture depends on the connection: say which, and how strong Wi-Fi is
+  const net = await api("/api/network").catch(() => null);
+  const netLine = !net ? "" : net.kind === "wired" ? " This PC is on a wired connection, the best for streaming."
+    : ` This PC is on Wi-Fi${net.name ? ` (${net.name})` : ""} at ${net.signal}% signal${net.signal < 70 ? ": a cable would give a steadier picture" : ""}.`;
+  if (modal) return;  // something else opened while it checked
+  choose("Streaming", streamStatus() + "." + netLine, [
     ...(info.sunshine === "stopped" ? [{ label: "Restart the PC", icon: "restart", sub: "Sunshine was quit; it starts again with Windows",
       fn: () => confirmPower("restart", "Restart", "Restart the PC now to start Sunshine again? Unsaved work in other apps will be lost.") }] : []),
     ...(!info.sunshineLogin ? [{ label: "Connect to Sunshine", icon: "pad", sub: "Once, with the controller: then pairing and restarting work from here", fn: connectSunshine }] : []),
@@ -1085,7 +1115,7 @@ function pcItems() {
     { icon: "phone", label: "Phone remote", meta: "Scan a code to control the PC from your phone", cta: "Show code", fn: showPhone },
     { icon: deviceIcon(info.audio?.name || ""), label: "Audio output", meta: info.audio ? `Playing on ${deviceName(info.audio.name)[0]}` : "Choose where games and videos play", cta: "Change", fn: pickAudio },
     { icon: Sound.on ? "sound" : "mute", label: "Sound", meta: Sound.on ? `Effects on, playing on the ${Out.where}` : "Effects off", cta: "Settings", fn: () => soundSettings() },
-    ...(info.hidden?.length ? [{ icon: "eye", label: "Hidden games", meta: info.hidden.join(", "), cta: "Show all", fn: () => setChoice("unhide-all") }] : []),
+    ...(info.hidden?.length ? [{ icon: "eye", label: "Hidden games", meta: info.hidden.map(h => h.name).join(", "), cta: "Choose", fn: hiddenMenu }] : []),
     { icon: "pad", label: "Turn off controller", meta: "Press the PS button to turn it back on", cta: "Turn off", fn: padOff, live: "pads" },
     { icon: "power", label: "Power", meta: "Sleep, restart or shut down the PC", cta: "Choose", fn: powerMenu },
     { icon: "sound", label: "Volume", meta: "PC volume and the microphone", cta: "Open", fn: () => volumeMenu() },
@@ -1141,7 +1171,8 @@ function build() {
   const games = $("#games"); games.innerHTML = "";
   if (!info.games.length) games.append(el("div", "empty", info.hidden?.length ? "All your games are hidden. Show them again from the PC row." : "No Steam games installed."));
   for (const g of info.games) {
-    const t = el("div", "item poster", `<img class="art" alt="" loading="lazy"><div class="name">${esc(g.name)}</div>${badge()}`);
+    const t = el("div", "item poster", `<img class="art" alt="" loading="lazy"><div class="name">${esc(g.title || g.name)}</div>${badge()}`);
+    if (info.running?.name === g.name) t.append(el("span", "running", "Running"));
     const img = t.querySelector(".art");
     img.onload = () => t.classList.add("loaded");
     img.onerror = () => {
@@ -1149,12 +1180,23 @@ function build() {
       else t.classList.add("noart");
     };
     img.src = g.art || `/art/${g.appid}`;
-    t.dataset.title = g.name;
+    t.dataset.title = g.title || g.name;
     t.dataset.meta = g.update || [g.meta, ago(g.lastPlayed), playtime(g.playtime), g.took && `Starts in about ${g.took} s`].filter(Boolean).join(" · ");
     t.dataset.hero = g.hero || `/art/${g.appid}/hero`;
     t.dataset.cta = g.update ? "Open Steam" : "Play";  // mid-update, Steam opens its download page, not the game
     t.game = g;  // for □ Details
-    t.onactivate = () => launch(g.id ? { id: g.id } : { game: g.appid }, g.name, artColor(img));
+    t.onactivate = () => launch(g.id ? { id: g.id } : { game: g.appid }, g.title || g.name, artColor(img));
+    games.append(t);
+  }
+  if (info.games.length > 2) {  // a random pick from your library: the selection jumps to it, ✕ there plays
+    const t = el("div", "item poster surprise", `<div class="name">Surprise me</div>${badge()}`);
+    t.dataset.title = "Surprise me"; t.dataset.meta = "Picks a game from your library"; t.dataset.cta = "Pick one";
+    t.onactivate = () => {
+      const r = pos.r, pool = rows[r].filter(e => e.game && e.game.name !== info.running?.name);
+      const pick = pool[Math.floor(Math.random() * pool.length)];
+      if (!pick) return Sound.bump();
+      focus(r, rows[r].indexOf(pick)); Sound.tab(); toast(`How about ${pick.dataset.title}?`);
+    };
     games.append(t);
   }
   clearTimeout(updateTimer);
@@ -1252,6 +1294,14 @@ function category(step) {
   const r = pos.r + step;
   if (r < 0 || r >= rows.length) return Sound.bump();
   focus(r, lastCol[r] ?? 0); Sound.tab();
+}
+// L2/R2: five tiles at a time along a row (a long games row in a couple of pulls)
+function page(step) {
+  if (modal) return Sound.bump();
+  if (!chosen) { focus(pos.r, 0); return Sound.move(); }
+  const c = Math.max(0, Math.min(rows[pos.r].length - 1, pos.c + 5 * step));
+  if (c === pos.c) return Sound.bump();
+  focus(pos.r, c); Sound.tab();
 }
 function pressFx() {  // a quick press look on whatever is focused
   const e = document.querySelector(".item.focus, .card .choice.focus, .key.focus");
@@ -1449,16 +1499,32 @@ function gameDetails() {
   const lines = [ago(g.lastPlayed), g.took && `Starts in about ${g.took} seconds`, g.playtime ? playtime(g.playtime).replace(" in total", " played") : "",
                  [g.size && `${gb(g.size)} on disk`, g.free && `${gb(g.free)} free`].filter(Boolean).join(", "),
                  g.appid ? "Steam" : g.meta || ""].filter(Boolean);
-  choose(g.name, "", [
+  const own = g.title || (g.hero || "").startsWith("/media/");
+  choose(g.title || g.name, "", [
     { label: "Play", icon: "resume", fn: () => t.onactivate() },
     { label: g.pinned ? "Unpin" : "Pin to front", icon: "pin", fn: () => setChoice(g.pinned ? "unpin" : "pin", g) },
+    { label: "Rename", icon: "edit", sub: "Your own name for it, here only", fn: async () => {
+      const name = await promptText(`Rename ${g.title || g.name}`);
+      if (name != null && name.trim()) setChoice("rename", g, name.trim());
+    } },
+    { label: "Choose art", icon: "image", sub: "One of your screenshots as its backdrop", fn: () => mediaGallery(shot => setChoice("art", g, "/media/" + shot.name)) },
+    ...(own ? [{ label: "Original name and art", icon: "restart", fn: () => setChoice("rename", g, "").then(() => setChoice("art", g, "")) }] : []),
     { label: "Hide", icon: "eye", fn: () => setChoice("hide", g) },
-  ], { art: t.classList.contains("loaded") ? t.querySelector(".art").src : "", lines });
+  ], { art: t.classList.contains("loaded") ? t.querySelector(".art").src : "", lines, vertical: true });  // six choices: a list fits, a row ran off the card
 }
-async function setChoice(action, g) {
-  const r = await api("/api/games", { action, key: g?.key }).catch(() => null);
+function hiddenMenu() {  // the PC row's Hidden games: bring one back, or all
+  choose("Hidden games", "", [
+    ...info.hidden.map(h => ({ label: h.name, sub: "Show it again", icon: "eye", fn: () => setChoice("unhide", h) })),
+    ...(info.hidden.length > 1 ? [{ label: "Show all", icon: "check", fn: () => setChoice("unhide-all") }] : []),
+  ], { vertical: true });
+}
+async function setChoice(action, g, value) {
+  const r = await api("/api/games", { action, key: g?.key, value }).catch(() => null);
   if (!r?.ok) return toast(r?.error || "Couch server isn't responding");
-  toast({ pin: `${g?.name} pinned`, unpin: `${g?.name} unpinned`, hide: `${g?.name} hidden. Show it again from the PC row.`, "unhide-all": "Hidden games are back" }[action]);
+  const name = g?.title || g?.name;
+  const said = ({ pin: `${name} pinned`, unpin: `${name} unpinned`, hide: `${name} hidden. Show it again from the PC row.`, unhide: `${name} is back`,
+          rename: value ? `Renamed to ${value}` : "Original name and art", art: value ? "Art changed" : "", "unhide-all": "Hidden games are back" })[action];
+  if (said) toast(said);
   await refresh();
   if (g) {  // follow a pinned or unpinned game to its new place
     const i = rows[pos.r].findIndex(t => t.game?.key === g.key);
@@ -1470,13 +1536,34 @@ async function setChoice(action, g) {
 }
 
 // Options button: the quick menu (everything in the PC row, from anywhere)
+function sleepTimerText() {
+  if (info.sleepAt) return `Sleeps at ${new Date(info.sleepAt * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+  return info.sleepIdle ? `Sleeps after ${info.sleepIdle / 60} hour${info.sleepIdle > 60 ? "s" : ""} untouched` : "Off";
+}
+function sleepTimer() {  // a TV's sleep timer, and an idle rule (nothing playing, nothing pressed) that waits out films and streams
+  const set = async (action, minutes, said) => {
+    await api("/api/power", { action, minutes }).catch(() => null);
+    await api("/api/power", { action: action === "timer" ? "idle" : "timer", minutes: 0 }).catch(() => null);  // one rule at a time
+    toast(said); await refresh();
+  };
+  choose("Sleep timer", `Now: ${sleepTimerText()}.`, [
+    ...[30, 60, 120].map(m => ({ label: m < 60 ? `In ${m} minutes` : `In ${m / 60} hour${m > 60 ? "s" : ""}`, icon: "moon",
+      fn: () => set("timer", m, `The PC sleeps in ${m < 60 ? m + " minutes" : m / 60 + (m > 60 ? " hours" : " hour")}`) })),
+    { label: "When nothing happens for 1 hour", icon: "moon", sub: "Not while a game is open or the Apple TV is streaming",
+      fn: () => set("idle", 60, "The PC sleeps after an hour untouched") },
+    { label: "Off", icon: "close", fn: () => set("idle", 0, "Sleep timer off") },
+  ], { vertical: true });
+}
 function powerMenu() {
-  choose("Power", "", [
+  // a game still open: say so before anything closes it (sleep only pauses it)
+  const game = info.running?.name, lost = game ? `${game} is still running and closes without saving.` : "Unsaved work in other apps will be lost.";
+  choose("Power", game ? `${game} is still running. Sleep keeps it where you are; restart and shut down close it.` : "", [
     { icon: "moon", label: "Sleep", sub: "Wake it with the PC's power button", fn: sleepNow },  // waking undoes it, so no dialog
+    { icon: "moon", label: "Sleep timer", sub: sleepTimerText(), fn: sleepTimer },
     { icon: "restart", label: "Restart", sub: "Closes all apps and restarts the PC", cls: "danger",
-      fn: () => confirmPower("restart", "Restart", "Restart the PC now? Unsaved work in other apps will be lost.") },
+      fn: () => confirmPower("restart", "Restart", `Restart the PC now? ${lost}`) },
     { icon: "power", label: "Shut down", sub: "Closes all apps and turns the PC off", cls: "danger",
-      fn: () => confirmPower("shutdown", "Shut down", "Shut down the PC now? Unsaved work in other apps will be lost.") },
+      fn: () => confirmPower("shutdown", "Shut down", `Shut down the PC now? ${lost}`) },
   ], { vertical: true, sound: "menu" });
 }
 // ---------- task manager: what's running on the PC, processor and memory use, and closing apps
@@ -1571,7 +1658,7 @@ async function storageMenu() {
 }
 
 // ---------- media gallery: screenshots from the Create button (Windows' Screenshots folder), one at a time
-async function mediaGallery() {
+async function mediaGallery(onPick) {  // onPick(shot): choosing a screenshot (a game's art) rather than browsing
   let r;
   try { r = await api("/api/media"); } catch { return toast("Couch isn't responding. Try again in a moment; if it keeps happening, restart the PC."); }
   if (!r.shots?.length) return choose("Media gallery", "No screenshots yet. Press Create on the controller, in a game or here, to take one.", [{ label: "Done" }]);
@@ -1589,7 +1676,8 @@ async function mediaGallery() {
   };
   show();
   openModal(g, [], () => closeModal(g));
-  modal.prompts = [["circle", "Back"]];
+  modal.prompts = onPick ? [["cross", "Use as art"], ["circle", "Cancel"]] : [["circle", "Back"]];
+  if (onPick) modal.activate = () => { Sound.select(); closeModal(g); onPick(shots[i]); };
   modal.move = dir => {
     const n = i + ({ left: -1, right: 1 }[dir] || 0);
     if (n === i || n < 0 || n >= shots.length) return Sound.bump();
@@ -1598,12 +1686,21 @@ async function mediaGallery() {
   updatePrompts();
 }
 function showControls() {
-  choose("Controls", "", [{ label: "Done" }], { lines: [
-    "Cross plays or opens what's selected",
-    "Circle goes back",
+  const [ok, no] = info.swap ? ["Circle", "Cross"] : ["Cross", "Circle"];
+  choose("Controls", "", [
+    { label: "Done" },
+    { label: info.swap ? "Use Cross to select again" : "Swap Cross and Circle", fn: async () => {
+      const r = await api("/api/settings", { swap: !info.swap }).catch(() => null);
+      if (!r?.ok) return toast("Couch isn't responding. Try again in a moment.");
+      info.swap = !info.swap; updatePrompts();
+      toast(info.swap ? "Circle selects and Cross goes back now" : "Cross selects and Circle goes back");
+    } },
+  ], { lines: [
+    `${ok} plays or opens what's selected`,
+    `${no} goes back`,
     "Triangle searches your games and apps",
     "Square shows a game's details",
-    "L1 and R1 jump between rows",
+    "L1 and R1 jump between rows; L2 and R2 skip along one",
     "Options opens the menu",
     "Create takes a screenshot, in a game too",
     "The mute button mutes the PC's microphone",
@@ -1815,6 +1912,7 @@ function onPad(a) {
   else if (a === "b") back();
   else if ((a === "l1" || a === "r1") && modal?.layer) modal.layer(a === "l1" ? -1 : 1);  // a text prompt's letters/symbols
   else if (a === "l1" || a === "r1") { comboPress(a); category(a === "l1" ? -1 : 1); }
+  else if (a === "l2" || a === "r2") page(a === "l2" ? -1 : 1);
   else if (a === "x") { if (modal?.del) modal.del(); else gameDetails(); }
   else if (a === "y") { if (modal) back(); else { Sound.select(); openSearch(); } }
   else if (a === "options") { if (modal) back(); else quickMenu(); }
