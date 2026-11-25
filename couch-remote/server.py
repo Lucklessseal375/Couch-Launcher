@@ -27,6 +27,7 @@ from urllib.parse import unquote, urlparse
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # audio.py and padspeaker.py sit next to this file
 import apps_added  # noqa: E402
 import audio  # noqa: E402
+import display  # noqa: E402
 import padspeaker  # noqa: E402
 import update  # noqa: E402
 
@@ -115,6 +116,63 @@ def load_apps():
     data = read_apps_file()
     apps = data.get("apps", []) + load_choices()["added"]  # yours live in choices.json: updates replace apps.json
     return [a for a in apps if installed(a)], set(int(x) for x in data.get("hide_steam_apps", []))
+
+
+# ---------------------------------------------------------------- per-game display modes (□ → Display mode)
+DISPLAY_TRY = [None]  # the 15 s timer of a mode being tried from the menu
+
+
+def valid_mode(mode):
+    m = tuple(int(x) for x in mode)
+    if len(m) != 3 or m not in display.modes():
+        raise ValueError("The TV doesn't offer that mode")
+    return m
+
+
+def try_mode(mode):
+    """Shows a mode now; it undoes itself in 15 s unless kept, so a mode the TV can't show never strands you."""
+    m = valid_mode(mode)
+    if DISPLAY_TRY[0]:
+        DISPLAY_TRY[0].cancel()
+    if not display.apply(*m):
+        raise ValueError("The TV didn't take that mode")
+    DISPLAY_TRY[0] = threading.Timer(15, undo_mode)
+    DISPLAY_TRY[0].start()
+    log.info("trying display mode %s", display.label(*m))
+
+
+def undo_mode():
+    if DISPLAY_TRY[0]:
+        DISPLAY_TRY[0].cancel()
+        DISPLAY_TRY[0] = None
+    display.restore()
+
+
+def set_game_mode(key, mode=None):
+    """Keeps a tried mode for a game (Couch goes back to the desktop's now; the game gets it at launch), or clears it."""
+    undo_mode()
+    with CHOICES_LOCK:
+        c = load_choices()
+        if mode:
+            c["display"][key] = list(valid_mode(mode))
+        else:
+            c["display"].pop(key, None)
+        save_choices(c)
+    log.info("display mode for %s: %s", key, display.label(*mode) if mode else "the desktop's")
+
+
+def game_mode_watch(started):
+    """While a game launched with its own mode runs, keep it; once its window has gone (or none came within
+    2 minutes), back to the desktop's mode."""
+    seen = False
+    while time.time() - started < 12 * 3600:
+        time.sleep(2)
+        if running_window():
+            seen = True
+        elif seen or time.time() - started > 120:
+            break
+    display.restore()
+    log.info("game closed: display back to the desktop's mode")
 
 
 def shown_apps():
@@ -293,7 +351,8 @@ def load_choices():
             "sleep_idle": int(d.get("sleep_idle", 0) or 0), "swap": bool(d.get("swap", False)),
             "added": [a for a in d.get("added", []) if isinstance(a, dict)],  # app tiles added from the launcher
             "app_order": [str(x) for x in d.get("app_order", [])],  # the Apps row as you arranged it (□ → Move)
-            "hidden_apps": [str(x) for x in d.get("hidden_apps", [])]}
+            "hidden_apps": [str(x) for x in d.get("hidden_apps", [])],
+            "display": {k: v for k, v in dict(d.get("display", {})).items() if isinstance(v, list) and len(v) == 3}}  # per-game mode
 
 
 def save_choices(c):
@@ -2532,6 +2591,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"shots": media_list()})
             if path == "/api/network":
                 return self.send_json(network())
+            if path == "/api/display" and kind == "local":  # □ → Display mode: what the TV offers, and each game's
+                return self.send_json({"now": list(display.current()), "saved": load_choices()["display"],
+                                       "modes": [{"mode": list(m), "label": display.label(*m)}
+                                                 for m in display.choices(display.modes(), display.current())]})
             if path == "/api/diagnostics" and kind == "local":  # About Couch on the TV
                 return self.send_json({"lines": diagnostics()})
             if path == "/api/startapps":  # the Add app tile's list of programs
@@ -2615,8 +2678,12 @@ class Handler(BaseHTTPRequestHandler):
                 if time.time() - STARTED < 10:  # nobody picks a game this fast: a stray request, refuse it
                     return self.send_json({"error": "Couch is still starting. Try again in a few seconds."}, 409)
                 before = visible_windows()
-                name = launch_game(b["game"]) if "game" in b else launch_app(str(b.get("id")))
                 is_game = "game" in b or any(g.get("id") == b.get("id") for g in load_games())
+                mode = is_game and load_choices()["display"].get(f"steam:{int(b['game'])}" if "game" in b else str(b.get("id")))
+                if mode and display.current() != tuple(mode) and display.apply(*mode):  # the game's own mode, before it opens
+                    log.info("display mode for this game: %s", display.label(*mode))
+                    threading.Thread(target=game_mode_watch, args=(time.time(),), daemon=True).start()
+                name = launch_game(b["game"]) if "game" in b else launch_app(str(b.get("id")))
                 app = next((a for a in load_apps()[0] if a.get("id") == b.get("id")), {})
                 fullscreen = bool(app.get("fullscreen"))
                 exe = Path(os.path.expandvars(app["target"])).name.lower() if app.get("kind") == "exe" else ""
@@ -2649,6 +2716,18 @@ class Handler(BaseHTTPRequestHandler):
                         save_choices(c)
                 else:
                     power(a)
+            elif path == "/api/display" and kind == "local":  # {"action": "try"|"keep"|"undo"|"clear", "mode", "key"}
+                a = b.get("action")
+                if a == "try":
+                    try_mode(b.get("mode") or [])
+                elif a == "keep":
+                    set_game_mode(str(b.get("key", "")), b.get("mode") or [])
+                elif a == "clear":
+                    set_game_mode(str(b.get("key", "")))
+                elif a == "undo":
+                    undo_mode()
+                else:
+                    raise ValueError("unknown action")
             elif path == "/api/diagnostics" and kind == "local":  # Copy for support: the same text the TV shows
                 subprocess.run(["clip.exe"], input="\n".join(diagnostics()).encode("utf-16-le"), timeout=10,
                                creationflags=0x08000000)
@@ -2762,6 +2841,7 @@ def main():
             urllib.request.urlopen(req, timeout=10).read()
         print("Already running.")
         return
+    display.restore()  # a game's mode left behind by a crash or restart mid-game: back to the desktop's
     if update.check(ROOT.parent):  # at sign-in, before anything starts
         restart_couch()
     srv = ThreadingHTTPServer(("0.0.0.0", port), Handler)

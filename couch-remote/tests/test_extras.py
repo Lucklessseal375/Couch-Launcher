@@ -150,3 +150,53 @@ class Diagnostics(unittest.TestCase):
             text = "\n".join(server.diagnostics())
         for part in ("Couch ", "Last update check:", "Streaming: Sunshine running", "Apps: 1, games: 0", "Recent problems:"):
             self.assertIn(part, text)
+
+
+class DisplayModes(unittest.TestCase):
+    def test_menu_offers_main_sizes_and_faster_refresh(self):
+        import display
+        all_modes = [(3840, 2160, 120), (3840, 2160, 60), (3840, 2160, 30), (2560, 1440, 144), (1920, 1080, 60),
+                     (1920, 1080, 120), (1600, 900, 60)]
+        self.assertEqual(display.choices(all_modes, (3840, 2160, 60)),
+                         [(3840, 2160, 60), (3840, 2160, 120), (2560, 1440, 144), (1920, 1080, 120)])
+
+    def test_only_modes_the_tv_offers(self):
+        with mock.patch.object(server.display, "modes", return_value=[(1920, 1080, 60)]):
+            self.assertEqual(server.valid_mode(["1920", 1080, 60]), (1920, 1080, 60))
+            with self.assertRaises(ValueError):
+                server.valid_mode([7680, 4320, 60])
+
+    def test_tried_mode_undoes_itself(self):
+        with mock.patch.object(server.display, "modes", return_value=[(1920, 1080, 60)]), \
+                mock.patch.object(server.display, "apply", return_value=True), \
+                mock.patch.object(server.display, "restore") as restore, \
+                mock.patch.object(server.threading, "Timer") as timer:
+            server.try_mode([1920, 1080, 60])
+            self.assertEqual(timer.call_args[0], (15, server.undo_mode))
+            server.undo_mode()
+        restore.assert_called_once()
+
+    def test_kept_mode_is_saved_per_game_and_cleared(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(server, "CHOICES_FILE", Path(d) / "c.json"), \
+                mock.patch.object(server.display, "modes", return_value=[(1920, 1080, 60)]), \
+                mock.patch.object(server.display, "restore"):
+            server.set_game_mode("steam:1", [1920, 1080, 60])
+            self.assertEqual(server.load_choices()["display"], {"steam:1": [1920, 1080, 60]})
+            server.set_game_mode("steam:1")
+            self.assertEqual(server.load_choices()["display"], {})
+
+    def test_desktop_mode_returns_when_the_game_closes(self):
+        clock = [0.0]
+        windows = iter([None, 7, 7, None])  # starting, playing, playing, closed
+        with mock.patch.object(server.time, "time", lambda: clock[0]),                 mock.patch.object(server.time, "sleep", lambda s: clock.__setitem__(0, clock[0] + s)),                 mock.patch.object(server, "running_window", lambda: next(windows)),                 mock.patch.object(server.display, "restore") as restore:
+            server.game_mode_watch(0.0)
+        restore.assert_called_once()
+        self.assertEqual(clock[0], 8)  # right after the window went, not at the 2-minute fallback
+
+    def test_game_that_never_opens_gets_the_desktop_back_after_2_minutes(self):
+        clock = [0.0]
+        with mock.patch.object(server.time, "time", lambda: clock[0]),                 mock.patch.object(server.time, "sleep", lambda s: clock.__setitem__(0, clock[0] + s)),                 mock.patch.object(server, "running_window", lambda: None),                 mock.patch.object(server.display, "restore") as restore:
+            server.game_mode_watch(0.0)
+        restore.assert_called_once()
+        self.assertTrue(120 < clock[0] <= 124)

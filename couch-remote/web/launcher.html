@@ -1536,8 +1536,45 @@ function gameDetails() {
     } },
     { label: "Choose art", icon: "image", sub: "One of your screenshots as its backdrop", fn: () => mediaGallery(shot => setChoice("art", g, "/media/" + shot.name)) },
     ...(own ? [{ label: "Original name and art", icon: "restart", fn: () => setChoice("rename", g, "").then(() => setChoice("art", g, "")) }] : []),
+    { label: "Display mode", icon: "tv", sub: "Resolution and refresh rate for this game", fn: () => displayMenu(g) },
     { label: "Hide", icon: "eye", fn: () => setChoice("hide", g) },
-  ], { art: t.classList.contains("loaded") ? t.querySelector(".art").src : "", lines, vertical: true });  // six choices: a list fits, a row ran off the card
+  ], { art: t.classList.contains("loaded") ? t.querySelector(".art").src : "", lines, vertical: true });  // a list fits, a row ran off the card
+}
+// ---------- □ → Display mode: a game's own resolution and refresh rate. Trying one shows it right away and goes back by
+// itself after 15 s unless kept (the server undoes it too), so a mode the TV can't show never leaves it blank.
+const modeLabel = ([w, h, hz]) => `${{ "3840x2160": "4K", "2560x1440": "1440p", "1920x1080": "1080p", "1280x720": "720p" }[`${w}x${h}`] || `${w}×${h}`} at ${hz} Hz`;
+const sameMode = (a, b) => !!a && !!b && a.join() === b.join();
+async function displayMenu(g) {
+  const name = g.title || g.name;
+  let d; try { d = await api("/api/display"); } catch { return toast("Couch isn't responding. Try again in a moment."); }
+  const saved = d.saved[g.key];
+  choose(`Display for ${name}`, saved ? `Now: ${modeLabel(saved)} while it plays` : "Now: the same as the desktop", [
+    ...d.modes.map(m => ({ label: m.label, sub: sameMode(m.mode, saved) ? "Chosen for this game" : sameMode(m.mode, d.now) ? "The desktop's" : "",
+                           check: sameMode(m.mode, saved), fn: () => tryMode(g, m) })),
+    ...(saved ? [{ label: "Same as the desktop", icon: "restart", fn: async () => {
+      const r = await api("/api/display", { action: "clear", key: g.key }).catch(() => null);
+      toast(r?.ok ? `${name} uses the desktop's display mode again` : "Couch isn't responding. Try again in a moment.");
+    } }] : []),
+  ], { vertical: true });
+}
+async function tryMode(g, m) {
+  const name = g.title || g.name;
+  const r = await api("/api/display", { action: "try", mode: m.mode }).catch(() => null);
+  if (!r?.ok) return toast(r?.error || "Couch isn't responding. Try again in a moment.");
+  let left = 15, timer;
+  const d = $("#dialog"), text = () => `For ${name}. Going back in ${left} second${left === 1 ? "" : "s"} unless you keep it.`;
+  const done = () => { clearInterval(timer); closeModal(d); };
+  const undo = said => { done(); api("/api/display", { action: "undo" }).catch(() => {}); if (said) toast(said); };
+  choose(`Keep ${m.label}?`, text(), [
+    { label: "Keep", icon: "check", fn: async () => {
+      clearInterval(timer);
+      const k = await api("/api/display", { action: "keep", key: g.key, mode: m.mode }).catch(() => null);
+      toast(k?.ok ? `${name} will start in ${m.label}` : "Couldn't save it. Try again in a moment.");
+    } },
+    { label: "Go back", icon: "restart", fn: () => undo() },
+  ], { start: 1 });
+  modal.onBack = () => undo();
+  timer = setInterval(() => { if (--left <= 0) undo("Back to the desktop's display mode"); else $("#dlg-text").textContent = text(); }, 1000);
 }
 // ---------- Add app: a program from Windows' Start menu (type a few letters, pick it) or an https website
 function addAppMenu() {
