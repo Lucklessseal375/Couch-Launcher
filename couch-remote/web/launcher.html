@@ -35,7 +35,7 @@
   .sky { overflow: hidden; }
   .sky::before, .sky::after { content: ""; position: absolute; inset: 0; background: var(--art) no-repeat; }
   .sky::before { background-size: cover; background-position: center; filter: blur(48px) saturate(1.25) brightness(.42); transform: scale(1.15); }
-  .sky::after { background-size: auto 100%; background-position: right center; transform-origin: 80% 40%;
+  .sky::after { background-size: auto 100%; background-position: right center; transform-origin: 80% 40%; will-change: transform;  /* its own GPU layer: the drift isn't repainted */
     --fade: linear-gradient(90deg, transparent var(--f0, 22%), #000 var(--f1, 52%));
     --low: linear-gradient(#000 52%, transparent 88%);  /* fade out behind the lower rows, where the poster's printed logo sat */
     -webkit-mask-image: var(--fade), var(--low); -webkit-mask-composite: source-in; mask-image: var(--fade), var(--low); mask-composite: intersect; }
@@ -180,7 +180,7 @@
                  filter: drop-shadow(0 .3vh .6vh rgba(0,0,0,.7)); }
   .item.focus .badge { opacity: 1; transform: scale(1); }
   .item .badge img { width: 100%; height: 100%; display: block; }
-  .item.focus .badge img { animation: spin .9s linear infinite; }
+  .item.focus .badge img { animation: spin .9s linear 3; }  /* three turns, then rest: spinning forever redrew the 4K screen nonstop (7% of a core idle) */
 
   .app { width: var(--tile); height: var(--tile); display: flex; flex-direction: column; justify-content: flex-end; padding: 1.8vh; background: var(--c); }
   .app .name { font: 800 3.3vh/.95 var(--ui); font-stretch: 75%; }
