@@ -667,14 +667,31 @@ def key_app(exe):
                  if a.get("keys") and Path(os.path.expandvars(a["target"])).name.lower() == exe), {})
 
 
-APP_DEVTOOLS = 9339  # DevTools port Couch opens on WebView2 apps with "back_closes" (Stremio): which page they show
+APP_DEVTOOLS = 9339  # the fixed DevTools port Couch used before 2026-11-25: a Stremio opened back then still has it
+
+
+def webview_port_file(app):
+    """Where a WebView2 app's browser writes the DevTools port it picked: <program>.WebView2\\EBWebView."""
+    return Path(os.path.expandvars(app["target"]) + ".WebView2") / "EBWebView" / "DevToolsActivePort"
+
+
+def app_devtools_port():
+    """The DevTools port of the WebView2 app Couch opened (Stremio). Couch asks for port 0, so the browser picks a free
+    one each time and no fixed port stays open for any local program to guess (brief 3.3); it's read from the file."""
+    for a in load_apps()[0]:
+        if a.get("back_closes") or a.get("page_script"):
+            try:
+                return int(webview_port_file(a).read_text().split()[0])
+            except (OSError, ValueError, IndexError):
+                pass
+    return APP_DEVTOOLS
 
 
 def app_page():
     """DevTools' entry for the page a WebView2 app Couch opened shows, or {} (opened some other way: no port)."""
     import urllib.request
     try:
-        pages = json.load(urllib.request.urlopen(f"http://127.0.0.1:{APP_DEVTOOLS}/json", timeout=2))
+        pages = json.load(urllib.request.urlopen(f"http://127.0.0.1:{app_devtools_port()}/json", timeout=2))
         return next(p for p in pages if p.get("type") == "page")
     except (OSError, ValueError, StopIteration):
         return {}
@@ -2152,7 +2169,9 @@ def launch_app(app_id):
     elif kind == "exe":
         env = None
         if app.get("back_closes") or app.get("page_script"):  # a WebView2 app (Stremio): DevTools reach its page
-            env = dict(os.environ, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=f"--remote-debugging-port={APP_DEVTOOLS}")
+            if not exe_running(Path(target).name):  # a fresh start writes a new port file; an old one would mislead
+                webview_port_file(app).unlink(missing_ok=True)
+            env = dict(os.environ, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS="--remote-debugging-port=0")
         subprocess.Popen([target] + list(app.get("args", [])), cwd=str(Path(target).parent), env=env,
                          creationflags=0x00000008 | 0x00000200)
         if app.get("page_script"):

@@ -18,7 +18,7 @@ urllib.request.urlopen(req).read()
 for _ in range(60):
     time.sleep(0.5)
     try:
-        pages = [p for p in json.load(urllib.request.urlopen("http://127.0.0.1:9339/json")) if p["type"] == "page" and "stremio" in p["url"]]
+        pages = [p for p in json.load(urllib.request.urlopen(f"http://127.0.0.1:{server.app_devtools_port()}/json")) if p["type"] == "page" and "stremio" in p["url"]]
         if pages: break
     except Exception: pass
 time.sleep(6)

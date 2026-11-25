@@ -127,3 +127,16 @@ class FitPageToScreen(unittest.TestCase):
 
     def test_page_that_fits_is_left_alone(self):
         self.assertEqual(self.run_fit([1920, 1080, 1920]), [])
+
+
+class WebviewPort(unittest.TestCase):
+    def test_port_comes_from_the_apps_own_file_else_the_old_fixed_one(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            app = {"id": "s", "target": str(Path(d) / "app.exe"), "page_script": "x.js"}
+            with mock.patch.object(server, "load_apps", return_value=([app], set())):
+                self.assertEqual(server.app_devtools_port(), server.APP_DEVTOOLS)  # Stremio opened before the change
+                f = server.webview_port_file(app)
+                f.parent.mkdir(parents=True)
+                f.write_text("51234\n/devtools/browser/abc\n")
+                self.assertEqual(server.app_devtools_port(), 51234)
