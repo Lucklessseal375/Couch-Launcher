@@ -3,7 +3,8 @@
       powershell -ExecutionPolicy Bypass -File .\install-couch.ps1
 
   It does only this, and is safe to run again:
-    1. Installs Python 3.13 (through winget) if Python isn't there yet, and pygame for the controller.
+    1. Installs Python 3.13 (through winget) if Python isn't there yet, pygame for the controller, and Windows'
+       Bluetooth bindings (pywinrt) for pairing from the TV.
     2. Creates the "Couch Launcher" task: Couch starts full screen when you sign in to Windows.
     3. Asks for admin once, then: lets the phone remote reach this PC (one firewall rule), installs Sunshine for
        streaming to another TV with the controller driver it needs (ViGEmBus, as a PS4 controller), and adds the "Couch" app to Sunshine.
@@ -95,7 +96,7 @@ if (-not $py) {
     if (-not (Test-Path $py)) { throw 'Python was installed, but python.exe was not found. Open a new PowerShell window and run this script again.' }
 }
 Write-Host "  Python: $py"
-& $py -m pip install --user --upgrade pygame
+& $py -m pip install --upgrade pygame winrt-runtime winrt-Windows.Devices.Enumeration winrt-Windows.Devices.Bluetooth winrt-Windows.Foundation winrt-Windows.Foundation.Collections  # controller; Bluetooth pairing from the TV
 if ($LASTEXITCODE -ne 0) { throw 'pip could not install pygame.' }
 
 Step '2. Start Couch at sign-in (task "Couch Launcher")'

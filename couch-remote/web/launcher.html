@@ -1130,6 +1130,7 @@ function pcItems() {
     { icon: "image", label: "Media gallery", meta: "Your screenshots. Press Create on the controller to take one", cta: "Open", fn: mediaGallery, live: "media" },
     { icon: "tasks", label: "Task manager", meta: "See what's running and close apps", cta: "Open", fn: () => taskManager() },
     { icon: "help", label: "Controls", meta: "What each button does", cta: "Show", fn: showControls },
+    { icon: "headphones", label: "Bluetooth", meta: "Pair a controller, headphones or a speaker", cta: "Open", fn: bluetoothMenu },
     { icon: "check", label: "About Couch", meta: "Version, updates and recent problems", cta: "Show", fn: aboutCouch },
     { icon: "exit", label: "Desktop", meta: "Closes the launcher and shows the desktop", cta: "Go to desktop", fn: () => api("/api/window", { action: "close-launcher" }) },
   ];
@@ -1839,6 +1840,35 @@ async function mediaGallery(onPick) {  // onPick(shot): choosing a screenshot (a
     i = n; Sound.move(); show();
   };
   updatePrompts();
+}
+// Bluetooth (PC row): pair a new device without a mouse. Windows does the pairing; forgetting one stays in its settings.
+async function bluetoothMenu() {
+  let bt; try { bt = await api("/api/bluetooth"); } catch { return toast("Couch isn't responding. Try again in a moment."); }
+  if (!bt.available) return choose("Bluetooth", "Pairing from Couch needs one more part on this PC. Run Install Couch.cmd once, then try again.", [{ label: "Done" }]);
+  choose("Bluetooth", bt.paired.length ? `Paired: ${bt.paired.join(", ")}` : "Nothing paired yet.", [
+    { label: "Pair a new device", icon: "search", sub: "Put it in pairing mode first. PS5 controller: hold PS and Create until the light flashes", fn: btScan },
+    { label: "Done" },
+  ], { vertical: true });
+}
+async function btScan() {
+  const d = $("#dialog");
+  choose("Looking for devices…", "This takes about 12 seconds. Keep the device in pairing mode.", [{ label: "Cancel" }]);
+  const mine = modal;
+  const r = await api("/api/bluetooth", { action: "scan" }).catch(() => null);
+  if (modal !== mine) return;  // cancelled meanwhile
+  closeModal(d);
+  if (!r?.ok) return toast(r?.error || "Couch isn't responding. Try again in a moment.");
+  if (!r.devices.length) return choose("Nothing found", "No device in pairing mode was found nearby.", [{ label: "Search again", fn: btScan }, { label: "Done" }]);
+  choose("Pick the device", "", [
+    ...r.devices.slice(0, 6).map(dev => ({ label: dev.name, icon: "headphones", fn: () => btPair(dev) })),
+    { label: "Search again", icon: "search", fn: btScan },
+  ], { vertical: true });
+}
+async function btPair(dev) {
+  toast(`Pairing ${dev.name}…`);
+  const r = await api("/api/bluetooth", { action: "pair", id: dev.id }).catch(() => null);
+  if (!r?.ok) return toast(r?.error || "Couch isn't responding. Try again in a moment.");
+  toast(r.result === "paired" ? `${dev.name} is paired` : `${dev.name} didn't pair: ${r.result}`);
 }
 // About Couch (PC row): what support would ask first. Exactly these lines are what Copy for support puts on the PC's
 // clipboard (your user folder and name taken out), to paste into a message.

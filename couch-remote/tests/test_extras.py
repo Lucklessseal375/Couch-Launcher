@@ -200,3 +200,18 @@ class DisplayModes(unittest.TestCase):
             server.game_mode_watch(0.0)
         restore.assert_called_once()
         self.assertTrue(120 < clock[0] <= 124)
+
+
+class BluetoothPairing(unittest.TestCase):
+    def test_only_devices_from_the_last_scan_can_be_paired(self):
+        server.BT_SEEN[:] = ["dev-1"]
+        with mock.patch.object(server.bluetooth, "pair", return_value="paired") as pair:
+            self.assertEqual(server.bt_pair("dev-1"), "paired")
+            with self.assertRaises(ValueError):
+                server.bt_pair("Bluetooth#someone-elses-device")
+        pair.assert_called_once_with("dev-1")
+
+    def test_missing_packages_are_reported_not_crashed(self):
+        import bluetooth
+        with mock.patch.object(bluetooth, "DeviceInformation", None):
+            self.assertFalse(bluetooth.available())

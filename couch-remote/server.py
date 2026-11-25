@@ -27,6 +27,7 @@ from urllib.parse import unquote, urlparse
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # audio.py and padspeaker.py sit next to this file
 import apps_added  # noqa: E402
 import audio  # noqa: E402
+import bluetooth  # noqa: E402
 import display  # noqa: E402
 import padspeaker  # noqa: E402
 import update  # noqa: E402
@@ -120,6 +121,15 @@ def load_apps():
 
 # ---------------------------------------------------------------- per-game display modes (□ → Display mode)
 DISPLAY_TRY = [None]  # the 15 s timer of a mode being tried from the menu
+BT_SEEN = []  # ids the last Bluetooth scan found: the only ones the TV may ask to pair
+
+
+def bt_pair(device_id):
+    if device_id not in BT_SEEN:  # only a device the last scan found, never an id sent from elsewhere
+        raise ValueError("Search for the device again")
+    result = bluetooth.pair(device_id)
+    log.info("bluetooth pairing: %s", result)
+    return result
 
 
 def valid_mode(mode):
@@ -2591,6 +2601,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"shots": media_list()})
             if path == "/api/network":
                 return self.send_json(network())
+            if path == "/api/bluetooth" and kind == "local":  # PC row → Bluetooth
+                return self.send_json({"available": bluetooth.available(),
+                                       "paired": bluetooth.paired() if bluetooth.available() else []})
             if path == "/api/display" and kind == "local":  # □ → Display mode: what the TV offers, and each game's
                 return self.send_json({"now": list(display.current()), "saved": load_choices()["display"],
                                        "modes": [{"mode": list(m), "label": display.label(*m)}
@@ -2716,6 +2729,14 @@ class Handler(BaseHTTPRequestHandler):
                         save_choices(c)
                 else:
                     power(a)
+            elif path == "/api/bluetooth" and kind == "local":  # {"action": "scan"} (12 s) or {"action": "pair", "id"}
+                if b.get("action") == "scan":
+                    devices = bluetooth.scan()
+                    BT_SEEN[:] = [d["id"] for d in devices]
+                    return self.send_json({"ok": True, "devices": devices})
+                if b.get("action") != "pair":
+                    raise ValueError("unknown action")
+                return self.send_json({"ok": True, "result": bt_pair(str(b.get("id", "")))})
             elif path == "/api/display" and kind == "local":  # {"action": "try"|"keep"|"undo"|"clear", "mode", "key"}
                 a = b.get("action")
                 if a == "try":
