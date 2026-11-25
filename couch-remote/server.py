@@ -1641,6 +1641,7 @@ def app_icon(app_id):
 LISTENERS = []  # one queue per open launcher page
 LISTENERS_LOCK = threading.Lock()
 PAD_STATUS = "pad:none"  # last controller/battery state sent to the launcher; new pages get it on connect
+PADS = []  # [{"name", "level"}] of the connected controllers, as the controller loop last saw them
 # True once the server reads the controller, False if it can't (then the page uses the Gamepad API).
 # None while it's still starting: the page must not fall back then, or both read the pad (seen at logon).
 PAD_READER = None
@@ -2008,6 +2009,8 @@ def _controller_loop():
     def pad_status():
         ps = live()
         levels = [sdl_power_level(sdl.SDL_JoystickCurrentPowerLevel(sdl.SDL_GameControllerGetJoystick(p))) for p in ps]
+        PADS[:] = [{"name": (sdl.SDL_GameControllerName(p) or b"Controller").decode(errors="replace"), "level": lv}
+                   for p, lv in zip(ps, levels)]  # for the Controls screen
         sony = [i for i, p in enumerate(ps) if b"DualSense" in (sdl.SDL_GameControllerName(p) or b"")]
         return pad_status_for(levels, sony if sony and levels[sony[0]] != "wired" and dualsense_charging() else ())
 
@@ -2483,7 +2486,7 @@ class Handler(BaseHTTPRequestHandler):
                 apps, hidden_apps = shown_apps()
                 games, hidden = library()
                 info = {"name": socket.gethostname(), "apps": apps, "games": games, "hidden": hidden,
-                        "hiddenApps": [{"id": a["id"], "name": a["name"]} for a in hidden_apps],
+                        "hiddenApps": [{"id": a["id"], "name": a["name"]} for a in hidden_apps], "pads": list(PADS),
                         "padReader": PAD_READER, "intro": bool(intro_file()), "sounds": sound_clips(),
                         "stream": STREAM["device"] if STREAM["on"] else None, "sunshine": sunshine_status(),
                         "sunshineLogin": SUNSHINE_CRED.exists(), "sleepAt": int(SLEEP["at"]),

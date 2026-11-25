@@ -1817,7 +1817,10 @@ applyMotion();
 function showControls(start = 0) {
   const [ok, no] = info.swap ? ["Circle", "Cross"] : ["Cross", "Circle"];
   const reduce = store.get("couchMotion") === "reduce";
-  choose("Controls", "", [
+  const how = { wired: "plugged in", empty: "wireless, battery empty", low: "wireless, battery low", medium: "wireless, battery half full",
+                full: "wireless, battery full", max: "wireless, battery full" };
+  const pads = (info.pads || []).map(p => `${p.name.replace(/ Wireless Controller$/, "")} (${how[p.level] || "connected"})`);
+  choose("Controls", pads.length ? `Connected: ${pads.join("; ")}` : "No controller connected. Pair one in Windows' Bluetooth settings, or plug it in.", [
     { label: "Done" },
     { label: "Reduce motion", sub: reduce ? "On: tiles don't lift or glint, the screensaver stays still" : "Off", check: reduce, fn: () => {
       store.set("couchMotion", reduce ? "full" : "reduce"); applyMotion(); Sound.select(); showControls(1);
