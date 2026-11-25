@@ -1,3 +1,5 @@
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -77,6 +79,49 @@ class ApplyUpdate(unittest.TestCase):
             self.assertFalse(update.check(self.root))  # the version that crashed isn't installed again
         fetch.assert_not_called()
         self.assertFalse(update.rollback(self.root))  # nothing left to roll back
+
+    def test_unsigned_version_is_not_downloaded(self):
+        with mock.patch.object(update, "latest_sha", return_value="new222"),                 mock.patch.object(update, "signature", return_value=None),                 mock.patch.object(update, "apply") as apply:
+            self.assertFalse(update.check(self.root))
+        apply.assert_not_called()
+
+
+KEYGEN = r"C:\Windows\System32\OpenSSH\ssh-keygen.exe"  # the one update.py uses
+
+
+@unittest.skipUnless(Path(KEYGEN).exists(), "needs ssh-keygen")
+class Signatures(unittest.TestCase):
+    """Real signatures with throwaway keys: only this PC's update-signers key counts, and only for that commit."""
+
+    def setUp(self):
+        d = tempfile.TemporaryDirectory()
+        self.addCleanup(d.cleanup)
+        self.d = Path(d.name)
+        self.root = self.d / "Couch"
+        (self.root / "couch-remote").mkdir(parents=True)
+        for name in ("ours", "theirs"):
+            subprocess.run([KEYGEN, "-q", "-t", "ed25519", "-N", "", "-f", str(self.d / name), "-C", name], check=True, stdin=subprocess.DEVNULL, capture_output=True)
+        pub = (self.d / "ours.pub").read_text().split()[:2]
+        (self.root / "couch-remote" / "update-signers").write_text("couch-update " + " ".join(pub) + chr(10))
+
+    def sign(self, key, sha):
+        msg = self.d / "msg"
+        msg.write_text(sha)
+        subprocess.run([KEYGEN, "-Y", "sign", "-n", "couch-update", "-f", str(self.d / key), str(msg)],
+                       check=True, capture_output=True, stdin=subprocess.DEVNULL)
+        return (self.d / "msg.sig").read_bytes()
+
+    def test_our_signature_for_this_commit_passes(self):
+        self.assertTrue(update.verified(self.root, "abc123", self.sign("ours", "abc123")))
+
+    def test_another_key_or_another_commit_fails(self):
+        self.assertFalse(update.verified(self.root, "abc123", self.sign("theirs", "abc123")))
+        self.assertFalse(update.verified(self.root, "abc123", self.sign("ours", "evil999")))
+
+    def test_no_signers_file_means_no_update(self):
+        sig = self.sign("ours", "abc123")
+        (self.root / "couch-remote" / "update-signers").unlink()
+        self.assertFalse(update.verified(self.root, "abc123", sig))
 
 
 class Supervise(unittest.TestCase):

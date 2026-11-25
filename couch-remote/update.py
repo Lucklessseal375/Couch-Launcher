@@ -8,10 +8,12 @@ but holds this PC's weather city, so an existing one is kept too.
 """
 import json
 import logging
+import os
 import shutil
 import subprocess
 import sys
 import tempfile
+import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -33,6 +35,34 @@ def latest_sha():
                                  headers={"Accept": "application/vnd.github.sha", "User-Agent": "couch-updater"})
     with urllib.request.urlopen(req, timeout=15) as r:
         return r.read().decode().strip()
+
+
+def signature(sha):
+    """The signature dev/sign-release.ps1 published for this commit, or None (not signed yet)."""
+    req = urllib.request.Request(f"https://raw.githubusercontent.com/{REPO}/signatures/{sha}.sig",
+                                 headers={"User-Agent": "couch-updater"})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return r.read()
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return None
+        raise
+
+
+def verified(root, sha, sig):
+    """Signed by a key in this PC's own update-signers file. It's the installed copy that decides, so a push can't
+    swap in its own key."""
+    signers = root / "couch-remote" / "update-signers"
+    keygen = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "OpenSSH" / "ssh-keygen.exe"  # Windows' own
+    if not signers.exists() or not keygen.exists():
+        return False
+    with tempfile.TemporaryDirectory() as d:
+        (Path(d) / "s.sig").write_bytes(sig)
+        r = subprocess.run([str(keygen), "-Y", "verify", "-f", str(signers), "-I", "couch-update", "-n", "couch-update",
+                            "-s", str(Path(d) / "s.sig")], input=sha.encode(), capture_output=True,
+                           timeout=30, creationflags=0x08000000)
+    return r.returncode == 0
 
 
 def imports_cleanly(new_remote):
@@ -116,6 +146,10 @@ def check(root):
                 return False  # this version crashed here once and was rolled back: wait for the next push
         except OSError:
             pass
+        sig = signature(sha)
+        if not sig or not verified(root, sha, sig):
+            log.info("update %s skipped: %s", sha[:7], "not signed yet" if not sig else "signature doesn't check out")
+            return False
         with tempfile.TemporaryDirectory() as d:
             zip_path = Path(d) / "couch.zip"
             req = urllib.request.Request(f"https://github.com/{REPO}/archive/{sha}.zip", headers={"User-Agent": "couch-updater"})
