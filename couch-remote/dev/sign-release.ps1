@@ -16,7 +16,7 @@ $tmp = Join-Path ([IO.Path]::GetTempPath()) "couch-sign-$sha"
 New-Item -ItemType Directory -Force $tmp | Out-Null
 $msg = Join-Path $tmp 'msg'
 [IO.File]::WriteAllText($msg, $sha)  # exactly the commit id, no newline: what update.py verifies
-& $keygen -Y sign -n couch-update -f $key $msg 2>$null | Out-Null
+cmd /c "`"$keygen`" -Y sign -n couch-update -f `"$key`" `"$msg`" 2>nul"  # its progress text on stderr would stop this script
 if (-not (Test-Path "$msg.sig")) { throw 'Signing failed.' }
 $blob = (git hash-object -w "$msg.sig").Trim()
 $parent = git rev-parse --verify -q origin/signatures
