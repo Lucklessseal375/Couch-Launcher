@@ -215,3 +215,45 @@ class BluetoothPairing(unittest.TestCase):
         import bluetooth
         with mock.patch.object(bluetooth, "DeviceInformation", None):
             self.assertFalse(bluetooth.available())
+
+
+class GameAudio(unittest.TestCase):
+    DEVS = [{"id": "tv", "name": "SAMSUNG", "default": True}, {"id": "hp", "name": "AirPods Pro", "default": False}]
+
+    def setUp(self):
+        import tempfile
+        d = tempfile.TemporaryDirectory()
+        self.addCleanup(d.cleanup)
+        for p in (mock.patch.object(server, "CHOICES_FILE", Path(d.name) / "c.json"),
+                  mock.patch.object(server.audio, "outputs", return_value=self.DEVS)):
+            p.start()
+            self.addCleanup(p.stop)
+
+    def test_saved_per_game_and_cleared(self):
+        server.set_game_audio("steam:1", "hp")
+        self.assertEqual(server.load_choices()["game_audio"], {"steam:1": {"id": "hp", "name": "AirPods Pro"}})
+        server.set_game_audio("steam:1", "")
+        self.assertEqual(server.load_choices()["game_audio"], {})
+        with self.assertRaises(ValueError):
+            server.set_game_audio("steam:1", "unplugged")
+
+    def test_switches_at_launch_and_back_to_the_usual_output(self):
+        server.set_game_audio("steam:1", "hp")
+        with server.CHOICES_LOCK:
+            c = server.load_choices(); c["audio"] = {"id": "tv", "name": "SAMSUNG"}; server.save_choices(c)
+        started = []
+        with mock.patch.object(server.audio, "set_default") as set_default, \
+                mock.patch.object(server.threading, "Thread", lambda target, args, daemon: started.append(args) or mock.MagicMock()):
+            server.start_game_audio("steam:1")
+            self.assertEqual(server.GAME_AUDIO[0]["id"], "hp")  # keep_audio now holds the game's output
+            set_default.assert_called_with("hp")
+            started[0][1]()  # the game closed
+        self.assertIsNone(server.GAME_AUDIO[0])
+        set_default.assert_called_with("tv")
+
+    def test_unplugged_output_leaves_sound_alone(self):
+        with server.CHOICES_LOCK:
+            c = server.load_choices(); c["game_audio"]["steam:2"] = {"id": "gone", "name": "Old headset"}; server.save_choices(c)
+        with mock.patch.object(server.audio, "set_default") as set_default:
+            server.start_game_audio("steam:2")
+        set_default.assert_not_called()

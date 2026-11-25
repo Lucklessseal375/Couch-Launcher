@@ -1537,7 +1537,7 @@ function gameDetails() {
     } },
     { label: "Choose art", icon: "image", sub: "One of your screenshots as its backdrop", fn: () => mediaGallery(shot => setChoice("art", g, "/media/" + shot.name)) },
     ...(own ? [{ label: "Original name and art", icon: "restart", fn: () => setChoice("rename", g, "").then(() => setChoice("art", g, "")) }] : []),
-    { label: "Display mode", icon: "tv", sub: "Resolution and refresh rate for this game", fn: () => displayMenu(g) },
+    { label: "Display and sound", icon: "tv", sub: "Resolution, refresh rate and sound output for this game", fn: () => avMenu(g) },
     { label: "Hide", icon: "eye", fn: () => setChoice("hide", g) },
   ], { art: t.classList.contains("loaded") ? t.querySelector(".art").src : "", lines, vertical: true });  // a list fits, a row ran off the card
 }
@@ -1545,6 +1545,29 @@ function gameDetails() {
 // itself after 15 s unless kept (the server undoes it too), so a mode the TV can't show never leaves it blank.
 const modeLabel = ([w, h, hz]) => `${{ "3840x2160": "4K", "2560x1440": "1440p", "1920x1080": "1080p", "1280x720": "720p" }[`${w}x${h}`] || `${w}×${h}`} at ${hz} Hz`;
 const sameMode = (a, b) => !!a && !!b && a.join() === b.join();
+async function avMenu(g) {
+  let d; try { d = await api("/api/display"); } catch { return toast("Couch isn't responding. Try again in a moment."); }
+  const mode = d.saved[g.key], out = d.gameAudio[g.key];
+  choose(`${g.title || g.name}: display and sound`, "Switched when it starts, back when it closes.", [
+    { label: "Display mode", icon: "tv", sub: mode ? modeLabel(mode) : "Same as the desktop", fn: () => displayMenu(g) },
+    { label: "Sound output", icon: "speaker", sub: out ? out.name : "The PC's usual output", fn: () => soundMenu(g, out) },
+  ], { vertical: true });
+}
+// □ → Display and sound → Sound output: headphones for one game, the TV for the rest
+async function soundMenu(g, out) {
+  const name = g.title || g.name;
+  const a = await api("/api/audio").catch(() => null);
+  if (!a) return toast("Couch isn't responding. Try again in a moment.");
+  const save = async (id, said) => {
+    const r = await api("/api/gameaudio", { key: g.key, id }).catch(() => null);
+    toast(r?.ok ? said : r?.error || "Couch isn't responding. Try again in a moment.");
+  };
+  choose(`Sound for ${name}`, "", [
+    { label: "The PC's usual output", icon: "speaker", check: !out, fn: () => save("", `${name} uses the PC's usual sound output`) },
+    ...a.devices.slice(0, 6).map(dev => ({ label: dev.name, icon: /headphone|headset|airpods|buds/i.test(dev.name) ? "headphones" : "speaker",
+                                          check: out?.id === dev.id, fn: () => save(dev.id, `${name} will play through ${dev.name}`) })),
+  ], { vertical: true });
+}
 async function displayMenu(g) {
   const name = g.title || g.name;
   let d; try { d = await api("/api/display"); } catch { return toast("Couch isn't responding. Try again in a moment."); }

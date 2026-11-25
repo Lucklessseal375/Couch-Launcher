@@ -171,9 +171,9 @@ def set_game_mode(key, mode=None):
     log.info("display mode for %s: %s", key, display.label(*mode) if mode else "the desktop's")
 
 
-def game_mode_watch(started):
-    """While a game launched with its own mode runs, keep it; once its window has gone (or none came within
-    2 minutes), back to the desktop's mode."""
+def game_mode_watch(started, undo=None):
+    """While a game launched with its own display mode or sound output runs, keep them; once its window has gone (or
+    none came within 2 minutes), back to the desktop's (undo, default: the display mode)."""
     seen = False
     while time.time() - started < 12 * 3600:
         time.sleep(2)
@@ -181,8 +181,43 @@ def game_mode_watch(started):
             seen = True
         elif seen or time.time() - started > 120:
             break
-    display.restore()
-    log.info("game closed: display back to the desktop's mode")
+    (undo or display.restore)()
+    log.info("game closed: %s back to the desktop's", "sound" if undo else "display")
+
+
+# ---------------------------------------------------------------- per-game sound output (□ → Display and sound)
+GAME_AUDIO = [None]  # {"id", "name"} a running game wants: keep_audio holds this instead of your usual output
+
+
+def set_game_audio(key, device_id=""):
+    """A game's own sound output (headphones for one game, the TV for the rest), or "" for the PC's usual one."""
+    with CHOICES_LOCK:
+        c = load_choices()
+        if device_id:
+            dev = next((d for d in audio.outputs() if d["id"] == device_id), None)
+            if not dev:
+                raise ValueError("That sound output isn't connected")
+            c["game_audio"][key] = {"id": dev["id"], "name": dev["name"]}
+        else:
+            c["game_audio"].pop(key, None)
+        save_choices(c)
+
+
+def start_game_audio(key):
+    """At launch: switch to the game's own output if it has one and it's connected; back when the game closes."""
+    want = load_choices()["game_audio"].get(key)
+    if not want or not any(d["id"] == want["id"] for d in audio.outputs()):
+        return
+    GAME_AUDIO[0] = want
+    audio.set_default(want["id"])
+    log.info("sound for this game: %s", want["name"])
+
+    def back():
+        GAME_AUDIO[0] = None
+        usual = load_choices()["audio"]
+        if usual:
+            audio.set_default(usual["id"])
+    threading.Thread(target=game_mode_watch, args=(time.time(), back), daemon=True).start()
 
 
 def shown_apps():
@@ -362,7 +397,8 @@ def load_choices():
             "added": [a for a in d.get("added", []) if isinstance(a, dict)],  # app tiles added from the launcher
             "app_order": [str(x) for x in d.get("app_order", [])],  # the Apps row as you arranged it (□ → Move)
             "hidden_apps": [str(x) for x in d.get("hidden_apps", [])],
-            "display": {k: v for k, v in dict(d.get("display", {})).items() if isinstance(v, list) and len(v) == 3}}  # per-game mode
+            "display": {k: v for k, v in dict(d.get("display", {})).items() if isinstance(v, list) and len(v) == 3},  # per-game mode
+            "game_audio": {k: v for k, v in dict(d.get("game_audio", {})).items() if isinstance(v, dict) and v.get("id")}}
 
 
 def save_choices(c):
@@ -691,7 +727,7 @@ def keep_audio():
     while True:
         time.sleep(3)
         try:
-            want = load_choices()["audio"]
+            want = GAME_AUDIO[0] or load_choices()["audio"]  # a running game's own output wins while it plays
             ids = audio.default_ids() if want else ()
             if all(i == want["id"] for i in ids):
                 continue
@@ -2606,6 +2642,7 @@ class Handler(BaseHTTPRequestHandler):
                                        "paired": bluetooth.paired() if bluetooth.available() else []})
             if path == "/api/display" and kind == "local":  # □ → Display mode: what the TV offers, and each game's
                 return self.send_json({"now": list(display.current()), "saved": load_choices()["display"],
+                                       "gameAudio": load_choices()["game_audio"],
                                        "modes": [{"mode": list(m), "label": display.label(*m)}
                                                  for m in display.choices(display.modes(), display.current())]})
             if path == "/api/diagnostics" and kind == "local":  # About Couch on the TV
@@ -2692,7 +2729,10 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_json({"error": "Couch is still starting. Try again in a few seconds."}, 409)
                 before = visible_windows()
                 is_game = "game" in b or any(g.get("id") == b.get("id") for g in load_games())
-                mode = is_game and load_choices()["display"].get(f"steam:{int(b['game'])}" if "game" in b else str(b.get("id")))
+                gkey = f"steam:{int(b['game'])}" if "game" in b else str(b.get("id"))
+                if is_game:
+                    start_game_audio(gkey)  # its own sound output, if you chose one
+                mode = is_game and load_choices()["display"].get(gkey)
                 if mode and display.current() != tuple(mode) and display.apply(*mode):  # the game's own mode, before it opens
                     log.info("display mode for this game: %s", display.label(*mode))
                     threading.Thread(target=game_mode_watch, args=(time.time(),), daemon=True).start()
@@ -2737,6 +2777,8 @@ class Handler(BaseHTTPRequestHandler):
                 if b.get("action") != "pair":
                     raise ValueError("unknown action")
                 return self.send_json({"ok": True, "result": bt_pair(str(b.get("id", "")))})
+            elif path == "/api/gameaudio" and kind == "local":  # {"key", "id"}: a game's own sound output ("" = usual)
+                set_game_audio(str(b.get("key", "")), str(b.get("id", "")))
             elif path == "/api/display" and kind == "local":  # {"action": "try"|"keep"|"undo"|"clear", "mode", "key"}
                 a = b.get("action")
                 if a == "try":
