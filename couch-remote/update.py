@@ -52,7 +52,8 @@ def apply(root, zip_path, sha):
         if not imports_cleanly(top / "couch-remote"):
             return None
         installer = root / "install-couch.ps1"
-        old = installer.read_bytes() if installer.exists() else b""
+        text = lambda p: p.read_bytes().replace(b"\r\n", b"\n") if p.exists() else b""  # a git copy has CRLF, the ZIP LF
+        old = text(installer)
         for f in top.rglob("*"):
             rel = f.relative_to(top).as_posix()
             dst = root / rel
@@ -60,7 +61,7 @@ def apply(root, zip_path, sha):
                 continue
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(f, dst)
-        changed = installer.read_bytes() != old
+        changed = text(installer) != old
     cache = root / "couch-remote" / "cache"
     cache.mkdir(parents=True, exist_ok=True)
     (cache / "version").write_text(sha, encoding="utf-8")

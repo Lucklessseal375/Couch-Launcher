@@ -41,6 +41,10 @@ class ApplyUpdate(unittest.TestCase):
         self.assertEqual(update.installed_sha(self.root), "abc123")
         self.assertFalse(changed)
 
+    def test_line_endings_alone_arent_an_installer_change(self):
+        (self.root / "install-couch.ps1").write_bytes(b"line 1\r\nline 2\r\n")  # a git checkout's CRLF
+        self.assertFalse(self.run_apply({"install-couch.ps1": "line 1\nline 2\n"}))
+
     def test_changed_installer_is_flagged(self):
         self.assertTrue(self.run_apply({"install-couch.ps1": "new installer"}))
         self.assertTrue((self.root / "couch-remote" / "cache" / "installer-changed").exists())

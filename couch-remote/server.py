@@ -2150,13 +2150,15 @@ def sleep_due(now, idle, idle_rule, streaming, game_running):
         bool(idle_rule and idle >= idle_rule * 60 and not streaming and not game_running)
 
 
+RESTART = 75  # exit code that asks the supervisor (see the bottom of this file) to start the new version
+
+
 def restart_couch():
-    """Ends this server and has the "Couch Launcher" task start the new one a few seconds later (after the port is
-    free). The TV page notices the new version and reloads itself."""
-    subprocess.Popen(["powershell", "-NoProfile", "-Command", "Start-Sleep 4; Start-ScheduledTask -TaskName 'Couch Launcher'"],
-                     creationflags=0x08000000 | 0x00000008)
+    """Ends this server; the supervisor starts the updated one straight away. The TV page notices the new version
+    and reloads itself."""
     log.info("restarting for the update")
-    os._exit(0)
+    logging.shutdown()
+    os._exit(RESTART)
 
 
 def update_watch():
@@ -2566,4 +2568,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if "--child" in sys.argv:
+        main()
+    else:  # supervisor: runs Couch as a child, and runs it again after it updates itself (a task-started process that
+        # exits can't reliably start the next one: in Windows Sandbox the restarted server never came up, 2026-11-24)
+        while subprocess.call([sys.executable, str(Path(__file__).resolve()), "--child", *sys.argv[1:]]) == RESTART:
+            pass
