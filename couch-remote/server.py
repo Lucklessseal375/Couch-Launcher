@@ -2161,6 +2161,22 @@ def restart_couch():
     os._exit(RESTART)
 
 
+def supervise(run_child, root=ROOT.parent):
+    """The process the "Couch Launcher" task starts: runs Couch as a child, again after it updates itself (a
+    task-started process that exits can't reliably start the next one: the restarted server never came up in Windows
+    Sandbox, 2026-11-24), and on the old files if the updated one crashes within 2 minutes."""
+    updated = False
+    while True:
+        t0 = time.time()
+        rc = run_child()
+        if rc == RESTART:
+            updated = True
+        elif updated and rc != 0 and time.time() - t0 < 120 and update.rollback(root):
+            updated = False  # shortcut: a crash that isn't the update's fault (2 min window) also rolls back
+        else:
+            return rc
+
+
 def update_watch():
     """Every 6 hours, while nothing is playing or streaming and nobody has touched the PC for 30 minutes."""
     while True:
@@ -2570,7 +2586,5 @@ def main():
 if __name__ == "__main__":
     if "--child" in sys.argv:
         main()
-    else:  # supervisor: runs Couch as a child, and runs it again after it updates itself (a task-started process that
-        # exits can't reliably start the next one: in Windows Sandbox the restarted server never came up, 2026-11-24)
-        while subprocess.call([sys.executable, str(Path(__file__).resolve()), "--child", *sys.argv[1:]]) == RESTART:
-            pass
+    else:
+        supervise(lambda: subprocess.call([sys.executable, str(Path(__file__).resolve()), "--child", *sys.argv[1:]]))

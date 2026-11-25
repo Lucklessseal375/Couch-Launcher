@@ -64,6 +64,44 @@ class ApplyUpdate(unittest.TestCase):
         with mock.patch.object(update, "latest_sha", side_effect=OSError("no network")):
             self.assertFalse(update.check(self.root))
 
+    def test_rollback_puts_the_old_files_back_and_skips_that_version(self):
+        r = self.root / "couch-remote"
+        (r / "server.py").write_text("old")
+        (r / "cache" / "version").write_text("old111")
+        self.run_apply({"couch-remote/server.py": "new", "couch-remote/added.py": "x"})
+        self.assertTrue(update.rollback(self.root))
+        self.assertEqual((r / "server.py").read_text(), "old")
+        self.assertFalse((r / "added.py").exists())
+        self.assertEqual(update.installed_sha(self.root), "old111")
+        with mock.patch.object(update, "latest_sha", return_value="abc123"),                 mock.patch.object(update.urllib.request, "urlopen") as fetch:
+            self.assertFalse(update.check(self.root))  # the version that crashed isn't installed again
+        fetch.assert_not_called()
+        self.assertFalse(update.rollback(self.root))  # nothing left to roll back
+
+
+class Supervise(unittest.TestCase):
+    def run_codes(self, codes, rolled_back=True):
+        import server
+        codes = list(codes)
+        with mock.patch.object(server.update, "rollback", return_value=rolled_back) as rb:
+            rc = server.supervise(lambda: codes.pop(0))
+        return rc, rb, codes
+
+    def test_restarts_after_an_update(self):
+        rc, rb, left = self.run_codes([75, 0])
+        self.assertEqual((rc, left), (0, []))
+        rb.assert_not_called()
+
+    def test_updated_version_crashing_rolls_back_and_runs_again(self):
+        rc, rb, left = self.run_codes([75, 1, 0])
+        rb.assert_called_once()
+        self.assertEqual((rc, left), (0, []))
+
+    def test_crash_without_an_update_just_ends(self):
+        rc, rb, left = self.run_codes([1, 0])
+        self.assertEqual((rc, left), (1, [0]))
+        rb.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

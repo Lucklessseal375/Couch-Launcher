@@ -11,7 +11,7 @@ A PS5-style, controller-driven launcher for a Windows PC on a TV, with a Steel B
 4. **Check your games.** Steam games show up by themselves. Other apps and games are listed in `couch-remote\apps.json`; tiles for programs a PC doesn't have are hidden on that PC (`"needs": "<path>"` hides an entry when that path is missing).
 5. **Optional extras:** weather (`couch-remote\config.json` → `"weather": {"city": "…"}`), music clips in `couch-remote\web\audio`, and streaming to another TV: create a Sunshine login and pair Moonlight (`docs/streaming-setup.md`).
 
-**Updates are automatic.** Each PC checks GitHub at sign-in and every 6 hours while nothing is playing, installs a newer Couch by itself (keeping that PC's settings), and the TV page reloads. If an update changes the installer, Couch shows a note to run **Install Couch.cmd** once. The PC you develop on (a git checkout) never updates itself.
+**Updates are automatic.** Each PC checks GitHub at sign-in and every 6 hours while nothing is playing, installs a newer Couch by itself (keeping that PC's settings), and the TV page reloads. If an update crashes on start, Couch switches back to the previous version by itself and skips that update. If an update changes the installer, Couch shows a note to run **Install Couch.cmd** once. The PC you develop on (a git checkout) never updates itself.
 
 To stop Couch starting at sign-in: `Unregister-ScheduledTask -TaskName 'Couch Launcher' -Confirm:$false`.
 

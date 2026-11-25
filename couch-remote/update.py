@@ -1,8 +1,9 @@
 """Keeps a Couch install up to date with GitHub's main branch (the repo is public: no sign-in needed).
 
 server.py calls check() at startup and every few hours while nothing is playing. A git checkout (the PC Couch is
-developed on) is never touched. An update is applied only after the new server.py imports cleanly, so a broken
-push can't stop Couch from starting. Per-PC files are never in GitHub's ZIP, so they're kept; config.json is in it
+developed on) is never touched. An update is applied only after the new server.py imports cleanly, and the files it
+replaces are kept: if the new Couch then crashes within 2 minutes, the supervisor (server.py) calls rollback(),
+which puts them back and skips that version until a newer push. Per-PC files are never in GitHub's ZIP, so they're kept; config.json is in it
 but holds this PC's weather city, so an existing one is kept too.
 """
 import json
@@ -54,20 +55,52 @@ def apply(root, zip_path, sha):
         installer = root / "install-couch.ps1"
         text = lambda p: p.read_bytes().replace(b"\r\n", b"\n") if p.exists() else b""  # a git copy has CRLF, the ZIP LF
         old = text(installer)
+        cache = root / "couch-remote" / "cache"
+        backup = cache / "previous"  # what this update replaces, for rollback()
+        shutil.rmtree(backup, ignore_errors=True)
+        backup.mkdir(parents=True)
+        added = []
         for f in top.rglob("*"):
             rel = f.relative_to(top).as_posix()
             dst = root / rel
             if f.is_dir() or (rel in KEEP and dst.exists()):
                 continue
+            if dst.exists():
+                (backup / rel).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(dst, backup / rel)
+            else:
+                added.append(rel)
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(f, dst)
+        (cache / "previous.json").write_text(json.dumps({"from": installed_sha(root), "to": sha, "added": added}),
+                                             encoding="utf-8")
         changed = text(installer) != old
-    cache = root / "couch-remote" / "cache"
-    cache.mkdir(parents=True, exist_ok=True)
     (cache / "version").write_text(sha, encoding="utf-8")
     if changed:
         (cache / "installer-changed").write_text(sha, encoding="utf-8")
     return changed
+
+
+def rollback(root):
+    """Puts back the files the last update replaced, and marks its version bad so check() won't install it again.
+    Returns False when there's nothing to roll back."""
+    cache = root / "couch-remote" / "cache"
+    try:
+        prev = json.loads((cache / "previous.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    backup = cache / "previous"
+    for f in backup.rglob("*"):
+        if f.is_file():
+            shutil.copy2(f, root / f.relative_to(backup))
+    for rel in prev["added"]:
+        (root / rel).unlink(missing_ok=True)
+    (cache / "version").write_text(prev["from"], encoding="utf-8")
+    (cache / "bad-version").write_text(prev["to"], encoding="utf-8")
+    (cache / "previous.json").unlink()
+    shutil.rmtree(backup, ignore_errors=True)
+    log.warning("rolled back from %s to %s: the update didn't start", prev["to"][:7], prev["from"][:7] or "the installed copy")
+    return True
 
 
 def check(root):
@@ -78,6 +111,11 @@ def check(root):
         sha = latest_sha()
         if not sha or sha == installed_sha(root):
             return False
+        try:
+            if sha == (root / "couch-remote" / "cache" / "bad-version").read_text(encoding="utf-8").strip():
+                return False  # this version crashed here once and was rolled back: wait for the next push
+        except OSError:
+            pass
         with tempfile.TemporaryDirectory() as d:
             zip_path = Path(d) / "couch.zip"
             req = urllib.request.Request(f"https://github.com/{REPO}/archive/{sha}.zip", headers={"User-Agent": "couch-updater"})
