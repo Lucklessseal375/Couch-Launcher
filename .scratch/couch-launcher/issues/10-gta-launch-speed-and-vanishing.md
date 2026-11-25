@@ -1,6 +1,6 @@
 # GTA V: slow launch, and the game vanished after a reboot
 
-Status: needs-info
+Status: wontfix
 
 Parked on 2026-11-22 at the user's request ("create a stop for this task, save everything for another time"). Everything below is committed; nothing is half-done in the code.
 
@@ -27,3 +27,5 @@ Next time: launch GTA from Couch after a reboot again, with `3d5c181` live, and 
 - Epic's own start-at-login hadn't started Epic within a minute of boot; Couch's start-Epic-first path covered it (4 s).
 
 ## Comments
+
+- 2026-11-25: closed. The user thinks the slow launch is their PC acting up, not Couch ("its my pc acting weird I think not the app"). Couch's own part of a launch measured ~0.1 s.
