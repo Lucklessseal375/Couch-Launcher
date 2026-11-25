@@ -1802,10 +1802,26 @@ async function mediaGallery(onPick) {  // onPick(shot): choosing a screenshot (a
   };
   updatePrompts();
 }
-function showControls() {
+// Reduce motion (Controls): the same calm look Windows' own "animation effects: off" gives, for a TV PC where nobody
+// changes that. It turns the page's reduced-motion CSS on and its motion-only CSS off.
+function applyMotion() {
+  const reduce = store.get("couchMotion") === "reduce";
+  for (const sheet of document.styleSheets) for (const r of (() => { try { return sheet.cssRules; } catch { return []; } })()) {  // Google Fonts' sheet can't be read
+    if (!r.media) continue;
+    r.origMedia ??= r.media.mediaText;
+    if (r.origMedia.includes("prefers-reduced-motion: no-preference")) r.media.mediaText = reduce ? "not all" : r.origMedia;
+    else if (r.origMedia.includes("prefers-reduced-motion: reduce")) r.media.mediaText = reduce ? "all" : r.origMedia;
+  }
+}
+applyMotion();
+function showControls(start = 0) {
   const [ok, no] = info.swap ? ["Circle", "Cross"] : ["Cross", "Circle"];
+  const reduce = store.get("couchMotion") === "reduce";
   choose("Controls", "", [
     { label: "Done" },
+    { label: "Reduce motion", sub: reduce ? "On: tiles don't lift or glint, the screensaver stays still" : "Off", check: reduce, fn: () => {
+      store.set("couchMotion", reduce ? "full" : "reduce"); applyMotion(); Sound.select(); showControls(1);
+    } },
     { label: info.swap ? "Use Cross to select again" : "Swap Cross and Circle", fn: async () => {
       const r = await api("/api/settings", { swap: !info.swap }).catch(() => null);
       if (!r?.ok) return toast("Couch isn't responding. Try again in a moment.");
@@ -1816,7 +1832,8 @@ function showControls() {
     `${ok} plays or opens what's selected`,
     `${no} goes back`,
     "Triangle searches your games and apps",
-    "Square shows a game's details",
+    "Square shows a game's details, or moves, hides or removes an app",
+    "Typing a name: Triangle adds a space, L1 and R1 switch capitals, symbols and accents",
     "L1 and R1 jump between rows; L2 and R2 skip along one",
     "Options opens the menu",
     "Create takes a screenshot, in a game too",
@@ -1824,7 +1841,7 @@ function showControls() {
     "The PS button on the launcher goes back to your game",
     "The PS button turns a sleeping controller back on",
     "On a keyboard: arrows, Enter, Esc, and / to search",
-  ] });
+  ], start });
 }
 function quickMenu() {
   if (modal || !info) return Sound.bump();
