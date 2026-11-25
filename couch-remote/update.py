@@ -56,12 +56,15 @@ def verified(root, sha, sig):
     signers = root / "couch-remote" / "update-signers"
     keygen = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "OpenSSH" / "ssh-keygen.exe"  # Windows' own
     if not signers.exists() or not keygen.exists():
+        log.warning("can't check update signatures: %s is missing", "update-signers" if not signers.exists() else keygen)
         return False
     with tempfile.TemporaryDirectory() as d:
         (Path(d) / "s.sig").write_bytes(sig)
         r = subprocess.run([str(keygen), "-Y", "verify", "-f", str(signers), "-I", "couch-update", "-n", "couch-update",
                             "-s", str(Path(d) / "s.sig")], input=sha.encode(), capture_output=True,
                            timeout=30, creationflags=0x08000000)
+    if r.returncode:
+        log.info("signature check said: %s", (r.stdout + r.stderr).decode(errors="ignore").strip()[:300])
     return r.returncode == 0
 
 
