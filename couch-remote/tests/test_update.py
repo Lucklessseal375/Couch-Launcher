@@ -128,7 +128,7 @@ class Supervise(unittest.TestCase):
     def run_codes(self, codes, rolled_back=True):
         import server
         codes = list(codes)
-        with mock.patch.object(server.update, "rollback", return_value=rolled_back) as rb:
+        with mock.patch.object(server.update, "rollback", return_value=rolled_back) as rb,                 mock.patch.object(server.time, "sleep"):
             rc = server.supervise(lambda: codes.pop(0))
         return rc, rb, codes
 
@@ -142,10 +142,14 @@ class Supervise(unittest.TestCase):
         rb.assert_called_once()
         self.assertEqual((rc, left), (0, []))
 
-    def test_crash_without_an_update_just_ends(self):
+    def test_crash_is_restarted(self):
         rc, rb, left = self.run_codes([1, 0])
-        self.assertEqual((rc, left), (1, [0]))
+        self.assertEqual((rc, left), (0, []))
         rb.assert_not_called()
+
+    def test_crashing_again_and_again_gives_up(self):
+        rc, _, left = self.run_codes([1, 1, 1, 0])
+        self.assertEqual((rc, left), (1, [0]))
 
 
 if __name__ == "__main__":

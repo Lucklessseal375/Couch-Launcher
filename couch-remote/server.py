@@ -2164,8 +2164,9 @@ def restart_couch():
 def supervise(run_child, root=ROOT.parent):
     """The process the "Couch Launcher" task starts: runs Couch as a child, again after it updates itself (a
     task-started process that exits can't reliably start the next one: the restarted server never came up in Windows
-    Sandbox, 2026-11-24), and on the old files if the updated one crashes within 2 minutes."""
-    updated = False
+    Sandbox, 2026-11-24), on the old files if the updated one crashes within 2 minutes, and again after any other
+    crash, unless it crashed 3 times in 10 minutes (then something's wrong that a restart won't fix)."""
+    updated, crashes = False, []
     while True:
         t0 = time.time()
         rc = run_child()
@@ -2173,6 +2174,12 @@ def supervise(run_child, root=ROOT.parent):
             updated = True
         elif updated and rc != 0 and time.time() - t0 < 120 and update.rollback(root):
             updated = False  # shortcut: a crash that isn't the update's fault (2 min window) also rolls back
+        elif rc != 0:
+            now = time.time()
+            crashes = [t for t in crashes if now - t < 600] + [now]
+            if len(crashes) >= 3:
+                return rc
+            time.sleep(3)
         else:
             return rc
 

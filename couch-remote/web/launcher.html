@@ -80,9 +80,10 @@
   #weather b { display: block; font: 650 3.4vh/1 var(--ui); font-variant-numeric: tabular-nums; }
   #weather small { display: block; margin-top: .6vh; font-size: 2.3vh; color: var(--dim); white-space: nowrap; }
   /* while Sunshine streams this screen to another TV (stream.cmd tells the server) */
-  #stream { padding: .9vh 1.8vh; border-radius: 1vh; background: var(--bib); color: #fff; font: 700 2.15vh/1 var(--ui); white-space: nowrap;
+  #stream, #offline { padding: .9vh 1.8vh; border-radius: 1vh; background: var(--bib); color: #fff; font: 700 2.15vh/1 var(--ui); white-space: nowrap;
             box-shadow: 0 .6vh 1.6vh rgba(0,0,0,.4); }
-  #stream[hidden] { display: none; }
+  #stream[hidden], #offline[hidden] { display: none; }
+  #offline img { height: 2.2vh; vertical-align: -.5vh; margin-right: .9vh; animation: spin 1.4s linear infinite; }  /* the steel ball keeps turning while Couch comes back */
   #search.prompt .sq > svg { display: none; }  /* a sign-in or PIN, not a search */
   #bell { display: flex; align-items: center; gap: .6vh; font: 700 2.1vh/1 var(--ui); color: var(--ink); }
   #bell[hidden] { display: none; }
@@ -347,7 +348,7 @@
   }
   @media (prefers-reduced-motion: reduce) {
     .sky::after, #idle-art, #idle-ball, #golden-spin, .app-shell, .details.swap #d-title, .details.swap #sfx span, .item.focus .badge img, .card, .overlay.show, .launch .ball,
-    .details.swap #d-meta, .details.swap .cta, .sys .ring, footer .p.new { animation: none !important; }
+    .details.swap #d-meta, .details.swap .cta, .sys .ring, footer .p.new, #offline img { animation: none !important; }
     .details.swap #sfx { animation: fade-sfx 1.6s ease-out; }
     #rows, .track, .item, .item .badge, .key { transition: opacity .2s, box-shadow .2s, filter .2s; }
     #glow { transition: opacity .2s; }
@@ -414,7 +415,7 @@
 <div class="app-shell">
   <header>
     <div class="brand"><svg class="mark" viewBox="0 0 2 2"><use href="#horseshoe"/></svg><h1>Couch</h1></div>
-    <div class="status"><div id="stream" hidden></div><div id="weather" hidden></div><div id="bell" hidden></div><div id="pad"></div><div class="time"><div id="clock">--:--</div><div id="date"></div></div></div>
+    <div class="status"><div id="offline" hidden><img src="/steelball.png" alt="">Reconnecting to Couch…</div><div id="stream" hidden></div><div id="weather" hidden></div><div id="bell" hidden></div><div id="pad"></div><div class="time"><div id="clock">--:--</div><div id="date"></div></div></div>
   </header>
   <div class="details" id="details">
     <h2 id="d-title">Pick something to play</h2>
@@ -2000,10 +2001,14 @@ async function refresh(toResume) {
   build();
   if (toResume && info.running) focus(0, 0);  // back from the game: Resume is where you'd want to be
 }
+// Two missed checks in a row (6 s): the server is down or restarting; say so until it answers again.
+let misses = 0;
 // Now playing stays current while the launcher is up: a game can close from the phone, the task manager or a crash
 setInterval(async () => {
   if (!info || document.hidden || modal) return;
-  let r; try { r = await api("/api/running"); } catch { return; }
+  let r; try { r = await api("/api/running"); } catch { if (++misses === 2) $("#offline").hidden = false; return; }
+  if (misses >= 2) { $("#offline").hidden = true; toast("Couch is back."); }
+  misses = 0;
   if (r.version && info.version && r.version !== info.version) return location.reload();  // Couch updated itself
   if (!!r.running !== !!info.running || r.running?.name !== info.running?.name) refresh();
 }, 3000);
