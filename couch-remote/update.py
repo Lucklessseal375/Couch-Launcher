@@ -3,7 +3,9 @@
 server.py calls check() at startup and every few hours while nothing is playing. A git checkout (the PC Couch is
 developed on) is never touched. An update is applied only after the new server.py imports cleanly, and the files it
 replaces are kept: if the new Couch then crashes within 2 minutes, the supervisor (server.py) calls rollback(),
-which puts them back and skips that version until a newer push. Per-PC files are never in GitHub's ZIP, so they're kept; config.json is in it
+which puts them back and skips that version until a newer push.
+Only versions signed with the key on the main PC are installed (dev/sign-release.ps1 signs; ed25519.py checks the
+signature against this PC's own update-signers file). Per-PC files are never in GitHub's ZIP, so they're kept; config.json is in it
 but holds this PC's weather city, so an existing one is kept too.
 """
 import json
