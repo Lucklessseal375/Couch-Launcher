@@ -113,5 +113,31 @@ class Arrange(unittest.TestCase):
                 server.arrange_apps(action, app_id, ids)
 
 
+class BrokenFiles(unittest.TestCase):
+    def setUp(self):
+        d = tempfile.TemporaryDirectory()
+        self.addCleanup(d.cleanup)
+        self.d = Path(d.name)
+        for p in (mock.patch.object(server, "CHOICES_FILE", self.d / "choices.json"),
+                  mock.patch.object(server, "APPS_FILE", self.d / "apps.json")):
+            p.start()
+            self.addCleanup(p.stop)
+
+    def test_apps_json_typo_leaves_out_its_tiles_not_the_home_screen(self):
+        (self.d / "apps.json").write_text('{"apps": [ {"id": "x", ')
+        self.assertEqual(server.load_apps(), ([], set()))
+        self.assertEqual(server.load_games(), [])
+
+    def test_entries_without_id_or_name_are_skipped(self):
+        (self.d / "apps.json").write_text(json.dumps({"apps": [{"id": "ok", "name": "Ok", "kind": "web", "target": "https://a.b"},
+                                                               {"name": "no id"}, "junk"]}))
+        self.assertEqual([a["id"] for a in server.load_apps()[0]], ["ok"])
+
+    def test_damaged_choices_are_kept_as_a_copy(self):
+        (self.d / "choices.json").write_text('{"hidden": [1, 2')
+        self.assertEqual(server.load_choices()["hidden"], [])
+        self.assertEqual((self.d / "choices.bad.json").read_text(), '{"hidden": [1, 2')
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -97,8 +97,22 @@ def installed(entry):
     return True
 
 
+def read_apps_file():
+    """apps.json, with entries that can't make a tile (no id or name) left out. A file that doesn't parse (a typo while
+    editing it) gives no built-in tiles rather than a home screen that won't load; the log says why."""
+    try:
+        data = json.loads(APPS_FILE.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError("not a JSON object")
+    except (OSError, ValueError) as e:
+        log.error("apps.json can't be read, so its tiles are left out: %s", e)
+        return {}
+    ok = lambda e: isinstance(e, dict) and isinstance(e.get("id"), str) and isinstance(e.get("name"), str)
+    return {**data, "apps": [a for a in data.get("apps", []) if ok(a)], "games": [g for g in data.get("games", []) if ok(g)]}
+
+
 def load_apps():
-    data = json.loads(APPS_FILE.read_text(encoding="utf-8"))
+    data = read_apps_file()
     apps = data.get("apps", []) + load_choices()["added"]  # yours live in choices.json: updates replace apps.json
     return [a for a in apps if installed(a)], set(int(x) for x in data.get("hide_steam_apps", []))
 
@@ -135,8 +149,7 @@ def add_app(kind, name, value):
     tile = apps_added.make_tile(kind, name, value, apps_added.start_apps() if kind == "program" else [])
     with CHOICES_LOCK:
         c = load_choices()
-        tile["id"] = apps_added.new_id(tile["name"], {a.get("id") for a in json.loads(
-            APPS_FILE.read_text(encoding="utf-8")).get("apps", []) + c["added"]})
+        tile["id"] = apps_added.new_id(tile["name"], {a.get("id") for a in read_apps_file().get("apps", []) + c["added"]})
         c["added"].append(tile)
         save_choices(c)
     log.info("added app %s (%s)", tile["id"], kind)
@@ -156,7 +169,7 @@ def remove_app(app_id):
 
 def load_games():
     """Non-Steam games from apps.json (e.g. Epic) that this PC has; their last-played time is kept in choices.json."""
-    return [g for g in json.loads(APPS_FILE.read_text(encoding="utf-8")).get("games", []) if installed(g)]
+    return [g for g in read_apps_file().get("games", []) if installed(g)]
 
 
 # ---------------------------------------------------------------- Steam library
@@ -264,8 +277,16 @@ def game_key(g):
 def load_choices():
     try:
         d = json.loads(CHOICES_FILE.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        d = {}  # none yet, or unreadable: show everything
+        if not isinstance(d, dict):
+            raise ValueError("not a JSON object")
+    except OSError:
+        d = {}  # none yet: show everything
+    except ValueError as e:  # damaged (edited by hand): keep a copy before the next save replaces it
+        bad = CHOICES_FILE.with_name("choices.bad.json")
+        if not bad.exists():
+            shutil.copyfile(CHOICES_FILE, bad)
+            log.error("choices.json can't be read (%s); a copy is kept as choices.bad.json", e)
+        d = {}
     return {"hidden": list(d.get("hidden", [])), "pinned": list(d.get("pinned", [])), "audio": d.get("audio"),
             "played": dict(d.get("played", {})), "took": dict(d.get("took", {})),
             "names": dict(d.get("names", {})), "art": dict(d.get("art", {})),  # your own titles and art, by game key

@@ -11,3 +11,4 @@ __pycache__/
 couch-remote/cache/
 couch-remote/choices.json
 couch-remote/choices.tmp
+couch-remote/choices.bad.json
