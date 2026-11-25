@@ -12,16 +12,20 @@ if (-not (Test-Path $key)) { throw "No signing key at ${key}: only the PC that m
 Set-Location (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
 git fetch -q origin
 $sha = (git rev-parse origin/main).Trim()
-$tmp = Join-Path ([IO.Path]::GetTempPath()) "couch-sign-$sha"
+$tmp = Join-Path ([IO.Path]::GetTempPath()) "couch-sign-$sha-$(Get-Random)"  # fresh each run: ssh-keygen asks before overwriting a .sig
 New-Item -ItemType Directory -Force $tmp | Out-Null
 $msg = Join-Path $tmp 'msg'
 [IO.File]::WriteAllText($msg, $sha)  # exactly the commit id, no newline: what update.py verifies
 cmd /c "`"$keygen`" -Y sign -n couch-update -f `"$key`" `"$msg`" 2>nul"  # its progress text on stderr would stop this script
 if (-not (Test-Path "$msg.sig")) { throw 'Signing failed.' }
-$blob = (git hash-object -w "$msg.sig").Trim()
+function Invoke-Git { $out = & git.exe @args; if ($LASTEXITCODE) { throw "git $args failed" }; $out }
+$blob = (Invoke-Git hash-object -w --no-filters "$msg.sig").Trim()
 $parent = git rev-parse --verify -q origin/signatures
-$entries = @(if ($parent) { git ls-tree $parent | Where-Object { $_ -notmatch "\t$sha\.sig$" } }) + "100644 blob $blob`t$sha.sig"
-$tree = ($entries -join "`n") + "`n" | git mktree
-$commit = if ($parent) { git commit-tree $tree -p $parent -m "Sign $sha" } else { git commit-tree $tree -m "Sign $sha" }
-git push -q origin "${commit}:refs/heads/signatures"
+$env:GIT_INDEX_FILE = Join-Path $tmp 'index'  # a scratch index: this copy's own staging area is left alone
+if ($parent) { Invoke-Git read-tree $parent }
+Invoke-Git update-index --add --cacheinfo "100644,$blob,$sha.sig"
+$tree = (Invoke-Git write-tree).Trim()
+Remove-Item Env:GIT_INDEX_FILE
+$commit = if ($parent) { Invoke-Git commit-tree $tree -p $parent -m "Sign $sha" } else { Invoke-Git commit-tree $tree -m "Sign $sha" }
+Invoke-Git push -q origin "$($commit.Trim()):refs/heads/signatures"
 Write-Host "Signed and published $($sha.Substring(0, 7)): home PCs install it at their next check."
