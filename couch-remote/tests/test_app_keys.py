@@ -108,3 +108,22 @@ class HeldDirection(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FitPageToScreen(unittest.TestCase):
+    def run_fit(self, sizes):
+        cdp = mock.MagicMock()
+        cdp.send.side_effect = lambda method, **kw: {"result": {"value": sizes}} if method == "Runtime.evaluate" else {}
+        cdp.s.recv.return_value = b""  # the app closes right away
+        with mock.patch.object(server, "Cdp", return_value=cdp), \
+                mock.patch.object(server, "app_page", return_value={"webSocketDebuggerUrl": "ws://x:1/p"}):
+            server.fit_page_to_screen()
+        return [c for c in cdp.send.call_args_list if c.args[0] == "Emulation.setDeviceMetricsOverride"]
+
+    def test_page_wider_than_the_screen_is_fitted(self):
+        (call,) = self.run_fit([1280, 720, 1366])
+        self.assertEqual((call.kwargs["width"], call.kwargs["height"]), (1280, 720))
+        self.assertFalse(server.FITTING[0])
+
+    def test_page_that_fits_is_left_alone(self):
+        self.assertEqual(self.run_fit([1920, 1080, 1920]), [])

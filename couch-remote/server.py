@@ -646,6 +646,43 @@ def run_page_script(js, limit=30):
     log.info("page script never ran")
 
 
+FITTING = [False]  # a fit_page_to_screen() session is holding the app's page size
+
+
+def fit_page_to_screen(limit=30):
+    """Stremio won't lay its page out narrower than 1366 px, but a 4K TV at 300% scaling is 1280 px wide, so its right
+    edge (player buttons, side panels) was off screen. Tells the page the screen's real size, and keeps this DevTools
+    session open while the app runs: the size override ends with the session."""
+    if FITTING[0]:
+        return
+    FITTING[0] = True
+    try:
+        t0 = time.time()
+        while time.time() - t0 < limit:
+            try:
+                cdp = Cdp(app_page()["webSocketDebuggerUrl"])
+            except (OSError, KeyError, ConnectionError):
+                time.sleep(0.5)
+                continue
+            try:
+                w, h, inner = cdp.send("Runtime.evaluate", expression="[screen.width, screen.height, innerWidth]",
+                                       returnByValue=True)["result"]["value"]
+                if inner <= w:
+                    return  # it fits already (a smaller scale, or a wider screen)
+                cdp.send("Emulation.setDeviceMetricsOverride", width=w, height=h, deviceScaleFactor=0, mobile=False)
+                log.info("fitted the app's page to the screen: %s px wide, not %s", w, inner)
+                cdp.s.settimeout(None)
+                while cdp.s.recv(4096):  # until the app closes
+                    pass
+                return
+            except (OSError, KeyError, RuntimeError, ConnectionError, TypeError, ValueError):
+                time.sleep(0.5)
+            finally:
+                cdp.s.close()
+    finally:
+        FITTING[0] = False
+
+
 def back_or_close(h, key, first_screen):
     """apps.json "back_closes": like a TV, ○ on an app's first screen (its address matches that pattern)
     closes it; Stremio has no way out of its own. Anywhere else ○ is its back key."""
@@ -2064,6 +2101,7 @@ def launch_app(app_id):
         if app.get("page_script"):
             js = (ROOT / app["page_script"]).read_text(encoding="utf-8")
             threading.Thread(target=run_page_script, args=(js,), daemon=True).start()
+            threading.Thread(target=fit_page_to_screen, daemon=True).start()
     elif kind == "web":
         if app.get("tv"):
             threading.Thread(target=edge_tv, args=(target, f"web-{app['id']}"), daemon=True).start()
