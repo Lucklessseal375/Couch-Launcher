@@ -63,7 +63,7 @@ Clean-PC install and signed self-update: Windows Sandbox (`C:\Users\eli\couch-sa
 
 ## Not done, by choice or for later
 
-- Electron-specific items (contextBridge, WebContentsView cache): Couch has no Electron.
-- Adjustable dead zones, button remapping and a controller test screen: the defaults work; worth it only if a controller misbehaves.
+- Electron-specific items (contextBridge, WebContentsView cache): Couch has no Electron; skipped at the user's request, 2026-11-25.
+- Adjustable dead zones, button remapping and a controller test screen: skipped at the user's request, 2026-11-25 (the defaults work).
 - Milestone 4 (universal search across streaming services, profiles, Plex/Jellyfin, voice): skipped at the user's request, 2026-11-25.
 - Copy-diagnostics action, light/high-contrast themes.
