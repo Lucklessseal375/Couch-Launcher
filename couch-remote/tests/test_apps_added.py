@@ -81,5 +81,37 @@ class AddRemove(unittest.TestCase):
             server.remove_app("youtube")
 
 
+class Arrange(unittest.TestCase):
+    APPS = [{"id": "steam"}, {"id": "epic"}, {"id": "ea"}, {"id": "youtube"}]
+
+    def setUp(self):
+        d = tempfile.TemporaryDirectory()
+        self.addCleanup(d.cleanup)
+        for p in (mock.patch.object(server, "CHOICES_FILE", Path(d.name) / "choices.json"),
+                  mock.patch.object(server, "load_apps", return_value=(list(self.APPS), set()))):
+            p.start()
+            self.addCleanup(p.stop)
+
+    def ids(self, apps):
+        return [a["id"] for a in apps]
+
+    def test_order_is_kept_and_new_apps_go_last(self):
+        server.arrange_apps("order", ids=["youtube", "steam"])
+        shown, _ = server.shown_apps()
+        self.assertEqual(self.ids(shown), ["youtube", "steam", "epic", "ea"])
+
+    def test_hide_and_unhide(self):
+        server.arrange_apps("hide", "ea")
+        shown, hidden = server.shown_apps()
+        self.assertEqual((self.ids(shown), self.ids(hidden)), (["steam", "epic", "youtube"], ["ea"]))
+        server.arrange_apps("unhide", "ea")
+        self.assertEqual(server.shown_apps()[1], [])
+
+    def test_unknown_apps_are_refused(self):
+        for action, app_id, ids in (("order", "", ["steam", "evil"]), ("hide", "nope", ()), ("order", "", [])):
+            with self.assertRaises(ValueError):
+                server.arrange_apps(action, app_id, ids)
+
+
 if __name__ == "__main__":
     unittest.main()

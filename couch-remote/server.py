@@ -103,6 +103,33 @@ def load_apps():
     return [a for a in apps if installed(a)], set(int(x) for x in data.get("hide_steam_apps", []))
 
 
+def shown_apps():
+    """(the Apps row in your order, without hidden ones; the hidden ones). load_apps() keeps every app, so a hidden
+    app still gets its controller keys when it's opened some other way."""
+    apps, c = load_apps()[0], load_choices()
+    order = {app_id: i for i, app_id in enumerate(c["app_order"])}
+    apps = sorted(apps, key=lambda a: order.get(a.get("id"), len(order)))  # stable: unarranged ones keep their place
+    hidden = set(c["hidden_apps"])
+    return [a for a in apps if a.get("id") not in hidden], [a for a in apps if a.get("id") in hidden]
+
+
+def arrange_apps(action, app_id="", ids=()):
+    """□ on an app tile: "order" saves the row's order (ids), "hide" and "unhide" one app."""
+    known = {a.get("id") for a in load_apps()[0]}
+    with CHOICES_LOCK:
+        c = load_choices()
+        if action == "order":
+            ids = [str(i) for i in ids][:300]
+            if not ids or not set(ids) <= known:
+                raise ValueError("unknown app in the new order")
+            c["app_order"] = ids
+        elif action in ("hide", "unhide") and app_id in known:
+            c["hidden_apps"] = [i for i in c["hidden_apps"] if i != app_id] + ([app_id] if action == "hide" else [])
+        else:
+            raise ValueError("unknown action or app")
+        save_choices(c)
+
+
 def add_app(kind, name, value):
     """The launcher's Add app tile. Returns the new tile's id."""
     tile = apps_added.make_tile(kind, name, value, apps_added.start_apps() if kind == "program" else [])
@@ -243,7 +270,9 @@ def load_choices():
             "played": dict(d.get("played", {})), "took": dict(d.get("took", {})),
             "names": dict(d.get("names", {})), "art": dict(d.get("art", {})),  # your own titles and art, by game key
             "sleep_idle": int(d.get("sleep_idle", 0) or 0), "swap": bool(d.get("swap", False)),
-            "added": [a for a in d.get("added", []) if isinstance(a, dict)]}  # app tiles added from the launcher
+            "added": [a for a in d.get("added", []) if isinstance(a, dict)],  # app tiles added from the launcher
+            "app_order": [str(x) for x in d.get("app_order", [])],  # the Apps row as you arranged it (□ → Move)
+            "hidden_apps": [str(x) for x in d.get("hidden_apps", [])]}
 
 
 def save_choices(c):
@@ -2432,9 +2461,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"running": {"name": RUNNING["name"]} if running_window() else None,
                                        "version": VERSION})
             if path == "/api/info":
-                apps, _ = load_apps()
+                apps, hidden_apps = shown_apps()
                 games, hidden = library()
                 info = {"name": socket.gethostname(), "apps": apps, "games": games, "hidden": hidden,
+                        "hiddenApps": [{"id": a["id"], "name": a["name"]} for a in hidden_apps],
                         "padReader": PAD_READER, "intro": bool(intro_file()), "sounds": sound_clips(),
                         "stream": STREAM["device"] if STREAM["on"] else None, "sunshine": sunshine_status(),
                         "sunshineLogin": SUNSHINE_CRED.exists(), "sleepAt": int(SLEEP["at"]),
@@ -2544,9 +2574,10 @@ class Handler(BaseHTTPRequestHandler):
                 if b.get("action") == "add":
                     return self.send_json({"ok": True, "id": add_app(str(b.get("kind")), str(b.get("name", "")),
                                                                      str(b.get("value", "")))})
-                if b.get("action") != "remove":
-                    raise ValueError("unknown action")
-                remove_app(str(b.get("id", "")))
+                if b.get("action") == "remove":
+                    remove_app(str(b.get("id", "")))
+                else:  # order / hide / unhide
+                    arrange_apps(str(b.get("action")), str(b.get("id", "")), b.get("ids") or [])
             elif path == "/api/games":
                 set_choice(str(b.get("action")), str(b.get("key", "")), str(b.get("value", "")))
             elif path == "/api/settings":  # {"swap": bool}: ✕ and ○ swapped

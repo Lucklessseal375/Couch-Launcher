@@ -202,6 +202,9 @@
   .poster.noart, .poster.surprise { background: radial-gradient(circle at 50% 36%, rgba(242,184,68,.3), transparent 50%),
     url(/steelball.png) 50% 34% / 42% no-repeat, linear-gradient(165deg, #3a2716, #120d09 70%); }
   .poster.surprise .name { display: block; text-align: center; }
+  .item.moving { transform: translateY(-2vh) rotate(-3deg) scale(1.06) !important; outline: .45vh dashed var(--gold); outline-offset: .6vh;
+                 box-shadow: 0 2.6vh 4.5vh #000c !important; z-index: 2; }  /* picked up, like a horseshoe lifted off its nail */
+  body.moving-app .cta { visibility: hidden; }
   .app.add { background: radial-gradient(circle at 50% 32%, rgba(242,184,68,.28), transparent 55%), linear-gradient(165deg, #3a2716, #120d09 75%); }
   .poster .running { position: absolute; top: 1.2vh; left: 1.2vh; padding: .4vh 1vh; border-radius: 99vh; z-index: 1;
                      font: 700 2.2vh/1.2 var(--ui); color: #120d09; background: var(--gold); box-shadow: 0 .3vh 1vh #0008; }
@@ -1022,7 +1025,7 @@ function updatePrompts() {
   const nav = [["tri", "Search"], [["l1", "r1"], "Category"], ["options", "Menu"]];
   if (!t) return setPrompts([["cross", "Select"], ...nav]);
   if (t.game) return setPrompts([["cross", "Play"], ["square", "Details"], ...nav]);
-  if (t.app?.id?.startsWith("my-")) return setPrompts([["cross", "Open"], ["square", "Remove"], ...nav]);
+  if (t.app) return setPrompts([["cross", "Open"], ["square", "Options"], ...nav]);
   setPrompts([["cross", t.dataset.cta || "Select"], ...nav]);
 }
 
@@ -1118,7 +1121,8 @@ function pcItems() {
     { icon: "phone", label: "Phone remote", meta: "Scan a code to control the PC from your phone", cta: "Show code", fn: showPhone },
     { icon: deviceIcon(info.audio?.name || ""), label: "Audio output", meta: info.audio ? `Playing on ${deviceName(info.audio.name)[0]}` : "Choose where games and videos play", cta: "Change", fn: pickAudio },
     { icon: Sound.on ? "sound" : "mute", label: "Sound", meta: Sound.on ? `Effects on, playing on the ${Out.where}` : "Effects off", cta: "Settings", fn: () => soundSettings() },
-    ...(info.hidden?.length ? [{ icon: "eye", label: "Hidden games", meta: info.hidden.map(h => h.name).join(", "), cta: "Choose", fn: hiddenMenu }] : []),
+    ...(info.hidden?.length || info.hiddenApps?.length ? [{ icon: "eye", label: info.hiddenApps?.length ? (info.hidden?.length ? "Hidden games and apps" : "Hidden apps") : "Hidden games",
+         meta: [...(info.hiddenApps || []), ...(info.hidden || [])].map(h => h.name).join(", "), cta: "Choose", fn: hiddenMenu }] : []),
     { icon: "pad", label: "Turn off controller", meta: "Press the PS button to turn it back on", cta: "Turn off", fn: padOff, live: "pads" },
     { icon: "power", label: "Power", meta: "Sleep, restart or shut down the PC", cta: "Choose", fn: powerMenu },
     { icon: "sound", label: "Volume", meta: "PC volume and the microphone", cta: "Open", fn: () => volumeMenu() },
@@ -1515,7 +1519,7 @@ async function windowAction(action) {
 // □ Details on a game: its cover, facts, and Play / Pin to front / Hide (the server keeps pins and hides)
 function gameDetails() {
   const t = !modal && chosen && rows[pos.r][pos.c], g = t && t.game;
-  if (t?.app?.id?.startsWith("my-")) return removeAppMenu(t.app);  // an app you added: □ takes it off again
+  if (t?.app) return appMenu(t.app);  // an app tile: move it, hide it, or remove one you added
   if (!g) return Sound.bump();
   const gb = n => `${(n / 1e9).toFixed(n > 1e10 ? 0 : 1)} GB`;
   const lines = [ago(g.lastPlayed), g.took && `Starts in about ${g.took} seconds`, g.playtime ? playtime(g.playtime).replace(" in total", " played") : "",
@@ -1572,6 +1576,48 @@ async function addApp(body) {
   if (t) { const rr = rows.findIndex(row => row.includes(t)); focus(rr, rows[rr].indexOf(t)); }
   toast(`${t?.dataset.title || "App"} added`);
 }
+// □ on an app tile
+function appMenu(a) {
+  const mine = a.id.startsWith("my-");
+  choose(a.name, "", [
+    { label: "Move", sub: "Slide it along the Apps row", icon: "tasks", fn: () => moveApp(a) },
+    mine ? { label: "Remove", sub: "Take the tile off Couch", icon: "close", fn: () => removeAppMenu(a) }
+         : { label: "Hide", sub: "Show it again from the PC row", icon: "eye", fn: () => arrangeApps({ action: "hide", id: a.id }, `${a.name} hidden. Show it again from the PC row.`) },
+  ], { vertical: true });
+}
+async function arrangeApps(body, said) {
+  const r = await api("/api/apps", body).catch(() => null);
+  if (!r?.ok) { toast(r?.error || "Couch isn't responding. Try again in a moment."); return false; }
+  await refresh(); if (said) toast(said);
+  return true;
+}
+// Move: the tile lifts; ← → slide it, ✕ drops it there, ○ puts it back
+function moveApp(a) {
+  const box = $("#apps"), r = rows.findIndex(row => row.some(e => e.app?.id === a.id));
+  const t = rows[r]?.find(e => e.app?.id === a.id);
+  if (!t) return;
+  const end = async keep => {
+    t.classList.remove("moving"); document.body.classList.remove("moving-app"); modal = null; updatePrompts();
+    if (!keep) return refresh();
+    const ids = [...box.querySelectorAll(".item")].map(e => e.app?.id).filter(Boolean);
+    if (await arrangeApps({ action: "order", ids })) { const rr = rows.findIndex(row => row.some(e => e.app?.id === a.id)); focus(rr, rows[rr].findIndex(e => e.app?.id === a.id)); }
+  };
+  t.classList.add("moving"); document.body.classList.add("moving-app"); Sound.select();
+  modal = {
+    els: [], i: 0, prompts: [["cross", "Done"], ["circle", "Cancel"]],
+    move(dir) {
+      const tiles = [...box.querySelectorAll(".item")].filter(e => e.app), i = tiles.indexOf(t);
+      const j = dir === "left" ? i - 1 : dir === "right" ? i + 1 : -1;
+      if (j < 0 || j >= tiles.length) return Sound.bump();
+      box.insertBefore(t, dir === "left" ? tiles[j] : tiles[j].nextSibling);
+      rows[r] = [...box.querySelectorAll(".item")];
+      focus(r, rows[r].indexOf(t)); Sound.move();
+    },
+    activate: () => { Sound.select(); end(true); },
+    onBack: () => end(false),
+  };
+  updatePrompts(); toast(`Move ${a.name} with ← and →`);
+}
 function removeAppMenu(a) {
   choose(`Remove ${a.name}?`, a.kind === "web" ? "Only the tile goes." : "Only the tile goes. The program stays installed.", [
     { label: "Remove", icon: "close", fn: async () => {
@@ -1582,8 +1628,9 @@ function removeAppMenu(a) {
     { label: "Cancel" },
   ], { vertical: true, start: 1 });
 }
-function hiddenMenu() {  // the PC row's Hidden games: bring one back, or all
-  choose("Hidden games", "", [
+function hiddenMenu() {  // the PC row's Hidden games (and apps): bring one back, or all the games
+  choose(info.hiddenApps?.length ? "Hidden" : "Hidden games", "", [
+    ...(info.hiddenApps || []).map(h => ({ label: h.name, sub: "App · Show it again", icon: "eye", fn: () => arrangeApps({ action: "unhide", id: h.id }, `${h.name} is back`) })),
     ...info.hidden.map(h => ({ label: h.name, sub: "Show it again", icon: "eye", fn: () => setChoice("unhide", h) })),
     ...(info.hidden.length > 1 ? [{ label: "Show all", icon: "check", fn: () => setChoice("unhide-all") }] : []),
   ], { vertical: true });
