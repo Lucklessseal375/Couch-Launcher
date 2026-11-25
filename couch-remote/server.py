@@ -25,6 +25,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # audio.py and padspeaker.py sit next to this file
+import apps_added  # noqa: E402
 import audio  # noqa: E402
 import padspeaker  # noqa: E402
 import update  # noqa: E402
@@ -98,7 +99,32 @@ def installed(entry):
 
 def load_apps():
     data = json.loads(APPS_FILE.read_text(encoding="utf-8"))
-    return [a for a in data.get("apps", []) if installed(a)], set(int(x) for x in data.get("hide_steam_apps", []))
+    apps = data.get("apps", []) + load_choices()["added"]  # yours live in choices.json: updates replace apps.json
+    return [a for a in apps if installed(a)], set(int(x) for x in data.get("hide_steam_apps", []))
+
+
+def add_app(kind, name, value):
+    """The launcher's Add app tile. Returns the new tile's id."""
+    tile = apps_added.make_tile(kind, name, value, apps_added.start_apps() if kind == "program" else [])
+    with CHOICES_LOCK:
+        c = load_choices()
+        tile["id"] = apps_added.new_id(tile["name"], {a.get("id") for a in json.loads(
+            APPS_FILE.read_text(encoding="utf-8")).get("apps", []) + c["added"]})
+        c["added"].append(tile)
+        save_choices(c)
+    log.info("added app %s (%s)", tile["id"], kind)
+    return tile["id"]
+
+
+def remove_app(app_id):
+    with CHOICES_LOCK:
+        c = load_choices()
+        left = [a for a in c["added"] if a.get("id") != app_id]
+        if len(left) == len(c["added"]):
+            raise ValueError("Only apps you added can be removed")
+        c["added"] = left
+        save_choices(c)
+    log.info("removed app %s", app_id)
 
 
 def load_games():
@@ -216,7 +242,8 @@ def load_choices():
     return {"hidden": list(d.get("hidden", [])), "pinned": list(d.get("pinned", [])), "audio": d.get("audio"),
             "played": dict(d.get("played", {})), "took": dict(d.get("took", {})),
             "names": dict(d.get("names", {})), "art": dict(d.get("art", {})),  # your own titles and art, by game key
-            "sleep_idle": int(d.get("sleep_idle", 0) or 0), "swap": bool(d.get("swap", False))}
+            "sleep_idle": int(d.get("sleep_idle", 0) or 0), "swap": bool(d.get("swap", False)),
+            "added": [a for a in d.get("added", []) if isinstance(a, dict)]}  # app tiles added from the launcher
 
 
 def save_choices(c):
@@ -1465,7 +1492,7 @@ def msix_logo(args):
     """The biggest square logo of a Store (MSIX) app launched through shell:AppsFolder, or None.
     The package folder carries the version, so it is found by pattern each time."""
     for a in args:
-        m = re.fullmatch(r"shell:AppsFolder\\(\w+)_(\w+)!.*", str(a), re.I)
+        m = re.fullmatch(r"shell:AppsFolder\\([\w.-]+)_(\w+)!.*", str(a), re.I)  # names can have dots: Microsoft.WindowsNotepad
         if m:
             # WindowsApps can't be listed without admin, but the package's own folder can be read: the registry names it
             repo = r"Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\Repository\Packages"
@@ -1475,8 +1502,9 @@ def msix_logo(args):
                     name = winreg.EnumKey(k, i)
                     if name.startswith(m[1] + "_") and name.endswith("__" + m[2]):
                         with winreg.OpenKey(k, name) as pk:
-                            logos = list((Path(winreg.QueryValueEx(pk, "PackageRootFolder")[0]) / "assets").glob("Square*Logo*.png"))
-            best = [p for p in logos if p.name == "Square44x44Logo.targetsize-256.png"]
+                            assets = Path(winreg.QueryValueEx(pk, "PackageRootFolder")[0]) / "assets"
+                            logos = [*assets.glob("Square*Logo*.png"), *assets.glob("*AppList*.png")]  # Notepad: NotepadAppList
+            best = [p for p in logos if p.name == "Square44x44Logo.targetsize-256.png" or p.name.endswith("AppList.targetsize-256.png")]
             return (best or sorted(logos, key=lambda p: p.stat().st_size)[-1:] or [None])[0]
     return None
 
@@ -2398,6 +2426,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"shots": media_list()})
             if path == "/api/network":
                 return self.send_json(network())
+            if path == "/api/startapps":  # the Add app tile's list of programs
+                return self.send_json({"apps": [{"name": n, "id": i} for n, i in apps_added.start_apps()]})
             if path == "/api/running":  # cheap: the launcher polls it to keep Now playing current
                 return self.send_json({"running": {"name": RUNNING["name"]} if running_window() else None,
                                        "version": VERSION})
@@ -2510,6 +2540,13 @@ class Handler(BaseHTTPRequestHandler):
                         save_choices(c)
                 else:
                     power(a)
+            elif path == "/api/apps":  # {"action": "add", "kind": "program"|"web", "name", "value"} or {"action": "remove", "id"}
+                if b.get("action") == "add":
+                    return self.send_json({"ok": True, "id": add_app(str(b.get("kind")), str(b.get("name", "")),
+                                                                     str(b.get("value", "")))})
+                if b.get("action") != "remove":
+                    raise ValueError("unknown action")
+                remove_app(str(b.get("id", "")))
             elif path == "/api/games":
                 set_choice(str(b.get("action")), str(b.get("key", "")), str(b.get("value", "")))
             elif path == "/api/settings":  # {"swap": bool}: ✕ and ○ swapped
