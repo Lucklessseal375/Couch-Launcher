@@ -269,13 +269,14 @@ class MusicAndMixer(unittest.TestCase):
             with mock.patch.dict(server.os.environ, {"USERPROFILE": d}):
                 self.assertEqual([p.name for p in server.music_files()], ["a.flac", "b.mp3"])
 
-    def test_mixer_names_and_only_playing_apps_can_change(self):
-        vols = {"steam.exe": {"level": 80, "muted": False}, "someapp.exe": {"level": 50, "muted": True}}
-        with mock.patch.object(server.audio, "app_volumes", return_value=vols), \
-                mock.patch.object(server, "running_window", return_value=None), \
-                mock.patch.object(server.audio, "set_app_volume") as setv:
-            self.assertEqual([(a["name"], a["level"]) for a in server.mixer()], [("Someapp", 50), ("Steam", 80)])
-            server.set_mixer("steam.exe", 40)
-            setv.assert_called_once_with("steam.exe", 40)
+    def test_mixer_keeps_youtube_apart_from_couchs_sounds(self):
+        sessions = [{"exe": "steam.exe", "pid": 1, "level": 80, "muted": False},
+                    {"exe": "msedge.exe", "pid": 2, "level": 90, "muted": False},
+                    {"exe": "msedge.exe", "pid": 3, "level": 60, "muted": False}]
+        with mock.patch.object(server.audio, "app_sessions", return_value=sessions),                 mock.patch.object(server, "edge_profiles", return_value={2: "launcher", 3: "web-youtube"}),                 mock.patch.object(server, "running_window", return_value=None),                 mock.patch.object(server.audio, "set_session_volume") as setv:
+            self.assertEqual([(a["name"], a["level"]) for a in server.mixer()],
+                             [("Couch's sounds and music", 90), ("Steam", 80), ("YouTube", 60)])
+            server.set_mixer("msedge.exe:web-youtube", 40)
+            setv.assert_called_once_with({3}, 40)  # YouTube only, Couch's sounds untouched
             with self.assertRaises(ValueError):
                 server.set_mixer("notplaying.exe", 40)

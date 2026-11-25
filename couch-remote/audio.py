@@ -266,8 +266,8 @@ def _exe_of(pid):
 
 
 def _sessions(fn):
-    """fn(exe name, ISimpleAudioVolume) for each app's sound session on the default output (not Windows' own sounds,
-    not ones that have ended)."""
+    """fn(exe name, pid, ISimpleAudioVolume) for each app's sound session on the default output (not Windows' own
+    sounds, not ones that have ended)."""
     def each(mgr):
         enum = c_void_p()
         _method(mgr, 5, POINTER(c_void_p))(mgr, byref(enum))  # GetSessionEnumerator
@@ -290,7 +290,7 @@ def _sessions(fn):
                         if exe:
                             vol = _query(ctl.value, IID_SIMPLE_VOLUME)
                             try:
-                                fn(exe, vol)
+                                fn(exe, pid.value, vol)
                             finally:
                                 _release(vol)
                     finally:
@@ -322,23 +322,23 @@ def _sessions(fn):
             _release(enum)
 
 
-def app_volumes():
-    """{exe: {"level": 0-100, "muted"}} for each program with sound on the default output (one entry per program)."""
+def app_sessions():
+    """[{"exe", "pid", "level": 0-100, "muted"}], one per program process with sound on the default output."""
     found = {}
 
-    def read(exe, v):
+    def read(exe, pid, v):
         f, m = ctypes.c_float(), wintypes.BOOL()
         _method(v, 4, POINTER(ctypes.c_float))(v, byref(f))  # GetMasterVolume
         _method(v, 6, POINTER(wintypes.BOOL))(v, byref(m))   # GetMute
-        found.setdefault(exe, {"level": round(f.value * 100), "muted": bool(m.value)})
+        found.setdefault(pid, {"exe": exe, "pid": pid, "level": round(f.value * 100), "muted": bool(m.value)})
     _sessions(read)
-    return found
+    return list(found.values())
 
 
-def set_app_volume(exe, level):
-    """Every sound session of that program to level (0-100), and unmuted when turned up."""
-    def write(e, v):
-        if e == exe:
+def set_session_volume(pids, level):
+    """Every sound session of those processes to level (0-100), and unmuted when turned up."""
+    def write(_exe, pid, v):
+        if pid in pids:
             _method(v, 3, ctypes.c_float, c_void_p)(v, max(0, min(100, level)) / 100, None)  # SetMasterVolume
             if level > 0:
                 _method(v, 5, wintypes.BOOL, c_void_p)(v, False, None)  # SetMute(false)

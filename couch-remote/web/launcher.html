@@ -1846,7 +1846,7 @@ async function mixerMenu() {
       adjust(step, b) {
         a.level = Math.max(0, Math.min(100, a.level + step * 5)); if (a.level) a.muted = false;
         b.querySelector(".bar i").style.width = a.level + "%"; b.querySelector("small").textContent = sub();
-        api("/api/mixer", { exe: a.exe, level: a.level }).catch(() => {});
+        api("/api/mixer", { key: a.key, level: a.level }).catch(() => {});
       } };
   }), { vertical: true });
 }

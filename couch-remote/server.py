@@ -199,29 +199,61 @@ def music_files():
 
 
 # ---------------------------------------------------------------- per-app volume (PC row → Volume → each app)
-APP_SOUND_NAMES = {"msedge.exe": "Edge: YouTube and Couch's sounds", "msedgewebview2.exe": "Web apps (Stremio, Claude)",
+APP_SOUND_NAMES = {"msedge.exe": "Edge", "msedgewebview2.exe": "Web apps (Stremio, Claude)",
                    "steam.exe": "Steam", "steamwebhelper.exe": "Steam", "launcher.exe": "Rockstar Games Launcher",
                    "discord.exe": "Discord", "spotify.exe": "Spotify", "windowssandboxremotesession.exe": "Windows Sandbox"}
+EDGE_PROFILE_NAMES = {"launcher": "Couch's sounds and music", "web-youtube": "YouTube"}
 
 
-def mixer():
-    """[{"exe", "name", "level", "muted"}] for each program with sound on the TV's output, named the way you'd say it:
-    the running game's name, a Couch tile's name, or a known program."""
+def edge_profiles(pids):
+    """{pid: Couch profile name ("launcher", "web-youtube")} for Edge processes Couch started; Edge's sound comes from
+    one audio process per profile, and its command line names the profile folder."""
+    if not pids:
+        return {}
+    r = subprocess.run(["powershell", "-NoProfile", "-Command",
+                        "Get-CimInstance Win32_Process -Filter \"" + " or ".join(f"ProcessId={int(p)}" for p in pids) +
+                        "\" | ForEach-Object { \"$($_.ProcessId)`t$($_.CommandLine)\" }"],
+                       capture_output=True, text=True, timeout=20, creationflags=0x08000000)
+    out = {}
+    for line in r.stdout.splitlines():
+        pid, _, cmd = line.partition("\t")
+        m = re.search(r"profiles\\([\w-]+)", cmd)
+        if m and pid.isdigit():
+            out[int(pid)] = m.group(1)
+    return out
+
+
+def sound_groups():
+    """{key: {"name", "pids", "level", "muted"}}: each program with sound, Couch's own Edge windows apart (YouTube is
+    its own slider, not lumped in with Couch's menu sounds), named the way you'd say it."""
+    sessions = audio.app_sessions()
+    profiles = edge_profiles([s["pid"] for s in sessions if s["exe"] == "msedge.exe"])
     names = {Path(os.path.expandvars(a["target"])).name.lower(): a["name"]
              for a in load_apps()[0] if a.get("kind") == "exe" and "explorer.exe" not in a["target"].lower()}
     h = running_window()
     game = (window_exe(h), RUNNING["name"]) if h and RUNNING.get("name") else ("", "")
-    out = []
-    for exe, v in audio.app_volumes().items():
-        name = game[1] if exe == game[0] else names.get(exe) or APP_SOUND_NAMES.get(exe) or exe.removesuffix(".exe").replace("-", " ").title()
-        out.append({"exe": exe, "name": name, **v})
-    return sorted(out, key=lambda a: a["name"].lower())
+    groups = {}
+    for s in sessions:
+        exe, prof = s["exe"], profiles.get(s["pid"])
+        key = f"{exe}:{prof}" if prof else exe
+        name = (EDGE_PROFILE_NAMES.get(prof) or (prof and prof.removeprefix("web-").title())) or \
+            (game[1] if exe == game[0] else names.get(exe) or APP_SOUND_NAMES.get(exe) or exe.removesuffix(".exe").replace("-", " ").title())
+        g = groups.setdefault(key, {"name": name, "pids": [], "level": s["level"], "muted": s["muted"]})
+        g["pids"].append(s["pid"])
+    return groups
 
 
-def set_mixer(exe, level):
-    if exe not in audio.app_volumes():  # only a program that has sound right now
+def mixer():
+    """[{"key", "name", "level", "muted"}] for the Volume for each app screen, by name."""
+    return sorted(({"key": k, "name": g["name"], "level": g["level"], "muted": g["muted"]} for k, g in sound_groups().items()),
+                  key=lambda a: a["name"].lower())
+
+
+def set_mixer(key, level):
+    g = sound_groups().get(key)
+    if not g:  # only something that has sound right now
         raise ValueError("That app isn't playing sound any more")
-    audio.set_app_volume(exe, int(level))
+    audio.set_session_volume(set(g["pids"]), int(level))
 
 
 # ---------------------------------------------------------------- per-game sound output (□ → Display and sound)
@@ -2838,8 +2870,8 @@ class Handler(BaseHTTPRequestHandler):
                 if b.get("action") != "pair":
                     raise ValueError("unknown action")
                 return self.send_json({"ok": True, "result": bt_pair(str(b.get("id", "")))})
-            elif path == "/api/mixer":  # {"exe", "level": 0-100}: one app's own volume (TV or phone)
-                set_mixer(str(b.get("exe", "")), max(0, min(100, int(b.get("level", 0)))))
+            elif path == "/api/mixer":  # {"key", "level": 0-100}: one app's own volume (TV or phone)
+                set_mixer(str(b.get("key", "")), max(0, min(100, int(b.get("level", 0)))))
             elif path == "/api/gameaudio" and kind == "local":  # {"key", "id"}: a game's own sound output ("" = usual)
                 set_game_audio(str(b.get("key", "")), str(b.get("id", "")))
             elif path == "/api/display" and kind == "local":  # {"action": "try"|"keep"|"undo"|"clear", "mode", "key"}
