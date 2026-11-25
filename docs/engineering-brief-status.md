@@ -22,7 +22,7 @@ Electron sections were mapped to the equivalent part here, or marked as not appl
 | 6.1 Home screen | Now playing (Resume/Close), Apps, Games (recent first, pins), PC row; the first press after a reload lands on your last tile. |
 | 6.2 Managing apps | Add app (Start-menu program or https website), Move, Hide, Remove, all from the controller; kept per PC in `choices.json`. |
 | 6.4 Accessibility | Reduce motion switch; TV-sized text (≥ 2.3vh); light/high-contrast themes not added (the JoJo look is dark by design). |
-| 7 Media features | Not started (no legitimate data source for "continue watching" across services). |
+| 7 Media features | Skipped with Milestone 4, at the user's request. |
 | 8 System | Sleep timer, power menu, audio output, volume, controller battery, stay-awake while streaming, Sunshine streaming. |
 | 9 Config | Atomic `choices.json` writes; a damaged `choices.json` is kept as `choices.bad.json`; a broken `apps.json` leaves out its tiles instead of failing. |
 | 15 Auto-update guardrail | Updates are signed (Ed25519, key only on the main PC), checked against the installed copy's own key, and roll back if the new version crashes within 2 minutes. |
@@ -65,5 +65,5 @@ Clean-PC install and signed self-update: Windows Sandbox (`C:\Users\eli\couch-sa
 
 - Electron-specific items (contextBridge, WebContentsView cache): Couch has no Electron.
 - Adjustable dead zones, button remapping and a controller test screen: the defaults work; worth it only if a controller misbehaves.
-- Universal search across streaming services, profiles, Plex/Jellyfin: brief Milestone 4; need your choices and legitimate data sources.
+- Milestone 4 (universal search across streaming services, profiles, Plex/Jellyfin, voice): skipped at the user's request, 2026-11-25.
 - Copy-diagnostics action, light/high-contrast themes.
