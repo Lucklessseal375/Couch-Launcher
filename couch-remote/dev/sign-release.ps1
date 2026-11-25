@@ -8,7 +8,7 @@
 $ErrorActionPreference = 'Stop'
 $key = Join-Path $env:USERPROFILE '.ssh\couch_update'
 $keygen = Join-Path $env:SystemRoot 'System32\OpenSSH\ssh-keygen.exe'
-if (-not (Test-Path $key)) { throw "No signing key at $key: only the PC that made it can sign updates." }
+if (-not (Test-Path $key)) { throw "No signing key at ${key}: only the PC that made it can sign updates." }
 Set-Location (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
 git fetch -q origin
 $sha = (git rev-parse origin/main).Trim()
