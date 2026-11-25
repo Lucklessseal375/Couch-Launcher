@@ -8,7 +8,6 @@ but holds this PC's weather city, so an existing one is kept too.
 """
 import json
 import logging
-import os
 import shutil
 import subprocess
 import sys
@@ -17,6 +16,8 @@ import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
+
+import ed25519
 
 REPO = "Lucklessseal375/Couch-Launcher"
 KEEP = {"couch-remote/config.json"}  # tracked, but this PC's own once it exists
@@ -54,18 +55,14 @@ def verified(root, sha, sig):
     """Signed by a key in this PC's own update-signers file. It's the installed copy that decides, so a push can't
     swap in its own key."""
     signers = root / "couch-remote" / "update-signers"
-    keygen = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "OpenSSH" / "ssh-keygen.exe"  # Windows' own
-    if not signers.exists() or not keygen.exists():
-        log.warning("can't check update signatures: %s is missing", "update-signers" if not signers.exists() else keygen)
+    try:
+        keys = [k for k in map(ed25519.ssh_ed25519_key, signers.read_text(encoding="utf-8").splitlines()) if k]
+    except (OSError, ValueError):
+        keys = []
+    if not keys:
+        log.warning("can't check update signatures: no key in %s", signers)
         return False
-    with tempfile.TemporaryDirectory() as d:
-        (Path(d) / "s.sig").write_bytes(sig)
-        r = subprocess.run([str(keygen), "-Y", "verify", "-f", str(signers), "-I", "couch-update", "-n", "couch-update",
-                            "-s", str(Path(d) / "s.sig")], input=sha.encode(), capture_output=True,
-                           timeout=30, creationflags=0x08000000)
-    if r.returncode:
-        log.info("signature check said: %s", (r.stdout + r.stderr).decode(errors="ignore").strip()[:300])
-    return r.returncode == 0
+    return ed25519.verify_sshsig(sig, sha.encode(), "couch-update", keys)
 
 
 def imports_cleanly(new_remote):

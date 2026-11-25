@@ -118,6 +118,17 @@ class Signatures(unittest.TestCase):
         self.assertFalse(update.verified(self.root, "abc123", self.sign("theirs", "abc123")))
         self.assertFalse(update.verified(self.root, "abc123", self.sign("ours", "evil999")))
 
+    def test_rfc8032_vectors(self):
+        import ed25519
+        pk = bytes.fromhex("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a")
+        sig = bytes.fromhex("e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e3970"
+                            "1cf9b46bd25bf5f0595bbe24655141438e7a100b")
+        self.assertTrue(ed25519.verify(pk, b"", sig))
+        self.assertFalse(ed25519.verify(pk, b"x", sig))
+
+    def test_garbage_signature_fails_quietly(self):
+        self.assertFalse(update.verified(self.root, "abc123", b"-----BEGIN SSH SIGNATURE-----\nnot base64!\n"))
+
     def test_no_signers_file_means_no_update(self):
         sig = self.sign("ours", "abc123")
         (self.root / "couch-remote" / "update-signers").unlink()
