@@ -16,7 +16,7 @@ Electron sections were mapped to the equivalent part here, or marked as not appl
 | 3.4 Injection | Checked: every name, title and window title is escaped (`esc`) or set as text. |
 | 4.1 Lifecycle / recovery | A supervisor restarts a crashed server (gives up after 3 crashes in 10 minutes). The TV shows "Reconnecting to Couch…". Launch has a 3 s double-press guard. |
 | 4.3 Error states | Launch failures, a server that's down and a missing controller each have plain messages. Edge itself missing isn't handled (Couch needs Edge). |
-| 4.4 Logging | 1 MB rotating log; no typed text, keys, tokens or URLs with queries. No "copy diagnostics" action. |
+| 4.4 Logging | 1 MB rotating log; no typed text, keys, tokens or URLs with queries. PC row → About Couch shows version, update status, streaming parts, controllers and recent problems; Copy for support puts exactly that text (user folder and name removed) on the clipboard. |
 | 5 Controller | Server-side reading (SDL) with held-key repeat; Controls lists every button, the connected controllers and battery, swap ✕/○, and Reduce motion. Not done: adjustable dead zones and a button-test screen (defaults work). |
 | 5.4 On-screen keyboard | Letters, capitals, symbols, accents (L1/R1), △ space, □ delete, hidden text for passwords; types into Couch's own prompts. Stremio has its own keyboard (`stremio.js`). |
 | 6.1 Home screen | Now playing (Resume/Close), Apps, Games (recent first, pins), PC row; the first press after a reload lands on your last tile. |
@@ -66,4 +66,4 @@ Clean-PC install and signed self-update: Windows Sandbox (`C:\Users\eli\couch-sa
 - Electron-specific items (contextBridge, WebContentsView cache): Couch has no Electron; skipped at the user's request, 2026-11-25.
 - Adjustable dead zones, button remapping and a controller test screen: skipped at the user's request, 2026-11-25 (the defaults work).
 - Milestone 4 (universal search across streaming services, profiles, Plex/Jellyfin, voice): skipped at the user's request, 2026-11-25.
-- Copy-diagnostics action, light/high-contrast themes.
+- Light/high-contrast themes: skipped, the JoJo / Steel Ball Run look stays (user's standing rule).

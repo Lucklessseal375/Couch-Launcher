@@ -135,3 +135,18 @@ class RemoteKeys(unittest.TestCase):
         press.assert_called_once_with("escape")
         _, press, _ = self.run_key("volup", True)
         press.assert_called_once_with("volup")
+
+
+class Diagnostics(unittest.TestCase):
+    def test_user_folder_and_name_are_taken_out(self):
+        with mock.patch.object(server.Path, "home", return_value=Path(r"C:\Users\pat")), \
+                mock.patch.dict(server.os.environ, {"USERNAME": "pat"}):
+            self.assertEqual(server.redact(r"C:\Users\pat\x.log pat's PC, patio"), r"%USERPROFILE%\x.log <user>'s PC, patio")
+
+    def test_lines_cover_version_streaming_and_problems(self):
+        with mock.patch.object(server, "library", return_value=([], [])), \
+                mock.patch.object(server, "shown_apps", return_value=([{"id": "a"}], [])), \
+                mock.patch.object(server, "sunshine_status", return_value="running"):
+            text = "\n".join(server.diagnostics())
+        for part in ("Couch ", "Last update check:", "Streaming: Sunshine running", "Apps: 1, games: 0", "Recent problems:"):
+            self.assertIn(part, text)

@@ -1130,6 +1130,7 @@ function pcItems() {
     { icon: "image", label: "Media gallery", meta: "Your screenshots. Press Create on the controller to take one", cta: "Open", fn: mediaGallery, live: "media" },
     { icon: "tasks", label: "Task manager", meta: "See what's running and close apps", cta: "Open", fn: () => taskManager() },
     { icon: "help", label: "Controls", meta: "What each button does", cta: "Show", fn: showControls },
+    { icon: "check", label: "About Couch", meta: "Version, updates and recent problems", cta: "Show", fn: aboutCouch },
     { icon: "exit", label: "Desktop", meta: "Closes the launcher and shows the desktop", cta: "Go to desktop", fn: () => api("/api/window", { action: "close-launcher" }) },
   ];
 }
@@ -1801,6 +1802,19 @@ async function mediaGallery(onPick) {  // onPick(shot): choosing a screenshot (a
     i = n; Sound.move(); show();
   };
   updatePrompts();
+}
+// About Couch (PC row): what support would ask first. Exactly these lines are what Copy for support puts on the PC's
+// clipboard (your user folder and name taken out), to paste into a message.
+async function aboutCouch() {
+  let lines;
+  try { lines = (await api("/api/diagnostics")).lines; } catch { return toast("Couch isn't responding. Try again in a moment."); }
+  choose("About Couch", "", [
+    { label: "Done" },
+    { label: "Copy for support", fn: async () => {
+      const r = await api("/api/diagnostics", {}).catch(() => null);
+      toast(r?.ok ? "Copied. Paste it into a message with Ctrl+V." : "Couldn't copy. Try again in a moment.");
+    } },
+  ], { lines });
 }
 // Reduce motion (Controls): the same calm look Windows' own "animation effects: off" gives, for a TV PC where nobody
 // changes that. It turns the page's reduced-motion CSS on and its motion-only CSS off.

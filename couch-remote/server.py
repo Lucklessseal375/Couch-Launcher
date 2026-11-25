@@ -568,6 +568,40 @@ def sunshine_status():
         return None
 
 
+def redact(text):
+    """Your user folder and name out of anything copied for support."""
+    home, user = str(Path.home()), os.environ.get("USERNAME", "")
+    text = text.replace(home, "%USERPROFILE%")
+    return re.sub(rf"(?i)\b{re.escape(user)}\b", "<user>", text) if len(user) > 2 else text
+
+
+def diagnostics():
+    """About Couch (PC row): what support would ask first. Shown on the TV before anything is copied (brief 4.4)."""
+    import platform
+
+    def service(name):
+        try:
+            return parse_sc(subprocess.run(["sc.exe", "query", name], capture_output=True, text=True, timeout=5,
+                                           creationflags=0x08000000).stdout) or "not installed"
+        except (OSError, subprocess.TimeoutExpired):
+            return "unknown"
+    try:
+        log_lines = (ROOT / "server.log").read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        log_lines = []
+    upd = [ln for ln in log_lines if re.search(r"updated to|update \w+ skipped|update check skipped|rolled back", ln)]
+    problems = [ln for ln in log_lines if " WARNING " in ln or " ERROR " in ln][-6:]
+    games, _ = library()
+    lines = [f"Couch {VERSION}" + (" (the main copy: it doesn't update itself)" if VERSION == "dev" else ""),
+             f"Last update check: {upd[-1][:19] + ' ' + upd[-1].split(' INFO ', 1)[-1] if upd else 'none since the log started'}",
+             f"Windows {platform.version()}, Python {platform.python_version()}",
+             f"Streaming: Sunshine {sunshine_status() or 'not installed'}, controller driver {service('ViGEmBus')}",
+             "Controllers: " + (", ".join(f"{p['name']} ({p['level']})" for p in PADS) or "none"),
+             f"Apps: {len(shown_apps()[0])}, games: {len(games)}",
+             "Recent problems:" + ("" if problems else " none")] + [f"  {ln}" for ln in problems]
+    return [redact(ln) for ln in lines]
+
+
 def audio_replaced(want, ids, names):
     """The outputs to switch away from so `want` is the default again (names), or None to leave it as is:
     a stream is on (its sound goes where Sunshine puts it), the chosen output is off (TV asleep), or Steam Remote
@@ -2498,6 +2532,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"shots": media_list()})
             if path == "/api/network":
                 return self.send_json(network())
+            if path == "/api/diagnostics" and kind == "local":  # About Couch on the TV
+                return self.send_json({"lines": diagnostics()})
             if path == "/api/startapps":  # the Add app tile's list of programs
                 return self.send_json({"apps": [{"name": n, "id": i} for n, i in apps_added.start_apps()]})
             if path == "/api/running":  # cheap: the launcher polls it to keep Now playing current
@@ -2613,6 +2649,10 @@ class Handler(BaseHTTPRequestHandler):
                         save_choices(c)
                 else:
                     power(a)
+            elif path == "/api/diagnostics" and kind == "local":  # Copy for support: the same text the TV shows
+                subprocess.run(["clip.exe"], input="\n".join(diagnostics()).encode("utf-16-le"), timeout=10,
+                               creationflags=0x08000000)
+                log.info("diagnostics copied to the clipboard")
             elif path == "/api/apps":  # {"action": "add", "kind": "program"|"web", "name", "value"} or {"action": "remove", "id"}
                 if b.get("action") == "add":
                     return self.send_json({"ok": True, "id": add_app(str(b.get("kind")), str(b.get("name", "")),
