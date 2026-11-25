@@ -257,3 +257,25 @@ class GameAudio(unittest.TestCase):
         with mock.patch.object(server.audio, "set_default") as set_default:
             server.start_game_audio("steam:2")
         set_default.assert_not_called()
+
+
+class MusicAndMixer(unittest.TestCase):
+    def test_music_folder_songs_only_audio_files(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            m = Path(d) / "Music"; (m / "Album").mkdir(parents=True)
+            for f in ("b.mp3", "notes.txt", "Album/a.flac", "cover.jpg"):
+                (m / f).write_bytes(b"x")
+            with mock.patch.dict(server.os.environ, {"USERPROFILE": d}):
+                self.assertEqual([p.name for p in server.music_files()], ["a.flac", "b.mp3"])
+
+    def test_mixer_names_and_only_playing_apps_can_change(self):
+        vols = {"steam.exe": {"level": 80, "muted": False}, "someapp.exe": {"level": 50, "muted": True}}
+        with mock.patch.object(server.audio, "app_volumes", return_value=vols), \
+                mock.patch.object(server, "running_window", return_value=None), \
+                mock.patch.object(server.audio, "set_app_volume") as setv:
+            self.assertEqual([(a["name"], a["level"]) for a in server.mixer()], [("Someapp", 50), ("Steam", 80)])
+            server.set_mixer("steam.exe", 40)
+            setv.assert_called_once_with("steam.exe", 40)
+            with self.assertRaises(ValueError):
+                server.set_mixer("notplaying.exe", 40)

@@ -239,3 +239,107 @@ def set_mic_muted(muted):
     """Mutes or unmutes the default microphone, for games and for calls (Discord uses the communications one)."""
     for role in (0, 2):
         _with_volume(CAPTURE, role, lambda v: _method(v, 14, wintypes.BOOL, c_void_p)(v, bool(muted), None))
+
+
+# ---------------------------------------------------------------- per-app volume (audio sessions, like Windows' Volume mixer)
+IID_SESSION_MANAGER2 = "{77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F}"
+IID_SESSION_CONTROL2 = "{BFB7FF88-7239-4FC9-8FA2-07C950BE9C6D}"
+IID_SIMPLE_VOLUME = "{87CE5498-68D6-44E5-9215-6DA47EF883D8}"
+kernel32 = ctypes.WinDLL("kernel32")
+
+
+def _query(obj, iid):
+    out = c_void_p()
+    _method(obj, 0, POINTER(GUID), POINTER(c_void_p))(obj, byref(GUID(iid)), byref(out))  # QueryInterface
+    return out.value
+
+
+def _exe_of(pid):
+    h = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not h:
+        return ""
+    try:
+        buf, n = ctypes.create_unicode_buffer(520), wintypes.DWORD(520)
+        return buf.value.rsplit("\\", 1)[-1].lower() if kernel32.QueryFullProcessImageNameW(h, 0, buf, byref(n)) else ""
+    finally:
+        kernel32.CloseHandle(h)
+
+
+def _sessions(fn):
+    """fn(exe name, ISimpleAudioVolume) for each app's sound session on the default output (not Windows' own sounds,
+    not ones that have ended)."""
+    def each(mgr):
+        enum = c_void_p()
+        _method(mgr, 5, POINTER(c_void_p))(mgr, byref(enum))  # GetSessionEnumerator
+        try:
+            n = c_int()
+            _method(enum.value, 3, POINTER(c_int))(enum.value, byref(n))
+            for i in range(n.value):
+                ctl = c_void_p()
+                _method(enum.value, 4, c_int, POINTER(c_void_p))(enum.value, i, byref(ctl))
+                try:
+                    state = c_int()
+                    _method(ctl.value, 3, POINTER(c_int))(ctl.value, byref(state))
+                    ctl2 = _query(ctl.value, IID_SESSION_CONTROL2)
+                    try:
+                        if state.value == 2 or _method(ctl2, 15)(ctl2) == 0:  # expired, or the system sounds session
+                            continue
+                        pid = wintypes.DWORD()
+                        _method(ctl2, 14, POINTER(wintypes.DWORD))(ctl2, byref(pid))
+                        exe = _exe_of(pid.value)
+                        if exe:
+                            vol = _query(ctl.value, IID_SIMPLE_VOLUME)
+                            try:
+                                fn(exe, vol)
+                            finally:
+                                _release(vol)
+                    finally:
+                        _release(ctl2)
+                finally:
+                    _release(ctl.value)
+        finally:
+            _release(enum.value)
+
+    with _Com():
+        enum = _create(CLSID_ENUMERATOR, IID_ENUMERATOR)
+        try:
+            dev = c_void_p()
+            try:
+                _method(enum, 4, c_int, c_int, POINTER(c_void_p))(enum, RENDER, 0, byref(dev))
+            except OSError:
+                return
+            try:
+                mgr = c_void_p()
+                _method(dev.value, 3, POINTER(GUID), wintypes.DWORD, c_void_p, POINTER(c_void_p))(
+                    dev.value, byref(GUID(IID_SESSION_MANAGER2)), CLSCTX_ALL, None, byref(mgr))
+                try:
+                    each(mgr.value)
+                finally:
+                    _release(mgr.value)
+            finally:
+                _release(dev.value)
+        finally:
+            _release(enum)
+
+
+def app_volumes():
+    """{exe: {"level": 0-100, "muted"}} for each program with sound on the default output (one entry per program)."""
+    found = {}
+
+    def read(exe, v):
+        f, m = ctypes.c_float(), wintypes.BOOL()
+        _method(v, 4, POINTER(ctypes.c_float))(v, byref(f))  # GetMasterVolume
+        _method(v, 6, POINTER(wintypes.BOOL))(v, byref(m))   # GetMute
+        found.setdefault(exe, {"level": round(f.value * 100), "muted": bool(m.value)})
+    _sessions(read)
+    return found
+
+
+def set_app_volume(exe, level):
+    """Every sound session of that program to level (0-100), and unmuted when turned up."""
+    def write(e, v):
+        if e == exe:
+            _method(v, 3, ctypes.c_float, c_void_p)(v, max(0, min(100, level)) / 100, None)  # SetMasterVolume
+            if level > 0:
+                _method(v, 5, wintypes.BOOL, c_void_p)(v, False, None)  # SetMute(false)
+    _sessions(write)

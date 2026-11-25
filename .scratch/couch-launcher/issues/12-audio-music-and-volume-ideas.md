@@ -1,6 +1,6 @@
 # Ideas: background music, per-app volume, and PC volume while playing
 
-Status: ready-for-agent
+Status: resolved
 
 Saved 2026-11-25 for later, at the user's request ("save it for ideas for music in the back ground with something to adjust audio per app volume also for volume for full pc in games and apps like YouTube"). Per-game audio output was built the same day (issue-free, in `server.py`); these are the follow-ups.
 
@@ -18,3 +18,10 @@ Saved 2026-11-25 for later, at the user's request ("save it for ideas for music 
 - **Which button changes volume in a game or YouTube without stealing one the game uses?** Options: hold PS + up/down (like a PS5's quick menu), or the PS-button quick menu with a volume slider over the game.
 - **Per-app levels:** Windows' per-app volume (`ISimpleAudioVolume` on each audio session, via pycaw-style COM calls, no new install needed with ctypes/comtypes) vs. only Couch's own apps.
 - **Background music:** your own files (like the intro clips) vs. a streaming service; under games or only in the menus.
+
+## Comments
+
+2026-11-25: built.
+- Whole-PC volume anywhere: hold PS and press up/down (4% a press, Windows shows its volume bar); PS alone still acts on release.
+- Per-app volume: PC row → Volume → Volume for each app, sliders over Windows' own per-app levels (audio.py, no install).
+- Background music: Menu music plays your Windows Music folder, shuffled, when no bgm-loop clip is set; fades when a game starts.

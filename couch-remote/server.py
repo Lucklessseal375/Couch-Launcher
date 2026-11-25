@@ -185,6 +185,45 @@ def game_mode_watch(started, undo=None):
     log.info("game closed: %s back to the desktop's", "sound" if undo else "display")
 
 
+# ---------------------------------------------------------------- menu music from your Music folder
+MUSIC_TYPES = {".mp3": "audio/mpeg", ".m4a": "audio/mp4", ".ogg": "audio/ogg", ".opus": "audio/ogg",
+               ".wav": "audio/wav", ".flac": "audio/flac"}
+
+
+def music_files():
+    """Songs in your Windows Music folder (and one folder down), for Couch's menu music when no loop clip is set.
+    Read each time, so songs you add show up; capped so a huge library doesn't slow the menu."""
+    music = Path(os.environ.get("USERPROFILE", "")) / "Music"
+    found = [p for p in [*music.glob("*"), *music.glob("*/*")] if p.suffix.lower() in MUSIC_TYPES and p.is_file()]
+    return sorted(found)[:2000]
+
+
+# ---------------------------------------------------------------- per-app volume (PC row → Volume → each app)
+APP_SOUND_NAMES = {"msedge.exe": "Edge: YouTube and Couch's sounds", "msedgewebview2.exe": "Web apps (Stremio, Claude)",
+                   "steam.exe": "Steam", "steamwebhelper.exe": "Steam", "launcher.exe": "Rockstar Games Launcher",
+                   "discord.exe": "Discord", "spotify.exe": "Spotify", "windowssandboxremotesession.exe": "Windows Sandbox"}
+
+
+def mixer():
+    """[{"exe", "name", "level", "muted"}] for each program with sound on the TV's output, named the way you'd say it:
+    the running game's name, a Couch tile's name, or a known program."""
+    names = {Path(os.path.expandvars(a["target"])).name.lower(): a["name"]
+             for a in load_apps()[0] if a.get("kind") == "exe" and "explorer.exe" not in a["target"].lower()}
+    h = running_window()
+    game = (window_exe(h), RUNNING["name"]) if h and RUNNING.get("name") else ("", "")
+    out = []
+    for exe, v in audio.app_volumes().items():
+        name = game[1] if exe == game[0] else names.get(exe) or APP_SOUND_NAMES.get(exe) or exe.removesuffix(".exe").replace("-", " ").title()
+        out.append({"exe": exe, "name": name, **v})
+    return sorted(out, key=lambda a: a["name"].lower())
+
+
+def set_mixer(exe, level):
+    if exe not in audio.app_volumes():  # only a program that has sound right now
+        raise ValueError("That app isn't playing sound any more")
+    audio.set_app_volume(exe, int(level))
+
+
 # ---------------------------------------------------------------- per-game sound output (□ → Display and sound)
 GAME_AUDIO = [None]  # {"id", "name"} a running game wants: keep_audio holds this instead of your usual output
 
@@ -2158,6 +2197,7 @@ def _controller_loop():
     held = {}  # direction -> time of next repeat
     stick = {"x": 0, "y": 0}
     pulled = set()  # L2/R2 held past halfway: one press each pull
+    guide = {"down": False, "used": False}  # the PS button held, and whether it changed the volume meanwhile
     dpad = set()
     log.info("controller support on")
     PAD_READER = True
@@ -2220,11 +2260,22 @@ def _controller_loop():
                 stick.update(x=0, y=0)
             elif e.type == B.CONTROLLERBUTTONDOWN and e.button in buttons:
                 a = buttons[e.button]
-                if a in ("up", "down", "left", "right"):
+                if a == "guide":  # acts when released, so PS + up/down can be the PC's volume instead
+                    guide.update(down=True, used=False)
+                elif guide["down"] and a in ("up", "down"):  # PS + up/down: PC volume, anywhere (games, YouTube)
+                    guide["used"] = True
+                    LAST_PAD[0] = time.time()
+                    press("volup" if a == "up" else "voldown")
+                    press("volup" if a == "up" else "voldown")  # 4% a press; Windows shows its volume bar
+                elif a in ("up", "down", "left", "right"):
                     dpad.add(a)
                 else:
                     act(a)
             elif e.type == B.CONTROLLERBUTTONUP and e.button in buttons:
+                if buttons[e.button] == "guide":
+                    if guide["down"] and not guide["used"]:
+                        act("guide")
+                    guide["down"] = False
                 dpad.discard(buttons[e.button])
             elif e.type == B.CONTROLLERAXISMOTION:
                 if e.axis == B.CONTROLLER_AXIS_LEFTX:
@@ -2637,6 +2688,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"shots": media_list()})
             if path == "/api/network":
                 return self.send_json(network())
+            if path == "/api/music" and kind == "local":  # menu music: how many songs, and their names
+                return self.send_json({"songs": [p.stem for p in music_files()]})
+            m = re.fullmatch(r"/music/(\d+)", path)
+            if m and kind == "local":  # one song by its number in that list (never a path from the request)
+                songs = music_files()
+                if int(m.group(1)) < len(songs):
+                    f = songs[int(m.group(1))]
+                    return self.send_file(f, MUSIC_TYPES[f.suffix.lower()])
+            if path == "/api/mixer":  # PC row → Volume → Volume for each app
+                return self.send_json({"apps": mixer()})
             if path == "/api/bluetooth" and kind == "local":  # PC row → Bluetooth
                 return self.send_json({"available": bluetooth.available(),
                                        "paired": bluetooth.paired() if bluetooth.available() else []})
@@ -2777,6 +2838,8 @@ class Handler(BaseHTTPRequestHandler):
                 if b.get("action") != "pair":
                     raise ValueError("unknown action")
                 return self.send_json({"ok": True, "result": bt_pair(str(b.get("id", "")))})
+            elif path == "/api/mixer":  # {"exe", "level": 0-100}: one app's own volume (TV or phone)
+                set_mixer(str(b.get("exe", "")), max(0, min(100, int(b.get("level", 0)))))
             elif path == "/api/gameaudio" and kind == "local":  # {"key", "id"}: a game's own sound output ("" = usual)
                 set_game_audio(str(b.get("key", "")), str(b.get("id", "")))
             elif path == "/api/display" and kind == "local":  # {"action": "try"|"keep"|"undo"|"clear", "mode", "key"}

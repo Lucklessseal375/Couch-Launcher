@@ -657,8 +657,24 @@ const Sound = (() => {
     },
   };
   const cue = slot => play(() => clip(slot) || synth[slot]());
+  // No loop clip: the songs in your Windows Music folder, shuffled, one after another (same Music volume, same fade-out
+  // when a game starts). Streamed one song at a time, so a long playlist costs nothing up front.
+  async function startPlaylist() {
+    let n; try { n = (await (await fetch("/api/music", { headers: { "X-Couch": "1" } })).json()).songs.length; } catch { return; }
+    if (!n || bgm || !on || !musicOn) return;
+    const c = ac(), el = new Audio(), g = c.createGain(), t = c.currentTime;
+    c.createMediaElementSource(el).connect(g).connect(bus);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(Math.max(musicVol, 0.001), t + 2.5);
+    let fails = 0;
+    const next = () => { el.src = `/music/${Math.floor(Math.random() * n)}`; el.play().catch(() => {}); };
+    el.addEventListener("ended", () => { fails = 0; next(); });
+    el.addEventListener("error", () => { if (++fails < 5) setTimeout(next, 1000); });  // a song that won't play is skipped
+    next();
+    bgm = { g, el };
+  }
   function startBgm() {  // looping menu music, low and faded in
-    if (!on || !musicOn || bgm || !clips.bgm) return;
+    if (!on || !musicOn || bgm) return;
+    if (!clips.bgm) return startPlaylist();
     const c = ac(), s = c.createBufferSource(), g = c.createGain(), t = c.currentTime;
     s.buffer = clips.bgm[0].buf; s.loop = true;
     g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(Math.max(musicVol, 0.001), t + 2.5);
@@ -667,8 +683,9 @@ const Sound = (() => {
   }
   function stopBgm(fade = 0.8) {  // ducks it away (a game is starting, or music was turned off)
     if (!bgm) return;
-    const t = ac().currentTime, { s, g } = bgm; bgm = null;
-    try { g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(Math.max(g.gain.value, 0.0001), t); g.gain.exponentialRampToValueAtTime(0.0001, t + fade); s.stop(t + fade + 0.05); } catch {}
+    const t = ac().currentTime, { s, g, el } = bgm; bgm = null;
+    try { g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(Math.max(g.gain.value, 0.0001), t); g.gain.exponentialRampToValueAtTime(0.0001, t + fade); s?.stop(t + fade + 0.05); } catch {}
+    if (el) setTimeout(() => { el.pause(); el.removeAttribute("src"); }, (fade + 0.1) * 1000);
   }
   function stopMusic(fade = 0.6) {
     if (!music) return;
@@ -1496,7 +1513,7 @@ function soundSettings(start = 0) {
       check: Sound.on, fn: () => { Sound.toggle(); again(0)(); } },
     { label: "Effects volume", icon: "sound", ...slider("sfxVol") },
     { label: "Menu music", icon: "music", check: Sound.musicOn,
-      sub: !Sound.musicOn ? "Off" : Sound.has("bgm") ? "On" : "On, once you add bgm-loop.mp3",
+      sub: !Sound.musicOn ? "Off" : Sound.has("bgm") ? "On" : "On: songs from your Windows Music folder, shuffled",
       fn: () => { Sound.musicOn = !Sound.musicOn; again(2)(); } },
     { label: "Music volume", icon: "music", ...slider("musicVol") },
     { label: "Voice lines", icon: "voice", check: Sound.voiceOn, sub: Sound.voiceOn ? "On" : "Off: effects only",
@@ -1813,10 +1830,25 @@ async function volumeMenu(start = 0) {
       } },
     { label: v.muted ? "Unmute" : "Mute", icon: v.muted ? "sound" : "mute",
       fn: () => api("/api/volume", { muted: !v.muted }).then(() => volumeMenu(1)) },
+    { label: "Volume for each app", icon: "music", sub: "A game, YouTube, Discord: each its own level", fn: mixerMenu },
     ...(v.micMuted == null ? [] : [{ label: v.micMuted ? "Turn microphone on" : "Mute microphone", icon: "voice",
       sub: `${v.micMuted ? "Muted" : "On"}. The mute button on the controller does this too`,
-      fn: () => api("/api/volume", { mic: !v.micMuted }).then(() => volumeMenu(2)) }]),
+      fn: () => api("/api/volume", { mic: !v.micMuted }).then(() => volumeMenu(3)) }]),
   ], { vertical: true, start });
+}
+// Volume for each app: Windows' own per-app levels (its Volume mixer), with left and right
+async function mixerMenu() {
+  let m; try { m = await api("/api/mixer"); } catch { return toast("Couch isn't responding. Try again in a moment."); }
+  if (!m.apps.length) return choose("Volume for each app", "Nothing is playing sound right now. Start a game or a video, then come back.", [{ label: "Done" }]);
+  choose("Volume for each app", "Left and right change one. The PC volume is the limit for all of them.", m.apps.slice(0, 7).map(a => {
+    const sub = () => `${a.level}%${a.muted ? ", muted" : ""}`;
+    return { label: a.name, icon: "sound", sub: sub(), bar: a.level / 100, stay: true,
+      adjust(step, b) {
+        a.level = Math.max(0, Math.min(100, a.level + step * 5)); if (a.level) a.muted = false;
+        b.querySelector(".bar i").style.width = a.level + "%"; b.querySelector("small").textContent = sub();
+        api("/api/mixer", { exe: a.exe, level: a.level }).catch(() => {});
+      } };
+  }), { vertical: true });
 }
 
 // ---------- storage: space on each drive, and the games taking it
@@ -1946,6 +1978,7 @@ function showControls(start = 0) {
     "Create takes a screenshot, in a game too",
     "The mute button mutes the PC's microphone",
     "The PS button on the launcher goes back to your game",
+    "Hold PS and press up or down to change the PC's volume, in games and YouTube too",
     "The PS button turns a sleeping controller back on",
     "On a keyboard: arrows, Enter, Esc, and / to search",
   ], start });
@@ -2226,7 +2259,8 @@ async function load() {
     if (info.installerChanged) toast("Couch updated. Run Install Couch.cmd once on this PC to finish");
     if (!PREVIEW) {
       await Out.detect(); await clipsReady;
-      if (Sound.has("bgm") && Sound.musicOn) Sound.startBgm(); else Intro.play("startup");
+      if (Sound.has("bgm") && Sound.musicOn) Sound.startBgm();
+      else { Intro.play("startup"); if (Sound.musicOn) setTimeout(() => Sound.startBgm(), 15000); }  // your Music folder, after the intro
     }
   } catch { $("#games").innerHTML = '<div class="empty">Couch server isn\'t running. Trying again…</div>'; setTimeout(load, 3000); }
 }
