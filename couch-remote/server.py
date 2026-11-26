@@ -2440,7 +2440,11 @@ def open_url(url):
 
     if url.startswith("steam://open/bigpicture") and not exe_running("steam.exe"):  # a closed Steam drops the link
         log.info("Steam is closed; starting it in Big Picture")
-        return subprocess.Popen([exe, "-gamepadui"], cwd=str(Path(exe).parent), creationflags=0x00000008 | 0x00000200)
+        try:
+            return subprocess.Popen([exe, "-gamepadui"], cwd=str(Path(exe).parent), creationflags=0x00000008 | 0x00000200)
+        except OSError as e:  # WinError 740, as in send_link
+            log.info("starting Steam directly failed (%s); using Windows' handler", e)
+            return os.startfile(exe, "open", "-gamepadui", str(Path(exe).parent))
     if scheme == "com.epicgames.launcher" and not exe_running("EpicGamesLauncher.exe"):
         log.info("Epic is closed; starting it before sending the link")
         return threading.Thread(target=start_then, args=([exe, "-silent"], EPIC_LOG, "OnLoginComplete", send_link, 30),

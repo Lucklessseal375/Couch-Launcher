@@ -90,21 +90,22 @@ class KeepAwake(unittest.TestCase):
         self.assertIsNone(server.AWAKE[0])
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class SteamBigPicture(unittest.TestCase):
-    def open_bp(self, steam_running):
+    def open_bp(self, steam_running, error=None):
         with mock.patch.object(server, "exe_running", return_value=steam_running), \
                 mock.patch.object(server.winreg, "OpenKey", mock.MagicMock()), \
                 mock.patch.object(server.winreg, "QueryValueEx", return_value=(r'"C:\Steam\steam.exe" -- "%1"', 1)), \
-                mock.patch.object(server.subprocess, "Popen") as popen:
+                mock.patch.object(server.subprocess, "Popen", side_effect=error) as popen:
             server.open_url("steam://open/bigpicture")
         return popen.call_args[0][0]
 
     def test_closed_steam_starts_straight_in_big_picture(self):
         self.assertEqual(self.open_bp(False), [r"C:\Steam\steam.exe", "-gamepadui"])
+
+    def test_closed_steam_that_wants_admin_goes_through_windows(self):  # WinError 740
+        with mock.patch.object(server.os, "startfile") as startfile:
+            self.open_bp(False, OSError("elevation"))
+        startfile.assert_called_once_with(r"C:\Steam\steam.exe", "open", "-gamepadui", r"C:\Steam")
 
     def test_running_steam_gets_the_link(self):
         self.assertEqual(self.open_bp(True), [r"C:\Steam\steam.exe", "--", "steam://open/bigpicture"])
@@ -291,3 +292,7 @@ class MusicAndMixer(unittest.TestCase):
             setv.assert_called_once_with({3}, 40)  # YouTube only, Couch's sounds untouched
             with self.assertRaises(ValueError):
                 server.set_mixer("notplaying.exe", 40)
+
+
+if __name__ == "__main__":
+    unittest.main()
