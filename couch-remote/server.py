@@ -40,8 +40,10 @@ APPS_FILE = ROOT / "apps.json"
 CHOICES_FILE = ROOT / "choices.json"  # games hidden or pinned with the launcher's □ button
 PROFILES = ROOT / "profiles"
 LAUNCHER_TITLE = "Couch Launcher"
-TV_USER_AGENT = ("Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.0) AppleWebKit/537.36 "
-                 "(KHTML, like Gecko) 76.0.3809.146/6.0 TV Safari/537.36")
+# YouTube picks its top quality by the device it is told this is: as a PlayStation 4 a 4K video offers 2160p; as a
+# Samsung TV in Edge it stopped at 720p
+TV_USER_AGENT = ("Mozilla/5.0 (PS4; Leanback Shell) Gecko/20100101 Firefox/65.0 LeanbackShell/01.00.01.75 "
+                 "Sony PS4/ (PS4, , no, CH)")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s",
                     handlers=[logging.handlers.RotatingFileHandler(ROOT / "server.log", maxBytes=1_000_000,
@@ -912,6 +914,7 @@ KEYS = {  # name: (virtual key, extended)
     "f13": (0x7C, False), "f14": (0x7D, False),  # no keyboard has them: an app's page script gives them a meaning
     "volup": (0xAF, True), "voldown": (0xAE, True), "mute": (0xAD, True),
     "playpause": (0xB3, True), "next": (0xB0, True), "prev": (0xB1, True),
+    "j": (0x4A, False), "l": (0x4C, False), "s": (0x53, False),  # YouTube TV: rewind, fast forward, search
 }
 
 
@@ -927,9 +930,9 @@ def _key(vk, up=False, ext=False):
 
 
 # The controller as a TV remote, only while a TV site (YouTube's TV app) is in front: ✕ select, ○ back,
-# □ play/pause, L1/R1 previous/next.
+# □ play/pause, △ search, L1/R1 previous/next, L2/R2 rewind/fast forward (in the player).
 TV_KEYS = {"up": "up", "down": "down", "left": "left", "right": "right", "a": "enter", "b": "escape",
-           "x": "playpause", "l1": "prev", "r1": "next"}
+           "x": "playpause", "y": "s", "l1": "prev", "r1": "next", "l2": "j", "r2": "l"}
 
 
 def key_app(exe):
@@ -1193,9 +1196,9 @@ def edge_kiosk(url, profile, user_agent=None, extra=()):
 # ---------------------------------------------------------------- TV sites (YouTube's TV app)
 # The --user-agent flag alone no longer gets YouTube's TV app: Edge still tells the site it is desktop Edge on Windows
 # (Sec-CH-UA client hints, which an extension can't strip either), so youtube.com/tv redirects to the desktop site. A
-# DevTools session on the window sets the whole identity to a Samsung TV; it only holds while it stays attached.
-TV_HINTS = {"brands": [], "fullVersion": "", "platform": "Tizen", "platformVersion": "6.0", "architecture": "arm",
-            "model": "SMART-TV", "mobile": False}
+# DevTools session on the window sets the whole identity to a TV's (see TV_USER_AGENT); it only holds while it stays attached.
+TV_HINTS = {"brands": [], "fullVersion": "", "platform": "PlayStation 4", "platformVersion": "", "architecture": "",
+            "model": "", "mobile": False}
 TV_PIDS = set()  # Edge browser processes showing a TV site: the controller drives them with TV-remote keys
 TV_OPEN = {}  # profile -> its Edge browser pid while its TV window is open
 # YouTube's TV app has no way out: back from home goes to its account screen, and back there does nothing (on a TV the
@@ -1273,7 +1276,7 @@ class Cdp:
 
 
 def edge_tv(url, profile):
-    """Opens a TV site in Edge as a Samsung TV and keeps the DevTools session open until the window closes."""
+    """Opens a TV site in Edge as a TV and keeps the DevTools session open until the window closes."""
     import urllib.request
     h = TV_OPEN.get(profile) and pid_window(TV_OPEN[profile])
     if h:  # already open: a second Edge launch on the profile would only add a blank window
@@ -1282,9 +1285,11 @@ def edge_tv(url, profile):
     port_file = PROFILES / profile / "DevToolsActivePort"
     end_profile_edge(profile)  # nothing of ours is open on it (checked above): a leftover would take the launch
     port_file.unlink(missing_ok=True)
-    # a black page until YouTube loads (about:blank is white); port 0: Edge picks a free one
+    # a black page until YouTube loads (about:blank is white); port 0: Edge picks a free one.
+    # Scale 1: a TV site picks its top video quality from the page's size, and at Windows' 300% a 4K TV is only
+    # 1280x720 to it, so videos stopped at 720p. TV sites size their own layout to the screen.
     edge_kiosk("data:text/html,<title>YouTube</title><body bgcolor=black>", profile, TV_USER_AGENT,
-               extra=["--remote-debugging-port=0"])
+               extra=["--remote-debugging-port=0", "--force-device-scale-factor=1"])
     for _ in range(100):
         try:
             port = int(port_file.read_text().split()[0])

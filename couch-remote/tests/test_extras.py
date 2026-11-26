@@ -294,5 +294,25 @@ class MusicAndMixer(unittest.TestCase):
                 server.set_mixer("notplaying.exe", 40)
 
 
+class YouTubeRemote(unittest.TestCase):
+    def test_triangle_searches_and_the_triggers_seek(self):  # keys read from YouTube TV's own code
+        self.assertEqual([server.KEYS[server.TV_KEYS[b]][0] for b in ("y", "l2", "r2")], [ord("S"), ord("J"), ord("L")])
+
+    def test_every_tv_button_has_a_key_to_press(self):
+        self.assertLessEqual(set(server.TV_KEYS.values()), set(server.KEYS))
+
+    def test_the_tv_window_ignores_windows_scaling(self):  # at 300% YouTube sees a 720p screen and stops at 720p
+        with mock.patch.object(server, "edge_kiosk", side_effect=RuntimeError("stop here")) as kiosk, \
+                mock.patch.object(server, "end_profile_edge"), mock.patch.object(server, "pid_window", return_value=0), \
+                mock.patch.object(server, "PROFILES", Path(tempfile.mkdtemp())):
+            with self.assertRaises(RuntimeError):
+                server.edge_tv("https://www.youtube.com/tv", "web-test")
+        self.assertIn("--force-device-scale-factor=1", kiosk.call_args.kwargs["extra"])
+
+    def test_youtube_is_told_it_is_a_ps4(self):  # measured on one 4K video: Samsung and Cobalt stopped at 720p or less
+        self.assertIn("PS4; Leanback Shell", server.TV_USER_AGENT)
+        self.assertNotEqual(server.TV_HINTS["platform"], "Windows")  # or youtube.com/tv turns into the desktop site
+
+
 if __name__ == "__main__":
     unittest.main()
