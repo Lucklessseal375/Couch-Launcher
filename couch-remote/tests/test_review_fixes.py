@@ -50,6 +50,30 @@ class Range(unittest.TestCase):
         with self.assertRaises(urllib.error.HTTPError) as e:
             self.get(f"bytes={len(self.data)}-")
         self.assertEqual(e.exception.code, 416)
+        self.assertEqual(e.exception.headers.get("Accept-Ranges"), "bytes")
+
+    def test_empty_file_is_served_and_ignores_range(self):
+        d = tempfile.TemporaryDirectory()
+        self.addCleanup(d.cleanup)
+        empty = Path(d.name) / "a.mp3"
+        empty.write_bytes(b"")
+        p = mock.patch.object(server, "music_files", return_value=[empty])
+        p.start()
+        self.addCleanup(p.stop)
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.server_close)
+        self.addCleanup(srv.shutdown)
+        self.url = f"http://127.0.0.1:{srv.server_port}/music/0"
+        self.assertEqual(self.get(), (200, None, b""))
+        self.assertEqual(self.get("bytes=0-"), (200, None, b""))
+
+    def test_head_sends_headers_without_a_body(self):
+        req = urllib.request.Request(self.url, method="HEAD")
+        with urllib.request.urlopen(req, timeout=5) as r:
+            self.assertEqual(r.status, 200)
+            self.assertEqual(r.headers.get("Content-Length"), str(len(self.data)))
+            self.assertEqual(r.read(), b"")
 
 
 class Odds(unittest.TestCase):

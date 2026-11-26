@@ -2696,7 +2696,7 @@ class Handler(BaseHTTPRequestHandler):
             size = os.fstat(f.fileno()).st_size
             start, end, code = 0, size - 1, 200
             m = re.fullmatch(r"bytes=(\d*)-(\d*)", self.headers.get("Range", "").strip())
-            if m and any(m.groups()):
+            if m and any(m.groups()) and size:  # no Range on an empty file: 200 + zero bytes, not a 416
                 if m[1]:
                     start, end = int(m[1]), min(int(m[2] or size - 1), size - 1)
                 else:  # the last N bytes
@@ -2705,6 +2705,7 @@ class Handler(BaseHTTPRequestHandler):
                     self.send_response(416)
                     self.send_header("Content-Range", f"bytes */{size}")
                     self.send_header("Content-Length", "0")
+                    self.send_header("Accept-Ranges", "bytes")  # a 416 is also an Accept-Ranges answer
                     self.end_headers()
                     return
                 code = 206
@@ -2718,6 +2719,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Cache-Control", cache or ("max-age=86400" if ctype.startswith("image/") else "no-cache"))
             self.end_headers()
             f.seek(start)
+            if self.command == "HEAD":
+                return  # headers only: a HEAD response must not carry a body
             try:
                 while left and (chunk := f.read(min(65536, left))):
                     self.wfile.write(chunk)
@@ -2881,6 +2884,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_file(WEB / "img" / f"{m.group(1)}.{m.group(2)}",
                                   {"jpg": "image/jpeg", "png": "image/png", "webp": "image/webp"}[m.group(2)])
         self.send_json({"error": "not found"}, 404)
+
+    do_HEAD = do_GET  # same routes; send_file writes headers only when the method is HEAD
 
     # -- POST
     def do_POST(self):

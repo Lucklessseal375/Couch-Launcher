@@ -1520,9 +1520,10 @@ function choose(title, text, choices, { vertical = false, start = 0, art = "", l
   });
   const c = $("#dlg-choices"); c.innerHTML = ""; c.append(...els); c.classList.toggle("vertical", vertical);
   c.classList.toggle("grid", vertical && els.length > 8 && !choices.some(ch => ch.adjust));  // sliders need left/right
-  c.classList.remove("scrolls");
+  const refreshScrolls = () => c.classList.toggle("scrolls", vertical && c.scrollHeight > c.clientHeight);
   openModal(d, els, null, start, sound);
-  c.classList.toggle("scrolls", vertical && c.scrollHeight > c.clientHeight);
+  refreshScrolls();  // the open animation can change layout; re-measure once it settles
+  requestAnimationFrame(refreshScrolls);
   els[start]?.scrollIntoView({ block: "nearest" });
 }
 // Cancel is focused first: these actions can't be undone
