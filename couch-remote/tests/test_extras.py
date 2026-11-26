@@ -243,12 +243,23 @@ class GameAudio(unittest.TestCase):
             c = server.load_choices(); c["audio"] = {"id": "tv", "name": "SAMSUNG"}; server.save_choices(c)
         started = []
         with mock.patch.object(server.audio, "set_default") as set_default, \
+                mock.patch.object(server.audio, "default_ids", return_value=("tv", "tv", "tv")), \
                 mock.patch.object(server.threading, "Thread", lambda target, args, daemon: started.append(args) or mock.MagicMock()):
             server.start_game_audio("steam:1")
             self.assertEqual(server.GAME_AUDIO[0]["id"], "hp")  # keep_audio now holds the game's output
             set_default.assert_called_with("hp")
             started[0][1]()  # the game closed
         self.assertIsNone(server.GAME_AUDIO[0])
+        set_default.assert_called_with("tv")
+
+    def test_back_to_what_it_was_when_no_usual_output_is_chosen(self):
+        server.set_game_audio("steam:1", "hp")
+        started = []
+        with mock.patch.object(server.audio, "set_default") as set_default, \
+                mock.patch.object(server.audio, "default_ids", return_value=("tv", "tv", "tv")), \
+                mock.patch.object(server.threading, "Thread", lambda target, args, daemon: started.append(args) or mock.MagicMock()):
+            server.start_game_audio("steam:1")
+            started[0][1]()
         set_default.assert_called_with("tv")
 
     def test_unplugged_output_leaves_sound_alone(self):

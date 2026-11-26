@@ -81,7 +81,10 @@ def apply(root, zip_path, sha):
     with tempfile.TemporaryDirectory() as d:
         with zipfile.ZipFile(zip_path) as z:
             z.extractall(d)
-        top = next(Path(d).iterdir())  # GitHub's ZIP holds one folder, <repo>-<sha>
+        top = next(Path(d).iterdir(), None)  # GitHub's ZIP holds one folder, <repo>-<sha>
+        if not top or not top.is_dir():
+            log.warning("update: the download doesn't look like Couch, keeping this version")
+            return None
         if not imports_cleanly(top / "couch-remote"):
             return None
         installer = root / "install-couch.ps1"

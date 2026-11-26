@@ -25,7 +25,9 @@ class Installed(unittest.TestCase):
 
     def test_unknown_kind_or_no_target_stays(self):
         self.assertTrue(server.installed({"kind": "something"}))
-        self.assertTrue(server.installed({"kind": "exe"}))
+
+    def test_exe_with_no_target_gets_no_tile(self):
+        self.assertFalse(server.installed({"kind": "exe"}))
 
 
 if __name__ == "__main__":

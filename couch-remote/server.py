@@ -86,8 +86,8 @@ def installed(entry):
     if needs and not os.path.exists(os.path.expandvars(needs)):
         return False
     target = os.path.expandvars(entry.get("target", ""))
-    if entry.get("kind") == "exe" and target:
-        return os.path.exists(target)
+    if entry.get("kind") == "exe":
+        return bool(target) and os.path.exists(target)
     if entry.get("kind") == "url" and ":" in target:
         scheme = target.split(":", 1)[0]
         if scheme.lower() in ("http", "https"):
@@ -279,6 +279,7 @@ def start_game_audio(key):
     want = load_choices()["game_audio"].get(key)
     if not want or not any(d["id"] == want["id"] for d in audio.outputs()):
         return
+    before = audio.default_ids()[0]  # to go back to if you never picked a usual output
     GAME_AUDIO[0] = want
     audio.set_default(want["id"])
     log.info("sound for this game: %s", want["name"])
@@ -286,8 +287,9 @@ def start_game_audio(key):
     def back():
         GAME_AUDIO[0] = None
         usual = load_choices()["audio"]
-        if usual:
-            audio.set_default(usual["id"])
+        target = usual["id"] if usual else before
+        if target:
+            audio.set_default(target)
     threading.Thread(target=game_mode_watch, args=(time.time(), back), daemon=True).start()
 
 
@@ -480,10 +482,17 @@ def save_choices(c):
     tmp.replace(CHOICES_FILE)  # all or nothing, even if the PC goes off mid-write
 
 
+def mtime(path):
+    """For sorting by date: 0 for a file that vanished since it was listed."""
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0
+
+
 def steam_playtime():
     """{appid: minutes played} for the Steam account used last on this PC ({} if Steam hasn't saved any)."""
-    files = sorted((steam_path() / "userdata").glob("*/config/localconfig.vdf"),
-                   key=lambda p: p.stat().st_mtime, reverse=True)
+    files = sorted((steam_path() / "userdata").glob("*/config/localconfig.vdf"), key=mtime, reverse=True)
     try:
         node = parse_vdf(files[0].read_text(encoding="utf-8", errors="replace")) if files else {}
     except OSError:
@@ -768,8 +777,10 @@ def diagnostics():
     upd = [ln for ln in log_lines if re.search(r"updated to|update \w+ skipped|update check skipped|rolled back", ln)]
     problems = [ln for ln in log_lines if " WARNING " in ln or " ERROR " in ln][-6:]
     games, _ = library()
+    when, _, what = upd[-1].partition(" INFO ") if upd else ("", "", "")
+    last_update = f"{when[:19]} {what}" if what else upd[-1] if upd else "none since the log started"
     lines = [f"Couch {VERSION}" + (" (the main copy: it doesn't update itself)" if VERSION == "dev" else ""),
-             f"Last update check: {upd[-1][:19] + ' ' + upd[-1].split(' INFO ', 1)[-1] if upd else 'none since the log started'}",
+             f"Last update check: {last_update}",
              f"Windows {platform.version()}, Python {platform.python_version()}",
              f"Streaming: Sunshine {sunshine_status() or 'not installed'}, controller driver {service('ViGEmBus')}",
              "Controllers: " + (", ".join(f"{p['name']} ({p['level']})" for p in PADS) or "none"),
@@ -895,7 +906,7 @@ def key_app(exe):
     """The apps.json app with "keys" (controller button: key) whose program is exe, else {}. Stremio's own
     gamepad support never sees the controller (its WebView2 gets no gamepads), but it does follow keys."""
     return next((a for a in load_apps()[0]
-                 if a.get("keys") and Path(os.path.expandvars(a["target"])).name.lower() == exe), {})
+                 if a.get("keys") and Path(os.path.expandvars(a.get("target", ""))).name.lower() == exe), {})
 
 
 APP_DEVTOOLS = 9339  # the fixed DevTools port Couch used before 2026-11-25: a Stremio opened back then still has it
@@ -1895,8 +1906,13 @@ def screenshots_dir():
         _fields_ = [("d1", ctypes.c_ulong), ("d2", ctypes.c_ushort), ("d3", ctypes.c_ushort), ("d4", ctypes.c_ubyte * 8)]
     u = uuid.UUID("b7bede81-df94-4682-a7d8-57a52620b86f")  # FOLDERID_Screenshots
     g, out = GUID(u.fields[0], u.fields[1], u.fields[2], (ctypes.c_ubyte * 8)(*u.bytes[8:])), ctypes.c_wchar_p()
-    if ctypes.windll.shell32.SHGetKnownFolderPath(ctypes.byref(g), 0, None, ctypes.byref(out)) == 0 and out.value:
-        return Path(out.value)
+    ole32 = ctypes.windll.ole32
+    ole32.CoTaskMemFree.argtypes = (ctypes.c_void_p,)
+    try:
+        if ctypes.windll.shell32.SHGetKnownFolderPath(ctypes.byref(g), 0, None, ctypes.byref(out)) == 0 and out.value:
+            return Path(out.value)
+    finally:
+        ole32.CoTaskMemFree(out)  # Windows allocated the string; this runs for every screenshot shown
     return Path.home() / "Pictures" / "Screenshots"
 
 
@@ -2001,8 +2017,8 @@ def media_list():
         files = [f for f in d.iterdir() if f.suffix.lower() in SHOT_TYPES and f.is_file()]
     except OSError:
         return []
-    files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
-    return [{"name": f.name, "time": int(f.stat().st_mtime)} for f in files[:200]]
+    dated = sorted(((mtime(f), f.name) for f in files), reverse=True)
+    return [{"name": name, "time": int(t)} for t, name in dated[:200] if t]
 
 
 def rumble(pattern):
@@ -2055,6 +2071,7 @@ def dualsense_charging():
     would share one answer; revisit if you ever pair two."""
     k, hid, sa = ctypes.windll.kernel32, ctypes.windll.hid, ctypes.windll.setupapi
     k.CreateFileW.restype = sa.SetupDiGetClassDevsW.restype = ctypes.c_void_p
+    sa.SetupDiDestroyDeviceInfoList.argtypes = (ctypes.c_void_p,)
 
     class Guid(ctypes.Structure):
         _fields_ = [("a", ctypes.c_ulong), ("b", ctypes.c_ushort), ("c", ctypes.c_ushort), ("d", ctypes.c_ubyte * 8)]
@@ -2068,6 +2085,15 @@ def dualsense_charging():
     g = Guid()
     hid.HidD_GetHidGuid(ctypes.byref(g))
     devs = ctypes.c_void_p(sa.SetupDiGetClassDevsW(ctypes.byref(g), None, None, 0x12))  # present interfaces
+    if devs.value in (None, ctypes.c_void_p(-1).value):
+        return None
+    try:
+        return _read_charging(k, sa, devs, g, Iface, Over)
+    finally:
+        sa.SetupDiDestroyDeviceInfoList(devs)
+
+
+def _read_charging(k, sa, devs, g, Iface, Over):
     i = 0
     while True:
         d = Iface()
@@ -2092,6 +2118,8 @@ def dualsense_charging():
             k.ReadFile(f, out, 100, None, ctypes.byref(ov))
             if k.WaitForSingleObject(ctypes.c_void_p(ov.e), 300) != 0:
                 k.CancelIoEx(f, ctypes.byref(ov))
+                got = wintypes.DWORD()  # wait for the cancel: Windows may still be writing into out and ov
+                k.GetOverlappedResult(f, ctypes.byref(ov), ctypes.byref(got), 1)
                 return None
             got = wintypes.DWORD()
             k.GetOverlappedResult(f, ctypes.byref(ov), ctypes.byref(got), 0)
@@ -2099,6 +2127,25 @@ def dualsense_charging():
         finally:
             k.CloseHandle(ctypes.c_void_p(ov.e))
             k.CloseHandle(f)
+
+
+CHARGING = [None]  # the last dualsense_charging() answer, for pad_status()
+
+
+def check_charging():
+    wireless = any("DualSense" in p["name"] and p["level"] != "wired" for p in list(PADS))
+    CHARGING[0] = dualsense_charging() if wireless else None
+
+
+def charge_watch():
+    """Reading the pad's report can take 300 ms when it has gone quiet, so it happens here, not between presses."""
+    while True:
+        time.sleep(10)
+        try:
+            check_charging()
+        except Exception:  # noqa: BLE001
+            log.exception("controller charge check")
+            time.sleep(600)
 
 
 def launcher_in_front():
@@ -2244,7 +2291,7 @@ def _controller_loop():
         PADS[:] = [{"name": (sdl.SDL_GameControllerName(p) or b"Controller").decode(errors="replace"), "level": lv}
                    for p, lv in zip(ps, levels)]  # for the Controls screen
         sony = [i for i, p in enumerate(ps) if b"DualSense" in (sdl.SDL_GameControllerName(p) or b"")]
-        return pad_status_for(levels, sony if sony and levels[sony[0]] != "wired" and dualsense_charging() else ())
+        return pad_status_for(levels, sony if sony and levels[sony[0]] != "wired" and CHARGING[0] else ())
 
     added = [0.0]  # when a controller last connected
 
@@ -2375,6 +2422,8 @@ def open_url(url):
     except OSError:
         return os.startfile(url)
     m = re.match(r'\s*"([^"]+)"\s*(.*)$', cmd) or re.match(r"\s*(\S+)\s*(.*)$", cmd)
+    if not m:  # an empty command: let Windows work it out
+        return os.startfile(url)
     exe, rest = m.group(1), m.group(2)
     args = [a.replace("%1", url) for a in (re.findall(r'"[^"]*"|\S+', rest) or ["%1"])]
     args = [a.strip('"') for a in args]
@@ -2538,6 +2587,7 @@ def supervise(run_child, root=ROOT.parent):
             now = time.time()
             crashes = [t for t in crashes if now - t < 600] + [now]
             if len(crashes) >= 3:
+                log.error("Couch crashed 3 times in 10 minutes (exit code %s); not starting it again", rc)
                 return rc
             time.sleep(3)
         else:
@@ -2548,8 +2598,11 @@ def update_watch():
     """Every 6 hours, while nothing is playing or streaming and nobody has touched the PC for 30 minutes."""
     while True:
         time.sleep(6 * 3600)
-        if not running_window() and not STREAM["on"] and idle_seconds() > 1800 and update.check(ROOT.parent):
-            restart_couch()
+        try:
+            if not running_window() and not STREAM["on"] and idle_seconds() > 1800 and update.check(ROOT.parent):
+                restart_couch()
+        except Exception:  # noqa: BLE001  (one bad check must not end updates until the next restart)
+            log.exception("update check")
 
 
 def sleep_watch():
@@ -2637,14 +2690,40 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def send_file(self, path, ctype):
-        data = Path(path).read_bytes()
-        self.send_response(200)
-        self.send_header("Content-Type", ctype)
-        self.send_header("Content-Length", str(len(data)))
-        self.send_header("Cache-Control", "max-age=86400" if ctype.startswith("image/") else "no-cache")
-        self.end_headers()
-        self.wfile.write(data)
+    def send_file(self, path, ctype, cache=None):
+        """In 64 KB pieces, so a long song isn't held in memory, and with Range so the player can seek in it."""
+        with open(path, "rb") as f:
+            size = os.fstat(f.fileno()).st_size
+            start, end, code = 0, size - 1, 200
+            m = re.fullmatch(r"bytes=(\d*)-(\d*)", self.headers.get("Range", "").strip())
+            if m and any(m.groups()):
+                if m[1]:
+                    start, end = int(m[1]), min(int(m[2] or size - 1), size - 1)
+                else:  # the last N bytes
+                    start = max(0, size - int(m[2]))
+                if start > end:
+                    self.send_response(416)
+                    self.send_header("Content-Range", f"bytes */{size}")
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
+                code = 206
+            left = end - start + 1
+            self.send_response(code)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(left))
+            if code == 206:
+                self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Cache-Control", cache or ("max-age=86400" if ctype.startswith("image/") else "no-cache"))
+            self.end_headers()
+            f.seek(start)
+            try:
+                while left and (chunk := f.read(min(65536, left))):
+                    self.wfile.write(chunk)
+                    left -= len(chunk)
+            except ConnectionError:
+                pass  # the player seeked or moved on
 
     def stream_events(self):
         """Controller presses for the launcher page, as a never-ending text stream."""
@@ -2722,12 +2801,6 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(network())
             if path == "/api/music" and kind == "local":  # menu music: how many songs, and their names
                 return self.send_json({"songs": [p.stem for p in music_files()]})
-            m = re.fullmatch(r"/music/(\d+)", path)
-            if m and kind == "local":  # one song by its number in that list (never a path from the request)
-                songs = music_files()
-                if int(m.group(1)) < len(songs):
-                    f = songs[int(m.group(1))]
-                    return self.send_file(f, MUSIC_TYPES[f.suffix.lower()])
             if path == "/api/mixer":  # PC row → Volume → Volume for each app
                 return self.send_json({"apps": mixer()})
             if path == "/api/bluetooth" and kind == "local":  # PC row → Bluetooth
@@ -2776,6 +2849,12 @@ class Handler(BaseHTTPRequestHandler):
         m = re.fullmatch(r"/audio/sbr/([\w-]+\.(mp3|ogg|wav|m4a|opus))", path)  # your SBR sound clips
         if m and (WEB / "audio" / "sbr" / m.group(1)).is_file():
             return self.send_file(WEB / "audio" / "sbr" / m.group(1), AUDIO_TYPES["." + m.group(2)])
+        m = re.fullmatch(r"/music/(\d+)", path)
+        if m and kind == "local":  # one song by its number in that list (never a path from the request)
+            songs = music_files()
+            if int(m.group(1)) < len(songs):
+                f = songs[int(m.group(1))]
+                return self.send_file(f, MUSIC_TYPES[f.suffix.lower()])
         if path == "/audio/intro":
             f = intro_file()
             if f:
@@ -2791,11 +2870,12 @@ class Handler(BaseHTTPRequestHandler):
         if m:
             f = app_icon(m.group(1))
             if f:
-                return self.send_file(f, "image/png")
+                return self.send_file(f, "image/png", cache="no-cache")
         m = re.fullmatch(r"/media/([\w .()-]+\.(?:png|jpe?g))", unquote(path), re.I)  # a screenshot; no folders
-        if m and (screenshots_dir() / m.group(1)).is_file():
+        if m:
             f = screenshots_dir() / m.group(1)
-            return self.send_file(f, SHOT_TYPES[f.suffix.lower()])
+            if f.is_file():
+                return self.send_file(f, SHOT_TYPES[f.suffix.lower()])
         m = re.fullmatch(r"/img/([\w-]+)\.(jpg|png|webp)", path)  # pictures kept in web/img (e.g. GTA's art)
         if m and (WEB / "img" / f"{m.group(1)}.{m.group(2)}").is_file():
             return self.send_file(WEB / "img" / f"{m.group(1)}.{m.group(2)}",
@@ -3005,6 +3085,7 @@ def main():
     srv = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     WATCHER.start()
     threading.Thread(target=controller_loop, daemon=True).start()
+    threading.Thread(target=charge_watch, daemon=True).start()
     threading.Thread(target=sleep_watch, daemon=True).start()
     threading.Thread(target=update_watch, daemon=True).start()
     threading.Thread(target=keep_audio, daemon=True).start()

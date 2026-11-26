@@ -472,7 +472,12 @@ const $ = s => document.querySelector(s);
 const api = (path, body) => fetch(path, body === undefined
   ? { headers: { "X-Couch": "1" } }
   : { method: "POST", headers: { "X-Couch": "1", "Content-Type": "application/json" }, body: JSON.stringify(body) }
-).then(r => r.json());
+).then(async r => {
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(j.error || `HTTP ${r.status}`), { body: j });
+  return j;
+});
+const errBody = e => e.body;  // an HTTP error's JSON; undefined when the server can't be reached
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch {} },
@@ -1089,7 +1094,7 @@ async function streamMenu() {
 let sunBusy = 0;  // a Sunshine call in flight: presses wait, so none lands on a tile behind a closing dialog
 async function sunshineCall(action, extra = {}) {
   sunBusy++;
-  const r = await api("/api/sunshine", { action, ...extra }).catch(() => ({ error: "Couch isn't responding. Try again in a moment." }))
+  const r = await api("/api/sunshine", { action, ...extra }).catch(e => e.body?.error ? e.body : { error: "Couch isn't responding. Try again in a moment." })
     .finally(() => sunBusy--);
   if (r.error === "login") { info.sunshineLogin = false; toast("Sunshine needs its login again: Streaming → Connect to Sunshine"); return null; }
   if (r.error) { toast(r.error); return null; }
@@ -1398,7 +1403,7 @@ async function launch(body, name, rgb) {
     const r = await api("/api/launch", body);
     if (!r.ok) { hideStarting(); toast(r.error || `Couldn't start ${name}. Try again in a moment.`); }
     else if (r.took) $("#starting-note").textContent = startHint = `Starting… Last time it took about ${r.took} seconds.`;
-  } catch { hideStarting(); toast("Couch isn't responding. Try again in a moment; if it keeps happening, restart the PC."); }
+  } catch (e) { hideStarting(); toast(e.body?.error || "Couch isn't responding. Try again in a moment; if it keeps happening, restart the PC."); }
 }
 
 // The starting screen stays until the game's window takes the screen (the launcher loses focus for good),
@@ -1480,7 +1485,7 @@ async function pickAudio() {
     }), { vertical: true, start: Math.max(0, list.findIndex(d => d.id === a.current?.id)) });
 }
 async function setAudio(d) {
-  const r = await api("/api/audio", { id: d.id }).catch(() => null);
+  const r = await api("/api/audio", { id: d.id }).catch(errBody);
   if (!r?.ok) return toast(r?.error || "Couch server isn't responding");
   toast(`Sound now plays on ${deviceName(r.name)[0]}`);
   refresh();
@@ -1531,7 +1536,7 @@ function soundboard() {
     })), { vertical: true });
 }
 async function windowAction(action) {
-  const r = await api("/api/window", { action }).catch(() => null);
+  const r = await api("/api/window", { action }).catch(errBody);
   if (!r?.ok) { toast(r?.error || "Couch server isn't responding"); refresh(); }
 }
 
@@ -1576,7 +1581,7 @@ async function soundMenu(g, out) {
   const a = await api("/api/audio").catch(() => null);
   if (!a) return toast("Couch isn't responding. Try again in a moment.");
   const save = async (id, said) => {
-    const r = await api("/api/gameaudio", { key: g.key, id }).catch(() => null);
+    const r = await api("/api/gameaudio", { key: g.key, id }).catch(errBody);
     toast(r?.ok ? said : r?.error || "Couch isn't responding. Try again in a moment.");
   };
   choose(`Sound for ${name}`, "", [
@@ -1600,7 +1605,7 @@ async function displayMenu(g) {
 }
 async function tryMode(g, m) {
   const name = g.title || g.name;
-  const r = await api("/api/display", { action: "try", mode: m.mode }).catch(() => null);
+  const r = await api("/api/display", { action: "try", mode: m.mode }).catch(errBody);
   if (!r?.ok) return toast(r?.error || "Couch isn't responding. Try again in a moment.");
   let left = 15, timer;
   const d = $("#dialog"), text = () => `For ${name}. Going back in ${left} second${left === 1 ? "" : "s"} unless you keep it.`;
@@ -1648,7 +1653,7 @@ async function addWebsite() {
   addApp({ kind: "web", value: url, name });
 }
 async function addApp(body) {
-  const r = await api("/api/apps", { action: "add", ...body }).catch(() => null);
+  const r = await api("/api/apps", { action: "add", ...body }).catch(errBody);
   if (!r?.ok) return toast(r?.error || "Couch isn't responding. Try again in a moment.");
   Sound.select(); await refresh();
   const t = rows.flat().find(e => e.app?.id === r.id);
@@ -1665,7 +1670,7 @@ function appMenu(a) {
   ], { vertical: true });
 }
 async function arrangeApps(body, said) {
-  const r = await api("/api/apps", body).catch(() => null);
+  const r = await api("/api/apps", body).catch(errBody);
   if (!r?.ok) { toast(r?.error || "Couch isn't responding. Try again in a moment."); return false; }
   await refresh(); if (said) toast(said);
   return true;
@@ -1715,7 +1720,7 @@ function hiddenMenu() {  // the PC row's Hidden games (and apps): bring one back
   ], { vertical: true });
 }
 async function setChoice(action, g, value) {
-  const r = await api("/api/games", { action, key: g?.key, value }).catch(() => null);
+  const r = await api("/api/games", { action, key: g?.key, value }).catch(errBody);
   if (!r?.ok) return toast(r?.error || "Couch server isn't responding");
   const name = g?.title || g?.name;
   const said = ({ pin: `${name} pinned`, unpin: `${name} unpinned`, hide: `${name} hidden. Show it again from the PC row.`, unhide: `${name} is back`,
@@ -1795,7 +1800,7 @@ async function taskManager(start = 0, quiet = false) {
   }, 2000);
 }
 function taskActions(a) {
-  const act = action => api("/api/tasks", { id: a.id, action }).then(r => {
+  const act = action => api("/api/tasks", { id: a.id, action }).catch(e => { if (e.body?.error) return e.body; throw e; }).then(r => {
     if (r.error) { toast(r.error); return taskManager(0, true); }
     if (action === "close") { closing.set(a.id, Date.now()); toast(`Closing ${a.name}…`); setTimeout(() => taskManager(0, true), 1500); }
     if (action === "force") { toast(`Force closed ${a.name}`); setTimeout(() => taskManager(0, true), 1500); }
@@ -1829,11 +1834,11 @@ async function volumeMenu(start = 0) {
         api("/api/volume", { level: v.level }).catch(() => {});
       } },
     { label: v.muted ? "Unmute" : "Mute", icon: v.muted ? "sound" : "mute",
-      fn: () => api("/api/volume", { muted: !v.muted }).then(() => volumeMenu(1)) },
+      fn: () => api("/api/volume", { muted: !v.muted }).then(() => volumeMenu(1)).catch(() => toast("Couldn't change it. Try again in a moment.")) },
     { label: "Volume for each app", icon: "music", sub: "A game, YouTube, Discord: each its own level", fn: mixerMenu },
     ...(v.micMuted == null ? [] : [{ label: v.micMuted ? "Turn microphone on" : "Mute microphone", icon: "voice",
       sub: `${v.micMuted ? "Muted" : "On"}. The mute button on the controller does this too`,
-      fn: () => api("/api/volume", { mic: !v.micMuted }).then(() => volumeMenu(3)) }]),
+      fn: () => api("/api/volume", { mic: !v.micMuted }).then(() => volumeMenu(3)).catch(() => toast("Couldn't change it. Try again in a moment.")) }]),
   ], { vertical: true, start });
 }
 // Volume for each app: Windows' own per-app levels (its Volume mixer), with left and right
@@ -1909,7 +1914,7 @@ async function btScan() {
   const d = $("#dialog");
   choose("Looking for devices…", "This takes about 12 seconds. Keep the device in pairing mode.", [{ label: "Cancel" }]);
   const mine = modal;
-  const r = await api("/api/bluetooth", { action: "scan" }).catch(() => null);
+  const r = await api("/api/bluetooth", { action: "scan" }).catch(errBody);
   if (modal !== mine) return;  // cancelled meanwhile
   closeModal(d);
   if (!r?.ok) return toast(r?.error || "Couch isn't responding. Try again in a moment.");
@@ -1921,7 +1926,7 @@ async function btScan() {
 }
 async function btPair(dev) {
   toast(`Pairing ${dev.name}…`);
-  const r = await api("/api/bluetooth", { action: "pair", id: dev.id }).catch(() => null);
+  const r = await api("/api/bluetooth", { action: "pair", id: dev.id }).catch(errBody);
   if (!r?.ok) return toast(r?.error || "Couch isn't responding. Try again in a moment.");
   toast(r.result === "paired" ? `${dev.name} is paired` : `${dev.name} didn't pair: ${r.result}`);
 }
@@ -2215,7 +2220,7 @@ async function listenPad() {
     await new Promise(r => setTimeout(r, 2000)); // server restarting; try again
   }
 }
-listenPad();
+if (!PREVIEW) listenPad();  // presses go to the newest listener: a preview must never take them from the TV
 
 // Fallback when the server can't read the controller (pygame missing): the browser's Gamepad API with the
 // standard DualSense mapping. 0 ✕, 1 ○, 2 □, 3 △, 4 L1, 5 R1, 9 Options, 12-15 D-pad, left stick to move.
