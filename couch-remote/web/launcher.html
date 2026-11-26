@@ -1094,11 +1094,12 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;",
 
 // The PC row and the Options menu share these
 // Streaming (Sunshine on this PC, Moonlight on another TV): status, Sunshine's settings page, ending a leftover stream
-const streamStatus = () => !info.sunshine ? "Play on another TV with Sunshine and Moonlight"
-  : info.sunshine !== "running" ? "Sunshine isn't running. Restart the PC to start it"
+const host = () => info.streamHost || "Vibepollo";  // a PC that hasn't switched yet still says Sunshine
+const streamStatus = () => !info.sunshine ? `Play on another TV with ${host()} and Moonlight`
+  : info.sunshine !== "running" ? `${host()} isn't running. Restart the PC to start it`
   : info.stream ? `Streaming to ${info.stream}` : "Ready: open Moonlight on the other TV and pick Couch";
 async function streamMenu() {
-  if (!info.sunshine) return choose("Streaming", "Install Sunshine on this PC and Moonlight on the other TV first. The steps are in docs/streaming-setup.md.", [{ label: "Done" }]);
+  if (!info.sunshine) return choose("Streaming", `Install ${host()} on this PC and Moonlight on the other TV first. The steps are in docs/streaming-setup.md.`, [{ label: "Done" }]);
   const signedIn = info.sunshineLogin && info.sunshine === "running";
   // the stream's picture depends on the connection: say which, and how strong Wi-Fi is
   const net = await api("/api/network").catch(() => null);
@@ -1106,15 +1107,15 @@ async function streamMenu() {
     : ` This PC is on Wi-Fi${net.name ? ` (${net.name})` : ""} at ${net.signal}% signal${net.signal < 70 ? ": a cable would give a steadier picture" : ""}.`;
   if (modal) return;  // something else opened while it checked
   choose("Streaming", streamStatus() + "." + netLine, [
-    ...(info.sunshine === "stopped" ? [{ label: "Restart the PC", icon: "restart", sub: "Sunshine was quit; it starts again with Windows",
-      fn: () => confirmPower("restart", "Restart", "Restart the PC now to start Sunshine again? Unsaved work in other apps will be lost.") }] : []),
-    ...(!info.sunshineLogin ? [{ label: "Connect to Sunshine", icon: "pad", sub: "Once, with the controller: then pairing and restarting work from here", fn: connectSunshine }] : []),
+    ...(info.sunshine === "stopped" ? [{ label: "Restart the PC", icon: "restart", sub: `${host()} was quit; it starts again with Windows`,
+      fn: () => confirmPower("restart", "Restart", `Restart the PC now to start ${host()} again? Unsaved work in other apps will be lost.`) }] : []),
+    ...(!info.sunshineLogin ? [{ label: `Connect to ${host()}`, icon: "pad", sub: "Once, with the controller: then pairing and restarting work from here", fn: connectSunshine }] : []),
     ...(signedIn ? [
       { label: "Pair a device", icon: "phone", sub: "Type the PIN a new Moonlight device shows", fn: pairDevice },
       { label: "Paired devices", icon: "tv", sub: "See them, or remove one", fn: pairedDevices },
-      { label: "Restart Sunshine", icon: "restart", sub: "If streaming misbehaves",
-        fn: () => confirmAction("Restart Sunshine?", "A stream in progress ends; the other TV can reconnect after a few seconds.", "Restart",
-          () => sunshineCall("restart").then(r => r && toast("Sunshine is restarting"))) },
+      { label: `Restart ${host()}`, icon: "restart", sub: "If streaming misbehaves",
+        fn: () => confirmAction(`Restart ${host()}?`, "A stream in progress ends; the other TV can reconnect after a few seconds.", "Restart",
+          () => sunshineCall("restart").then(r => r && toast(`${host()} is restarting`))) },
     ] : []),
     ...(info.stream ? [signedIn
       ? { label: "End stream", icon: "close", sub: "Closes the session on the other screen",
@@ -1122,8 +1123,8 @@ async function streamMenu() {
             () => sunshineCall("close").then(r => { if (!r) return; api("/api/stream", { on: false }).catch(() => {}); toast("Stream ended"); })) }
       : { label: "Clear streaming status", icon: "close", sub: "If Couch still shows a stream that has ended",
           fn: () => api("/api/stream", { on: false }).then(() => toast("Streaming status cleared")).catch(() => {}) }] : []),
-    ...(info.sunshine === "running" ? [{ label: "Open Sunshine settings", icon: "exit", sub: "Its full page, on this screen (mouse and keyboard)",
-      fn: () => { toast("Opening Sunshine…"); api("/api/sunshine", { action: "open" }).catch(() => {}); } }] : []),
+    ...(info.sunshine === "running" ? [{ label: `Open ${host()} settings`, icon: "exit", sub: "Its full page, on this screen (mouse and keyboard)",
+      fn: () => { toast(`Opening ${host()}…`); api("/api/sunshine", { action: "open" }).catch(() => {}); } }] : []),
     { label: "Done" },
   ], { vertical: true });
 }
@@ -1133,20 +1134,21 @@ async function sunshineCall(action, extra = {}) {
   sunBusy++;
   const r = await api("/api/sunshine", { action, ...extra }).catch(e => e.body?.error ? e.body : { error: "Couch isn't responding. Try again in a moment." })
     .finally(() => sunBusy--);
-  if (r.error === "login") { info.sunshineLogin = false; toast("Sunshine needs its login again: Streaming → Connect to Sunshine"); return null; }
+  if (r.error === "login") { info.sunshineLogin = false; toast(`${host()} needs its login again: Streaming → Connect to ${host()}`); return null; }
   if (r.error) { toast(r.error); return null; }
   return r.result ?? r;
 }
 async function connectSunshine() {
-  const user = await promptText("Sunshine username");
+  const user = await promptText(`${host()} username`);
   if (user == null) return;
-  const password = await promptText("Sunshine password", { secret: true });
+  const password = await promptText(`${host()} password`, { secret: true });
   if (password == null) return;
-  toast("Checking with Sunshine…");
-  if ((await sunshineCall("login", { user, password }))?.ok) { info.sunshineLogin = true; toast("Connected to Sunshine"); streamMenu(); }
+  toast(`Checking with ${host()}…`);
+  if ((await sunshineCall("login", { user, password }))?.ok) { info.sunshineLogin = true; toast(`Connected to ${host()}`); streamMenu(); }
 }
 async function pairDevice(again) {
-  const r = await sunshineCall("pending");
+  // Vibepollo has no list of devices asking to pair: go straight to the PIN
+  const r = host() === "Vibepollo" ? { pairings: [{}] } : await sunshineCall("pending");
   if (!r) return again && closeModal($("#dialog"));
   const list = r.pairings || [], nameOf = p => p.name || p.client_name || p.device_name || "Moonlight device";
   if (!list.length && again) return toast("Nothing is asking to pair yet. Keep the PIN on the other screen and try again.");
@@ -1157,7 +1159,7 @@ async function pairDevice(again) {
     const pin = await promptText(`PIN shown on ${nameOf(p)}`);
     if (!pin) return;
     const res = await sunshineCall("pair", { pairing_id: p.id, pin: pin.trim(), name: nameOf(p) });
-    if (res) toast(res.status === false || res.status === "false" ? "Sunshine didn't accept that PIN. Try again." : `${nameOf(p)} paired`);
+    if (res) toast(res.status === false || res.status === "false" ? `${host()} didn't accept that PIN. Try again.` : `${nameOf(p)} paired`);
   };
   if (list.length === 1) return pair(list[0]);
   choose("Pair a device", "Which device is asking?", list.map(p => ({ label: nameOf(p), fn: () => pair(p) })), { vertical: true });

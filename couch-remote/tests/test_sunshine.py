@@ -1,4 +1,5 @@
 import base64
+import http.client
 import io
 import json
 import sys
@@ -84,6 +85,15 @@ class SunshineLogin(unittest.TestCase):
             with self.assertRaises(PermissionError):
                 server.sunshine_api("POST", "/api/restart", {})
         self.assertFalse(server.SUNSHINE_CRED.exists())
+
+    def test_a_restart_that_hangs_up_without_answering_worked(self):  # Vibepollo does this
+        with self.fake(200):
+            server.sunshine_login("me", "pw")
+        gone = mock.patch("urllib.request.urlopen", side_effect=http.client.RemoteDisconnected("closed"))
+        with gone:
+            self.assertEqual(server.sunshine_api("POST", "/api/restart", {}), {})
+            with self.assertRaises(OSError):
+                server.sunshine_api("GET", "/api/clients/list")
 
     def test_end_stream_closes_sunshines_app(self):
         self.assertEqual(server.SUNSHINE_ACTIONS["close"](), ("POST", "/api/apps/close", {}))

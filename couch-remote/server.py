@@ -583,7 +583,7 @@ def set_audio(device_id):
     return dev["name"]
 
 
-STREAM = {"on": False, "device": ""}  # a Moonlight stream through Sunshine, as told by stream.cmd (Sunshine prep commands)
+STREAM = {"on": False, "device": ""}  # a Moonlight stream through Vibepollo (or Sunshine), as told by stream.cmd (prep commands)
 
 
 LAST_DEVICE = ["another screen"]  # the device the last stream went to, for a reconnect Sunshine doesn't announce
@@ -626,7 +626,15 @@ def set_stream(on, device=""):
     return dict(STREAM)
 
 
-SUNSHINE_LOG = Path(r"C:\Program Files\Sunshine\config\sunshine.log")
+# Vibepollo installs into "Apollo"; a PC that hasn't switched yet still has Sunshine
+STREAM_DIRS = [Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / n / "config" for n in ("Apollo", "Sunshine")]
+
+
+def stream_log():
+    """The streaming host's newest log, or None. Sunshine writes one sunshine.log; Vibepollo may start a new
+    logs/sunshine-<time>.log for each run."""
+    logs = [p for d in STREAM_DIRS for p in (d / "sunshine.log", *d.glob("logs/sunshine-*.log"))]
+    return max((p for p in logs if p.exists()), key=mtime, default=None)
 
 
 def sunshine_events(text):
@@ -640,16 +648,21 @@ def sunshine_events(text):
 
 
 def watch_sunshine():
-    """Read Sunshine's log as it grows (read-only), from its end at start-up; a new, shorter log is read from the top."""
-    pos = None
+    """Read the host's log as it grows (read-only), from its end at start-up; a new or shorter log is read from the top."""
+    path = pos = None
     while True:
         time.sleep(3)
         try:
-            size = SUNSHINE_LOG.stat().st_size
-            if pos is None or size < pos:
-                pos = size if pos is None else 0
+            new = stream_log()
+            if new is None:
+                continue
+            size = new.stat().st_size
+            if path is None:
+                path, pos = new, size
+            elif new != path or size < pos:
+                path, pos = new, 0
             if size > pos:
-                with open(SUNSHINE_LOG, "rb") as f:
+                with open(path, "rb") as f:
                     f.seek(pos)
                     chunk = f.read()
                 pos += len(chunk)
@@ -711,6 +724,7 @@ def sunshine_login(user, password):
 def sunshine_api(method, path, body=None):
     """A call to Sunshine's API with the saved login. PermissionError when there is none or Sunshine no longer
     accepts it (then it's forgotten, and the Streaming menu asks again)."""
+    import http.client
     import urllib.error
     if not SUNSHINE_CRED.exists():
         raise PermissionError("no Sunshine login")
@@ -721,6 +735,10 @@ def sunshine_api(method, path, body=None):
             SUNSHINE_CRED.unlink(missing_ok=True)
             log.info("Sunshine refused the saved login; forgot it")
             raise PermissionError("Sunshine login no longer works") from e
+        raise
+    except http.client.RemoteDisconnected:
+        if path == "/api/restart":  # Vibepollo restarts before it answers
+            return {}
         raise
 
 
@@ -743,14 +761,25 @@ def parse_sc(out):
     return "running" if "RUNNING" in out else "stopped"
 
 
+# the streaming host's service -> its name on screen; Vibepollo first, in case an old Sunshine is left over
+STREAM_SERVICES = {"ApolloService": "Vibepollo", "SunshineService": "Sunshine"}
+STREAM_HOST = ["Vibepollo"]  # the one sunshine_status() last found
+
+
 def sunshine_status():
-    """Sunshine (the streaming host) is a Windows service that starts with Windows; Couch only reads its state
-    (starting or stopping a service needs admin)."""
+    """The streaming host (Vibepollo, a Sunshine fork, or Sunshine itself) is a Windows service that starts with
+    Windows; Couch only reads its state (starting or stopping a service needs admin)."""
     try:
-        return parse_sc(subprocess.run(["sc.exe", "query", "SunshineService"], capture_output=True, text=True,
-                                       timeout=5, creationflags=0x08000000).stdout)
+        for service, name in STREAM_SERVICES.items():
+            state = parse_sc(subprocess.run(["sc.exe", "query", service], capture_output=True, text=True,
+                                            timeout=5, creationflags=0x08000000).stdout)
+            if state:
+                STREAM_HOST[0] = name
+                return state
     except (OSError, subprocess.TimeoutExpired):
         return None
+    STREAM_HOST[0] = "Vibepollo"
+    return None
 
 
 def redact(text):
@@ -777,12 +806,13 @@ def diagnostics():
     upd = [ln for ln in log_lines if re.search(r"updated to|update \w+ skipped|update check skipped|rolled back", ln)]
     problems = [ln for ln in log_lines if " WARNING " in ln or " ERROR " in ln][-6:]
     games, _ = library()
+    streaming = sunshine_status()  # first: it also sets STREAM_HOST
     when, _, what = upd[-1].partition(" INFO ") if upd else ("", "", "")
     last_update = f"{when[:19]} {what}" if what else upd[-1] if upd else "none since the log started"
     lines = [f"Couch {VERSION}" + (" (the main copy: it doesn't update itself)" if VERSION == "dev" else ""),
              f"Last update check: {last_update}",
              f"Windows {platform.version()}, Python {platform.python_version()}",
-             f"Streaming: Sunshine {sunshine_status() or 'not installed'}, controller driver {service('ViGEmBus')}",
+             f"Streaming: {STREAM_HOST[0]} {streaming or 'not installed'}, controller driver {service('ViGEmBus')}",
              "Controllers: " + (", ".join(f"{p['name']} ({p['level']})" for p in PADS) or "none"),
              f"Apps: {len(shown_apps()[0])}, games: {len(games)}",
              "Recent problems:" + ("" if problems else " none")] + [f"  {ln}" for ln in problems]
@@ -2831,7 +2861,7 @@ class Handler(BaseHTTPRequestHandler):
                 info = {"name": socket.gethostname(), "apps": apps, "games": games, "hidden": hidden,
                         "hiddenApps": [{"id": a["id"], "name": a["name"]} for a in hidden_apps], "pads": list(PADS),
                         "padReader": PAD_READER, "intro": bool(intro_file()), "sounds": sound_clips(),
-                        "stream": STREAM["device"] if STREAM["on"] else None, "sunshine": sunshine_status(),
+                        "stream": STREAM["device"] if STREAM["on"] else None, "sunshine": sunshine_status(), "streamHost": STREAM_HOST[0],
                         "sunshineLogin": SUNSHINE_CRED.exists(), "sleepAt": int(SLEEP["at"]),
                         "sleepIdle": load_choices()["sleep_idle"], "swap": SWAP[0], "version": VERSION,
                         "installerChanged": (ROOT / "cache" / "installer-changed").exists()}
@@ -3007,7 +3037,7 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     if a == "login":
                         ok = sunshine_login(str(b.get("user", "")), str(b.get("password", "")))
-                        return self.send_json({"ok": ok} if ok else {"error": "Sunshine didn't accept that username and password."})
+                        return self.send_json({"ok": ok} if ok else {"error": f"{STREAM_HOST[0]} didn't accept that username and password."})
                     if a not in SUNSHINE_ACTIONS:
                         return self.send_json({"error": "unknown action"}, 400)
                     log.info("Sunshine: %s", a)
@@ -3016,7 +3046,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_json({"error": "login", "login": False})
                 except (OSError, ValueError) as e:  # Sunshine not running, or it restarted mid-call
                     log.info("Sunshine %s failed: %s", a, e)
-                    return self.send_json({"error": "Sunshine isn't answering. Try again in a moment."})
+                    return self.send_json({"error": f"{STREAM_HOST[0]} isn't answering. Try again in a moment."})
             elif path == "/api/light" and kind == "local":  # the controllers' light bar: {"rgb": [r, g, b]}
                 r, g, bl = (max(0, min(255, int(v))) for v in b["rgb"])
                 LIGHT[0] = (r, g, bl)

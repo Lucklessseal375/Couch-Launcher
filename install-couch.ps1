@@ -6,11 +6,11 @@
     1. Installs Python 3.13 (through winget) if Python isn't there yet, pygame for the controller, and Windows'
        Bluetooth bindings (pywinrt) for pairing from the TV.
     2. Creates the "Couch Launcher" task: Couch starts full screen when you sign in to Windows.
-    3. Asks for admin once, then: lets the phone remote reach this PC (one firewall rule), installs Sunshine for
-       streaming to another TV with the controller driver it needs (ViGEmBus, as a PS4 controller), and adds the "Couch" app to Sunshine.
+    3. Asks for admin once, then: lets the phone remote reach this PC (one firewall rule), installs Vibepollo (a
+       Sunshine fork, with its own controller driver) for streaming to another TV, and adds the "Couch" app to it.
     4. Puts a "Couch" shortcut on the desktop.
   From then on Couch updates itself from GitHub (couch-remote\update.py): at sign-in, and every 6 hours while idle.
-  Then it starts Couch. Left for you: Sunshine's login and pairing Moonlight (docs\streaming-setup.md).
+  Then it starts Couch. Left for you: Vibepollo's login and pairing Moonlight (docs\streaming-setup.md).
 #>
 param([switch]$Admin, [string]$Py)  # -Admin: the part step 3 runs elevated
 $ErrorActionPreference = 'Stop'
@@ -28,53 +28,49 @@ if ($Admin) {
         Remove-NetFirewallRule -DisplayName 'Couch (phone remote)' -ErrorAction SilentlyContinue
         New-NetFirewallRule -DisplayName 'Couch (phone remote)' -Direction Inbound -Action Allow -Program $Py -Profile Private,Public | Out-Null
         Say 'Firewall rule for the phone remote added.'
-        if (Get-Service SunshineService -ErrorAction SilentlyContinue) {
-            Say 'Sunshine is already installed.'
-        } elseif (Get-Command winget -ErrorAction SilentlyContinue) {
-            winget install --id LizardByte.Sunshine --exact --scope machine --silent --accept-package-agreements --accept-source-agreements | Out-Null
-            Say 'Sunshine installed.'
-        } else {
-            $msi = Join-Path $env:TEMP 'Sunshine-Windows-AMD64-installer.msi'
-            Invoke-WebRequest -UseBasicParsing 'https://github.com/LizardByte/Sunshine/releases/latest/download/Sunshine-Windows-AMD64-installer.msi' -OutFile $msi
-            Start-Process msiexec.exe -Wait -ArgumentList '/i', "`"$msi`"", '/qn'
-            Say 'Sunshine installed (from its GitHub releases).'
+        if (Get-Service ApolloService -ErrorAction SilentlyContinue) {  # Vibepollo's service name
+            Say 'Vibepollo is already installed.'
+        } else {  # one pinned release, checked before it runs; it replaces Sunshine if that is there
+            $setup = Join-Path $env:TEMP 'VibepolloSetup-v2.18.9.exe'
+            Invoke-WebRequest -UseBasicParsing 'https://github.com/Nonary/Vibepollo/releases/download/2.18.9/VibepolloSetup-v2.18.9.exe' -OutFile $setup
+            if ((Get-FileHash $setup -Algorithm SHA256).Hash -ne 'cc840f867ed4b4462f10d12a5572e8a17748e75aefd495b5af54951a81278bed') { throw 'The Vibepollo download is not the expected file; not running it.' }
+            $run = Start-Process $setup -Wait -PassThru -ArgumentList '/qn', '/norestart'
+            if ($run.ExitCode -notin 0, 3010) { throw "Vibepollo's installer failed (exit code $($run.ExitCode))." }
+            if ($run.ExitCode -eq 3010) { Say 'Restart the PC to finish installing Vibepollo.' }
+            Say 'Vibepollo installed.'
         }
-        if (-not (Get-Service SunshineService -ErrorAction SilentlyContinue)) { throw 'Sunshine did not install.' }
-        $cfg = Join-Path $env:ProgramFiles 'Sunshine\config'
+        $service = Get-CimInstance Win32_Service -Filter "Name='ApolloService'"
+        if (-not $service) { throw 'Vibepollo did not install.' }
+        # the service runs <install folder>\tools\sunshinesvc.exe; the settings are in <install folder>\config
+        $svcExe = [regex]::Match($service.PathName, '^"?(.+?\.exe)').Groups[1].Value
+        $cfg = Join-Path (Split-Path -Parent (Split-Path -Parent $svcExe)) 'config'
         New-Item -ItemType Directory -Force $cfg | Out-Null
         $appsFile = Join-Path $cfg 'apps.json'
         $j = if (Test-Path $appsFile) { Get-Content $appsFile -Raw | ConvertFrom-Json } else { [pscustomobject]@{ apps = @(@{ name = 'Desktop'; 'image-path' = 'desktop.png' }); env = @{} } }
         if (@($j.apps | Where-Object { $_.name -eq 'Couch' }).Count) {
-            Say 'Sunshine already has the Couch app.'
+            Say 'Vibepollo already has the Couch app.'
         } else {
             $cmd = '"' + (Join-Path $repo 'couch-remote\stream.cmd') + '"'
             $j.apps = @($j.apps) + [pscustomobject]@{ name = 'Couch'; cmd = ''; 'auto-detach' = $true; 'wait-all' = $true
                 'prep-cmd' = @(@{ do = "$cmd on `"Apple TV`""; undo = "$cmd off"; elevated = $false }) }
             $j | ConvertTo-Json -Depth 6 | Set-Content $appsFile -Encoding UTF8
-            Say 'Added the Couch app to Sunshine.'; $restart = $true
+            Say 'Added the Couch app to Vibepollo.'; $restart = $true
         }
-        # Without ViGEmBus, Moonlight's controller never reaches Windows ("No gamepad input is available" in Sunshine's log)
-        if (Get-Service ViGEmBus -ErrorAction SilentlyContinue) {
-            Say 'Controller driver for streaming (ViGEmBus) is already installed.'
-        } else {
-            if (Get-Command winget -ErrorAction SilentlyContinue) {
-                winget install --id ViGEm.ViGEmBus --exact --silent --accept-package-agreements --accept-source-agreements | Out-Null
-            } else {
-                $vig = Join-Path $env:TEMP 'ViGEmBus_1.22.0_x64_x86_arm64.exe'
-                Invoke-WebRequest -UseBasicParsing 'https://github.com/nefarius/ViGEmBus/releases/download/v1.22.0/ViGEmBus_1.22.0_x64_x86_arm64.exe' -OutFile $vig
-                Start-Process $vig -Wait -ArgumentList '/exenoui', '/qn', '/norestart'
-            }
-            if (-not (Get-Service ViGEmBus -ErrorAction SilentlyContinue)) { throw 'The controller driver for streaming (ViGEmBus) did not install.' }
-            Say 'Controller driver for streaming (ViGEmBus) installed.'; $restart = $true
-        }
-        # A PS4 controller: the closest ViGEmBus can make (PS5 needs Sunshine's paid driver; without this it's Xbox)
+        # Couch is a window on the TV's own screen. Vibepollo's default streams a new virtual screen: just an empty desktop
         $conf = Join-Path $cfg 'sunshine.conf'
         $lines = @(if (Test-Path $conf) { Get-Content $conf })
-        if (-not ($lines -match '^\s*gamepad\s*=\s*ds4\s*$')) {
-            Set-Content $conf (@($lines | Where-Object { $_ -notmatch '^\s*gamepad\s*=' }) + 'gamepad = ds4')
-            Say 'Sunshine set to a PS4 controller (PlayStation buttons in games).'; $restart = $true
+        if (-not ($lines -match '^\s*virtual_display_mode\s*=\s*disabled\s*$')) {
+            Set-Content $conf (@($lines | Where-Object { $_ -notmatch '^\s*virtual_display_mode\s*=' }) + 'virtual_display_mode = disabled')
+            Say "Vibepollo set to stream the TV's own screen."; $restart = $true
         }
-        if ($restart) { Restart-Service SunshineService }  # never interrupts a stream when nothing changed
+        # A virtual PS5 controller from Vibepollo's own driver: PlayStation buttons in games, and the only kind that can send
+        # adaptive triggers back (the Moonlight app on the other end has to support them; Apple TV's doesn't)
+        $lines = @(if (Test-Path $conf) { Get-Content $conf })
+        if (-not ($lines -match '^\s*gamepad\s*=\s*vhf_ds5\s*$')) {
+            Set-Content $conf (@($lines | Where-Object { $_ -notmatch '^\s*gamepad\s*=' }) + 'gamepad = vhf_ds5')
+            Say 'Vibepollo set to a PS5 controller.'; $restart = $true
+        }
+        if ($restart) { Restart-Service ApolloService }  # never interrupts a stream when nothing changed
     } catch {
         Say "FAILED: $_"
     }
@@ -132,4 +128,4 @@ Step 'Starting Couch'
 Start-ScheduledTask -TaskName 'Couch Launcher'
 Write-Host "`nDone. Couch opens full screen in a few seconds, and from now on whenever you sign in." -ForegroundColor Green
 Write-Host 'Your games: Steam games appear by themselves. Other apps and games come from couch-remote\apps.json; tiles for programs this PC does not have are hidden.'
-Write-Host 'Streaming to another TV, left for you: open https://localhost:47990 and create a Sunshine login, then pair Moonlight (docs\streaming-setup.md, step 3).'
+Write-Host 'Streaming to another TV, left for you: open https://localhost:47990 and create a Vibepollo login, then pair Moonlight (docs\streaming-setup.md, step 3).'

@@ -149,7 +149,7 @@ class Diagnostics(unittest.TestCase):
                 mock.patch.object(server, "shown_apps", return_value=([{"id": "a"}], [])), \
                 mock.patch.object(server, "sunshine_status", return_value="running"):
             text = "\n".join(server.diagnostics())
-        for part in ("Couch ", "Last update check:", "Streaming: Sunshine running", "Apps: 1, games: 0", "Recent problems:"):
+        for part in ("Couch ", "Last update check:", "Streaming: Vibepollo running", "Apps: 1, games: 0", "Recent problems:"):
             self.assertIn(part, text)
 
 
