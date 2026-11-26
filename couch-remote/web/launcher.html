@@ -10,14 +10,11 @@
 <meta name="color-scheme" content="dark">
 <link href="https://fonts.googleapis.com/css2?family=Lobster&family=Aoboshi+One&family=Archivo:wdth,wght@62..125,400..900&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <style>
-  /* Steel Ball Run, at night. Warm saddle-brown surfaces and parchment text from the official site's ink; the show's key
-     art (and then the focused game's art) fills the screen. One loud thing: the focused title in Aoboshi One (the site's
-     display serif) with a hard Johnny-cyan offset like the logo. Around it: the gold horseshoe as the focus ring, Gyro's
-     teal race bib as the action, the pink Couch script, ゴゴゴ. Layout, buttons and prompts follow the PS5. */
+  /* Midnight Spin: plum shadows, parchment type, and pink race-poster accents. */
   :root {
-    --obsidian: #150f0b; --glass: rgba(38, 28, 21, .56); --glass-hi: rgba(42, 31, 23, .86); --line: rgba(255, 236, 205, .12);
+    --obsidian: #160d1c; --glass: rgba(31, 18, 39, .56); --glass-hi: rgba(39, 22, 48, .86); --line: rgba(255, 236, 205, .12);
     --ink: #f3e6cf; --dim: #bfae96; --faint: #8a7a66;
-    --ice: #8fe3ff; --pink: #e0306e; --johnny: #5ec8ef; --gyro: #6fae3e; --gold: #f2b844; --bib: #13809a; --serif: "Aoboshi One", Georgia, serif;
+    --ice: #8fe3ff; --pink: #f14989; --johnny: #5ec8ef; --gyro: #6fae3e; --gold: #f2b844; --bib: #13809a; --serif: "Aoboshi One", Georgia, serif;
     --ps-cross: #7ea6ff; --ps-circle: #ff6f7d; --ps-tri: #43d6b0; --ps-square: #f08bd8;
     --logo: "Lobster", "Segoe Script", cursive;
     --ui: "Archivo", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
@@ -45,7 +42,7 @@
   .sky.on, .bg.on { opacity: 1; }
   .bg { background-size: cover; background-position: center 30%; background-color: var(--obsidian); filter: saturate(1.08) brightness(.66); }
   .shade { position: fixed; inset: 0; pointer-events: none; transition: opacity .6s ease; background:
-      linear-gradient(90deg, rgba(21,15,11,.97) 0%, rgba(21,15,11,.84) 30%, rgba(21,15,11,.32) 60%, rgba(21,15,11,.06) 100%),
+      linear-gradient(90deg, rgba(22,13,28,.97) 0%, rgba(21,15,11,.84) 30%, rgba(21,15,11,.32) 60%, rgba(21,15,11,.06) 100%),
       linear-gradient(0deg, rgba(21,15,11,.98) 0%, rgba(21,15,11,.6) 36%, rgba(21,15,11,0) 62%),
       linear-gradient(180deg, rgba(21,15,11,.72) 0%, rgba(21,15,11,0) 20%); }
   .spiral-mark { position: fixed; right: -14vh; bottom: -20vh; width: 78vh; height: 78vh; opacity: .05; color: var(--gold); pointer-events: none; }
@@ -116,8 +113,8 @@
              text-shadow: 0 .5vh 2.4vh rgba(0,0,0,.75), 0 0 4vh color-mix(in srgb, var(--focus, var(--gold)) 22%, transparent); }
   #d-meta { color: var(--dim); font-size: 2.6vh; margin-top: .7vh; min-height: 1.3em; max-width: 64vw;
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .cta { display: inline-flex; align-items: center; gap: 1.2vh; margin-top: 1.3vh; padding: 1vh 3.2vh 1vh 1.2vh; border-radius: 1vh;
-         background: var(--bib); color: #fff; font: 400 2.6vh/1 var(--serif); transform: rotate(-1.5deg);
+  .cta { display: inline-flex; align-items: center; gap: 1.2vh; margin-top: 1.3vh; padding: 1vh 3.2vh 1vh 1.2vh; border-radius: 99px;
+         background: #a91c57; color: #fff; font: 400 2.6vh/1 var(--serif); transform: rotate(-1.5deg);
          box-shadow: inset 0 1px 0 rgba(255,255,255,.28), 0 .8vh 2vh rgba(0,0,0,.45),
                      0 0 3.2vh color-mix(in srgb, var(--bib) 55%, transparent); }  /* a soft PS5-style glow */
   .cta .glyph { background: var(--obsidian); box-shadow: none; }
@@ -146,7 +143,7 @@
   /* ---------- rows: carousels that glide on a spring */
   main { height: calc(100% - 11vh - 23vh - 8vh); overflow: hidden;
          -webkit-mask-image: linear-gradient(#000 calc(100% - 4vh), transparent); mask-image: linear-gradient(#000 calc(100% - 4vh), transparent); }
-  #rows { transition: transform .6s var(--spring); padding-bottom: 4vh; }  /* the last row clears the prompt bar */
+  #rows { transition: transform .24s var(--spring); padding-bottom: 4vh; }  /* the last row clears the prompt bar */
   section { padding: .2vh 0; opacity: .62; transition: opacity .45s ease; }
   section.active, body:not(.chosen) section { opacity: 1; }
   section h2 { margin: 0 0 0 var(--pad); font: 400 2.6vh/1 var(--serif); color: var(--dim); }
@@ -156,9 +153,9 @@
 
   .item { flex: 0 0 auto; position: relative; border-radius: 1.4vh; outline: none; cursor: pointer;
           box-shadow: 0 1.4vh 3vh rgba(0,0,0,.5);
-          transition: transform .5s var(--spring), box-shadow .35s ease, filter .35s ease; filter: brightness(.8) saturate(.92); }
+          transition: transform .16s var(--spring), filter .16s ease; filter: brightness(.8) saturate(.92); }
   .item.focus { transform: scale(1.07); z-index: 3; filter: none;  /* --focus: the focused game's or app's own colour, else gold */
-                box-shadow: 0 0 0 .32vh var(--obsidian), 0 0 0 .75vh var(--focus, var(--gold)),
+                box-shadow: 0 0 0 .32vh var(--obsidian), 0 0 0 .62vh var(--ink),
                             0 0 6vh .4vh color-mix(in srgb, var(--focus, var(--gold)) 30%, transparent), 0 2.6vh 5vh rgba(0,0,0,.6); }
   /* focus, after tvOS: the tile lifts and a gold glint crosses it once, like light on the steel ball (motion allowed only) */
   @media (prefers-reduced-motion: no-preference) {
@@ -166,7 +163,7 @@
     .item::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 1; opacity: 0;
       background: linear-gradient(115deg, transparent 38%, color-mix(in srgb, var(--focus, #ffecbe) 45%, rgba(255,255,255,.28)) 50%, transparent 62%)
                   160% 0 / 260% 100% no-repeat; }
-    .item.focus::before { animation: glint .9s var(--spring) .08s both; }
+    .item.focus::before { animation: glint .48s var(--spring) .22s both; }
     body.calm .item.focus { transform: translateY(-1.6vh) scale(1.12); }  /* idle, after tvOS: the focused tile grows */
     .item.focus.press { transform: scale(.96); transition-duration: .08s; }  /* pressed, after tvOS "highlighted": dips, then springs back */
     @keyframes glint { from { opacity: 1; background-position: 160% 0; } to { opacity: 1; background-position: -60% 0; } }
@@ -180,7 +177,7 @@
                  filter: drop-shadow(0 .3vh .6vh rgba(0,0,0,.7)); }
   .item.focus .badge { opacity: 1; transform: scale(1); }
   .item .badge img { width: 100%; height: 100%; display: block; }
-  .item.focus .badge img { animation: spin .9s linear 3; }  /* three turns, then rest: spinning forever redrew the 4K screen nonstop (7% of a core idle) */
+  .item.focus .badge img { animation: spin .48s var(--spring) .22s 1; }  /* one turn after focus settles */
 
   .app { width: var(--tile); height: var(--tile); display: flex; flex-direction: column; justify-content: flex-end; padding: 1.8vh; background: var(--c); }
   .app .name { font: 800 3.3vh/.95 var(--ui); font-stretch: 75%; }
@@ -937,7 +934,7 @@ function toast(msg) {
 }
 
 // ---------- home backdrop: the show's official key art, crossfading slowly; a focused game's art covers it
-const SKIES = ["/poster.webp", "/img/sbr-riders.jpg", "/img/sbr-race.jpg"];
+const SKIES = ["/img/sbr-riders.jpg", "/img/sbr-race.jpg", "/poster.webp"];
 const IDLE_ART = [...SKIES, "/img/sbr-desert.jpg"];  // too wide for the home backdrop: Johnny would sit under the menu
 let skyFront = $("#skyA"), skyBack = $("#skyB"), skyN = 0;
 function nextSky() {
@@ -972,7 +969,7 @@ function setBackdrop(url) {
     };
     img.onerror = () => { if (bgWant === url) bgFront.classList.remove("on"); };
     img.src = url;
-  }, 140);
+  }, 220);
 }
 
 // ---------- details line for the focused tile
