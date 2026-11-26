@@ -14,14 +14,12 @@ Saved 2026-11-25 for later, at the user's request ("save it for ideas for music 
 - The PC row has a Volume tile (whole-PC master volume) and Sound settings (Couch's own sounds and music).
 - In games and apps, the controller's buttons go to the app; only the PS button and Create/mute are Couch's everywhere.
 
-## Open questions
-- **Which button changes volume in a game or YouTube without stealing one the game uses?** Options: hold PS + up/down (like a PS5's quick menu), or the PS-button quick menu with a volume slider over the game.
-- **Per-app levels:** Windows' per-app volume (`ISimpleAudioVolume` on each audio session, via pycaw-style COM calls, no new install needed with ctypes/comtypes) vs. only Couch's own apps.
-- **Background music:** your own files (like the intro clips) vs. a streaming service; under games or only in the menus.
+## Remaining decision
+- **Background music during gameplay or apps:** Decide whether menu music should keep playing quietly when a game or app is in front. The current implementation fades menu music when a game starts.
 
 ## Comments
 
 2026-11-25: built.
 - Whole-PC volume anywhere: hold PS and press up/down (4% a press, Windows shows its volume bar); PS alone still acts on release.
-- Per-app volume: PC row → Volume → Volume for each app, sliders over Windows' own per-app levels (audio.py, no install).
+- Per-app volume: PC row → Volume → Volume for each app, sliders over Windows' own per-app levels (audio.py, no install). YouTube has its own slider, separate from Couch’s sounds and music.
 - Background music: Menu music plays your Windows Music folder, shuffled, when no bgm-loop clip is set; fades when a game starts.
