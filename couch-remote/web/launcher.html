@@ -19,7 +19,7 @@
     --logo: "Lobster", "Segoe Script", cursive;
     --ui: "Archivo", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
     --spring: cubic-bezier(.22, 1, .36, 1);
-    --tile: 17vh; --poster-h: 27vh; --pad: 5vw;
+    --tile: 17vh; --poster-h: 22vh; --pad: 5vw;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; overflow: hidden; }
@@ -32,9 +32,9 @@
   .sky { overflow: hidden; }
   .sky::before, .sky::after { content: ""; position: absolute; inset: 0; background: var(--art) no-repeat; }
   .sky::before { background-size: cover; background-position: center; filter: blur(48px) saturate(1.25) brightness(.42); transform: scale(1.15); }
-  .sky::after { background-size: auto 100%; background-position: right center; transform-origin: 80% 40%; will-change: transform;  /* its own GPU layer: the drift isn't repainted */
+  .sky::after { background-size: auto 76%; background-position: right top; transform-origin: 80% 40%; will-change: transform;  /* its own GPU layer: the drift isn't repainted */
     --fade: linear-gradient(90deg, transparent var(--f0, 22%), #000 var(--f1, 52%));
-    --low: linear-gradient(#000 52%, transparent 88%);  /* fade out behind the lower rows, where the poster's printed logo sat */
+    --low: linear-gradient(#000 48%, transparent 79%);  /* fade out behind the lower rows, where the poster's printed logo sat */
     -webkit-mask-image: var(--fade), var(--low); -webkit-mask-composite: source-in; mask-image: var(--fade), var(--low); mask-composite: intersect; }
   .sky.on::after { animation: sky-drift 22s ease-out both; }
   .sky:not(.on)::after { transform: scale(1.06); }  /* fading out: hold where the drift ended, no snap back */
@@ -106,7 +106,7 @@
   @keyframes idle-pan { from { transform: scale(1.04) translate(-1.5%, -1%); } to { transform: scale(1.1) translate(1.5%, 1%); } }
 
   /* ---------- details of the focused tile (PS5 game hub) */
-  .details { position: relative; height: 23vh; padding: .4vh var(--pad) 0; }  /* room under the Play pill before the row title */
+  .details { position: relative; height: 47vh; padding: 20vh var(--pad) 0; }  /* room under the Play pill before the row title */
   /* no outline copy behind the letters: a soft drop shadow and a faint glow in the focused item's colour; room below for g, y, p */
   #d-title { margin: 0 0 -1.2vh; font: 400 7.4vh/1.08 var(--serif); letter-spacing: -.01em; max-width: 64vw; padding-bottom: 1.7vh;
              white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -141,7 +141,7 @@
   @keyframes shake { 0%,100% { transform: translate(0,0); } 25% { transform: translate(.25vh,-.2vh); } 75% { transform: translate(-.25vh,.2vh); } }
 
   /* ---------- rows: carousels that glide on a spring */
-  main { height: calc(100% - 11vh - 23vh - 8vh); overflow: hidden;
+  main { height: calc(100% - 11vh - 47vh - 8vh); overflow: hidden;
          -webkit-mask-image: linear-gradient(#000 calc(100% - 4vh), transparent); mask-image: linear-gradient(#000 calc(100% - 4vh), transparent); }
   #rows { transition: transform .24s var(--spring); padding-bottom: 4vh; }  /* the last row clears the prompt bar */
   section { padding: .2vh 0; opacity: .62; transition: opacity .45s ease; }
@@ -934,7 +934,7 @@ function toast(msg) {
 }
 
 // ---------- home backdrop: the show's official key art, crossfading slowly; a focused game's art covers it
-const SKIES = ["/img/sbr-riders.jpg", "/img/sbr-race.jpg", "/poster.webp"];
+const SKIES = ["/img/midnight-riders.webp", "/img/sbr-riders.jpg", "/img/sbr-race.jpg", "/poster.webp"];
 const IDLE_ART = [...SKIES, "/img/sbr-desert.jpg"];  // too wide for the home backdrop: Johnny would sit under the menu
 let skyFront = $("#skyA"), skyBack = $("#skyB"), skyN = 0;
 function nextSky() {
@@ -942,7 +942,7 @@ function nextSky() {
   img.onload = () => {
     skyBack.style.setProperty("--art", `url("${url}")`);
     // fade from where the picture starts: a tall poster begins well right of a wide one
-    const left = Math.max(0, 100 - 100 * innerHeight * img.naturalWidth / img.naturalHeight / innerWidth);
+    const left = Math.max(0, 100 - 76 * innerHeight * img.naturalWidth / img.naturalHeight / innerWidth);
     skyBack.style.setProperty("--f0", Math.max(22, left) + "%");
     skyBack.style.setProperty("--f1", Math.max(52, left + 14) + "%");
     skyBack.classList.add("on"); skyFront.classList.remove("on");
@@ -951,7 +951,7 @@ function nextSky() {
   img.src = url;
 }
 nextSky();
-setInterval(() => { if (!document.hidden && !bgWant) nextSky(); }, 20000);
+// Keep Johnny and Gyro on the home screen; game heroes still follow focus.
 
 // ---------- backdrop: the focused game's art, crossfaded
 let bgFront = $("#bgA"), bgBack = $("#bgB"), bgWant = null, bgTimer;
