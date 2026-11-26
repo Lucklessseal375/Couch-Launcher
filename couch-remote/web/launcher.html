@@ -376,6 +376,12 @@
   .shade { background:linear-gradient(90deg,#19091ef5,rgba(25,9,30,.72) 22%,transparent 59%),linear-gradient(0deg,#19091e 1%,transparent 38%); }
   .card .choices.vertical { max-height:62vh; overflow-y:auto; scrollbar-width:none; padding:.6vh 1vh; scroll-padding:.6vh; }
   .card .choices.vertical .choice { flex:none; }
+  /* long menus go two across so everything fits; only longer ones still scroll */
+  .card:has(.choices.grid) { max-width:94vw; padding-top:2.6vh; padding-bottom:2vh; }
+  .card .choices.vertical.grid { display:grid; grid-template-columns:1fr 1fr; gap:.8vh 1vw; width:84vw; max-height:72vh; margin-top:1vh; }
+  .card .choices.vertical.grid .choice { padding-top:.9vh; padding-bottom:.9vh; }
+  /* rows fade out at the edges of a scrolling list instead of being sliced */
+  .card .choices.vertical.scrolls { padding-block:5vh; scroll-padding-block:5vh; mask-image:linear-gradient(transparent,#000 5vh,#000 calc(100% - 5vh),transparent); }
   .card { background:#28162c; color:var(--ink); }
   .card::before { height:.4vh; background:linear-gradient(90deg,var(--pink),transparent); }
   .card .choices.vertical .choice.focus { transform:none; box-shadow:inset .55vh 0 var(--pink); }
@@ -1368,7 +1374,8 @@ function move(dir) {
     if (modal.move) return modal.move(dir);
     const cur = modal.els[modal.i];
     if ((dir === "left" || dir === "right") && cur?.choice?.adjust) return cur.choice.adjust(dir === "left" ? -1 : 1, cur);
-    const step = { left: -1, up: -1, right: 1, down: 1 }[dir];  // rows of buttons and lists alike
+    const across = $("#dlg-choices").classList.contains("grid") && modal.els[0]?.parentElement.id === "dlg-choices" ? 2 : 1;
+    const step = { left: -1, up: -across, right: 1, down: across }[dir];  // rows of buttons, lists and two-across menus alike
     if (step) {
       const i = Math.max(0, Math.min(modal.els.length - 1, modal.i + step));
       if (i === modal.i) return Sound.bump();
@@ -1512,7 +1519,11 @@ function choose(title, text, choices, { vertical = false, start = 0, art = "", l
     return b;
   });
   const c = $("#dlg-choices"); c.innerHTML = ""; c.append(...els); c.classList.toggle("vertical", vertical);
+  c.classList.toggle("grid", vertical && els.length > 8 && !choices.some(ch => ch.adjust));  // sliders need left/right
+  c.classList.remove("scrolls");
   openModal(d, els, null, start, sound);
+  c.classList.toggle("scrolls", vertical && c.scrollHeight > c.clientHeight);
+  els[start]?.scrollIntoView({ block: "nearest" });
 }
 // Cancel is focused first: these actions can't be undone
 function confirmAction(title, text, yesLabel, onYes) {
