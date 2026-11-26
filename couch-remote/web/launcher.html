@@ -19,7 +19,7 @@
     --logo: "Lobster", "Segoe Script", cursive;
     --ui: "Archivo", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
     --spring: cubic-bezier(.22, 1, .36, 1);
-    --tile: 17vh; --poster-h: 27vh; --pad: 5vw;
+    --tile: 17vh; --poster-h: 31vh; --pad: 5vw;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; overflow: hidden; }
@@ -120,14 +120,14 @@
   .cta .glyph { background: var(--obsidian); box-shadow: none; }
   body:not(.chosen) .cta { visibility: hidden; } /* ✕ does nothing until a tile is selected */
   #d-title.long { font-size: 5.2vh; padding-top: 1.6vh; }
-  .details.swap #d-title { animation: dash .5s var(--spring); }
+
   /* the line and the pill follow the title in, a beat apart, so a focus change reads as one motion */
   .details.swap #d-meta { animation: rise .5s var(--spring) .06s both; }
   .details.swap .cta { animation: rise-cta .5s var(--spring) .12s both; }
   @keyframes rise { from { opacity: 0; transform: translateY(1.2vh); } }
   @keyframes rise-cta { from { opacity: 0; transform: translateY(1.2vh) rotate(-1.5deg); } }
   section h2 { transition: color .35s ease; }
-  @keyframes dash { from { opacity: 0; transform: translateX(-3vw) skewX(-12deg); } to { opacity: 1; transform: none; } }
+
   #sfx { position: absolute; right: 7vw; top: 0; font: 900 6vh/1 "Yu Gothic UI", "Meiryo", "MS Gothic", sans-serif; color: var(--pink);
          -webkit-text-stroke: .22vh #fff; letter-spacing: -.05em; opacity: 0; transform: skewX(-14deg); pointer-events: none;
          text-shadow: .3vh .3vh 0 var(--johnny); }
@@ -360,18 +360,47 @@
   #shelves { display:flex; gap:2.5vw; padding:2vh var(--pad) 0; height:9vh; align-items:center; }
   #shelves button { background:none; border:0; border-bottom:.45vh solid transparent; color:var(--dim); padding:.7vh .25vw; font:650 2.65vh var(--ui); cursor:pointer; }
   #shelves button[aria-pressed=true] { color:var(--ink); border-color:var(--pink); }
-  .details { height:40vh; padding-top:5vh; }
-  #d-title { font:bold italic 9vh/1.12 Georgia,serif; }
-  .cta { background:#c91359; transform:none; font:700 2.8vh var(--ui); }
+  .details { height:36vh; padding-top:3vh; isolation:isolate; }
+  #d-title { font:bold italic 11.3vh/1.08 Georgia,serif; letter-spacing:-.035em; text-shadow:.3vh .35vh #280c23; }
+  .cta { background:#cb1258; transform:none; font:800 3.1vh var(--ui); border:.28vh solid #ffe6ce;
+    border-radius:.8vh 2.8vh .8vh 2.8vh; box-shadow:.55vh .55vh #160f1c; }
   #sfx, #rows section:not(.active), #rows section h2 { display:none; }
-  main { height:33vh; mask-image:none; }
+  main { height:37vh; mask-image:none; }
   .strip { padding-top:2vh; }
   #rows .poster,#rows .app,#rows .sys { border-radius:.9vh; }
   #rows .poster.roblox .name { display:block; }
   .poster.roblox .art { object-fit:contain; padding:2vh 0 4vh; }
   .poster.roblox .name { text-align:center; }
   #rows .item.focus { box-shadow:0 0 0 .45vh #fff0c9,0 .7vh 2.5vh #0009; transform:translateY(-.5vh); }
-  #rows .item .badge { display:none; }
+  #rows .item .badge { top: .75vh; right: .75vh; width: 4.8vh; height: 4.8vh;
+    filter: drop-shadow(0 .35vh .65vh #000d); }
+  #rows .item.focus .badge { opacity: 1; }
+  @media (prefers-reduced-motion: no-preference) {
+    .details.swap #d-title { animation: print-register .36s var(--spring); }
+    @keyframes print-register {
+      from { transform:translateX(.8vw) skewX(-4deg); text-shadow:-.55vh .15vh #d5216a,.55vh -.15vh #70ddd8; }
+      65% { text-shadow:-.12vh 0 #d5216a,.12vh 0 #70ddd8; }
+    }
+    #rows .item.focus .badge::after { content:""; position:absolute; inset:-12%; pointer-events:none;
+      border:2px solid transparent; border-top-color:#ffe7a8; border-right-color:#83ddce; border-radius:50%;
+      animation:spin-trail .6s ease-out both; }
+    @keyframes spin-trail {
+      from { opacity:0; transform:rotate(-160deg) scale(.65); }
+      22% { opacity:.95; }
+      to { opacity:0; transform:rotate(125deg) scale(1.2); }
+    }
+    #rows section.active { animation: shelf-arrive .24s var(--spring) both; }
+    #rows .item.focus.press { transform: translateY(-.2vh) scale(.98); }
+    #rows .item.focus .badge img { animation: ball-settle .64s var(--spring) .12s both; }
+    @keyframes shelf-arrive { from { opacity: .55; translate: 0 .6vh; } }
+    @keyframes ball-settle {
+      from { opacity: .45; transform: rotate(-155deg) scale(.8); }
+      to { opacity: 1; transform: rotate(0) scale(1); }
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #rows .item .badge { transform: none; }
+  }
   .sky::after { background-size:auto 83%; --low:linear-gradient(#000 61%,transparent 85%); }
   .shade { background:linear-gradient(90deg,#19091ef5,rgba(25,9,30,.72) 22%,transparent 59%),linear-gradient(0deg,#19091e 1%,transparent 38%); }
   .card .choices.vertical { max-height:62vh; overflow-y:auto; scrollbar-width:none; padding:.6vh 1vh; scroll-padding:.6vh; }
@@ -390,22 +419,114 @@
   .gallery { width:100vw; height:100vh; justify-content:center; }
   #gal-img { width:100%; height:100%; max-width:none; max-height:none; border-radius:0; }
   #gal-cap,#gal-ball { position:absolute; bottom:9vh; background:#25162deb; color:var(--ink); border:0; border-radius:1vh; padding:1vh 1.4vw; }
+  #gal-ball[hidden] { display: none; }
   #gal-ball { right:4vw; cursor:pointer; }
   #gal-ball img { width:3vh; display:block; }
+  #gal-cap.stamp { color: #ffe3a7; border: 1px dashed #c79152; letter-spacing: .08em; }
+  @media (prefers-reduced-motion: no-preference) {
+    #gal-cap.stamp { animation: stamp .32s var(--spring) both; }
+    @keyframes stamp { from { opacity: .35; transform: scale(1.18) rotate(-3deg); } }
+  }
   #gallery.quiet #gal-cap,#gallery.quiet #gal-ball,body:has(#gallery.show.quiet) #prompts { opacity:0; }
   #idle-riders { position:absolute; top:63%; left:62%; font-size:2.6vh; color:#362032; filter:grayscale(1) brightness(.48); }
   @media(prefers-reduced-motion:no-preference){body.idle #idle-riders { animation:ride 60s linear infinite alternate; } @keyframes ride { to { translate:-28vw 1vh; } }}
   @media(prefers-reduced-motion:reduce){#rows .item.focus { transform:none; }}
+  .race-airship { position:absolute; pointer-events:none; left:42%; top:13%; width:14vw; opacity:.96; filter:drop-shadow(.18vh .35vh .12vh #260e24aa); }
+  #idle .race-airship { left:24%; top:24%; width:23vw; }
+  body.modal > .race-airship,body.idle > .race-airship,body:has(.bg.on) > .race-airship,
+  #idle .race-airship { display:none; }
+  body.idle #idle.race-slide .race-airship { display:block; }
+  #rows .poster.focus::after { content:""; position:absolute; inset:auto auto .65vh -.5vh;
+    width:5.8vh; height:.8vh; background:#ee4388; box-shadow:.65vh -.75vh #8ddbd8; transform:skewX(-36deg); pointer-events:none; }
+  .race-panel { border:.45vh solid #170b19; outline:.2vh solid #f0d7b7;
+    box-shadow:1vh .9vh #af255e,1.45vh 1.35vh #170b19; }
+  .race-panel h3 { font-weight:bold; font-style:italic; }
+  .race-panel #dlg-art { border:.4vh solid #f2d9b9; }
+  .launch { position:relative; isolation:isolate; }
+  .launch::before { content:""; position:absolute; z-index:-1; left:50%; top:5vh; width:58vw; height:6vh;
+    background:repeating-linear-gradient(170deg,transparent 0 1.5vh,#81dedf 1.55vh 1.8vh,transparent 1.85vh 2.6vh);
+    mask-image:linear-gradient(90deg,transparent,#000 17%,transparent 42% 58%,#000 83%,transparent);
+    transform:translateX(-50%); pointer-events:none; }
+  @media (prefers-reduced-motion: no-preference) {
+    .race-airship { animation:airship-pass 48s ease-in-out infinite alternate; --flight:11vw; }
+    #idle .race-airship { --flight:38vw; }
+    .race-airship use { animation:airship-sway 6s ease-in-out infinite alternate; transform-origin:50% 50%; }
+    @keyframes airship-sway { from { transform:translateY(1px) rotate(-1deg); } to { transform:translateY(-1px) rotate(1.5deg); } }
+    @keyframes airship-pass { to { transform:translate(var(--flight),-1.3vh) rotate(-2deg); } }
+    #dialog.show .race-panel { animation:ink-reveal .28s var(--spring) both; }
+    @keyframes ink-reveal { from { clip-path:polygon(0 0,18% 0,0 100%,0 100%); } to {clip-path:polygon(0 0,116% 0,100% 100%,0 100%);} }
+    #starting.show .launch::before { animation:race-burst .34s ease-out both; }
+    @keyframes race-burst { from { transform:translateX(-50%) scaleX(.62); opacity:.9; } to {transform:translateX(-50%) scaleX(1.08);opacity:0;} }
+  }
+
+  /* The tab reads like a race bib, with offset inks matching the poster art. */
+  #shelves button { position:relative; isolation:isolate; padding-inline:1.1vw; }
+  #shelves button[aria-pressed=true] { color:#241326; border-color:transparent; }
+  #shelves button[aria-pressed=true]::before {
+    content:""; position:absolute; inset:0; z-index:-1; background:#ffe6bd;
+    transform:skewX(-12deg); box-shadow:.35vh .35vh #c92667;
+  }
+  #d-title { text-shadow:.28vh .32vh #38112b,.53vh .55vh #94345f; }
+  #rows .item.focus { box-shadow:0 0 0 .4vh #fff0c9,.65vh .8vh #b72b62,.85vh 1vh #240e24; }
+  .details::before {
+    content:""; display:block; width:clamp(50px,8vw,150px); height:.65vh;
+    margin-bottom:1vh; transform:skewX(-32deg); transform-origin:left;
+    background:linear-gradient(90deg,#eb4788 0 64%,transparent 64% 69%,#8bded5 69% 84%,transparent 84% 89%,#ffe4b2 89%);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .details.swap::before { animation:ink-dash .42s ease-out; }
+    @keyframes ink-dash { from { transform:skewX(-32deg) scaleX(.12); } }
+    #shelves button[aria-pressed=true]::before { animation:bib-land .28s var(--spring); }
+    @keyframes bib-land { from { transform:translateY(-2vh) skewX(-22deg) scale(1.25); } 70% { transform:skewX(-10deg) scale(.96); } }
+    #rows section.active .track > .item { animation:card-deal .38s var(--spring) backwards; }
+    #rows section.active .track > .item:nth-child(2) { animation-delay:35ms; }
+    #rows section.active .track > .item:nth-child(3) { animation-delay:70ms; }
+    #rows section.active .track > .item:nth-child(n+4) { animation-delay:105ms; }
+    @keyframes card-deal { from { opacity:0; translate:calc(var(--travel, 1) * 17vw) 2.2vh; rotate:calc(var(--travel, 1) * 5deg); } }
+  }
+  #rows { position:relative; }
+  @media (prefers-reduced-motion: no-preference) {
+    .sky.on { animation:landscape-arrive .85s cubic-bezier(.16,1,.3,1); }
+    @keyframes landscape-arrive { from { transform:scale(1.12) translateX(3vw); } }
+    .details:not(.swap) #d-title { animation:title-cut .58s ease-out both; }
+    @keyframes title-cut {
+      from { clip-path:polygon(0 0,5% 0,0 100%,0 100%); translate:-3vw 0; }
+      to { clip-path:polygon(0 0,120% 0,100% 100%,0 100%); }
+    }
+    #rows section.departing:not(.active):not([hidden]) {
+      display:block; position:absolute; inset:0 0 auto; pointer-events:none;
+      animation:shelf-exit .28s ease-in both;
+    }
+    @keyframes shelf-exit { to { opacity:0; visibility:hidden; translate:calc(var(--travel) * -20vw) 1vh; } }
+    #rows .item.focus:not(.press) { transform:translateY(-.8vh) scale(1.045); transition:transform .2s cubic-bezier(.18,1.6,.4,1),filter .16s; }
+    .details.swap #d-title { animation-duration:.21s; }
+    #dialog.show .race-panel { animation:panel-unfold .38s cubic-bezier(.16,1,.3,1) both; }
+    @keyframes panel-unfold {
+      from { translate:var(--panel-x,0) var(--panel-y,10vh); scale:.22; rotate:-5deg; clip-path:polygon(0 0,50% 0,35% 100%,0 100%); }
+      to { clip-path:polygon(0 0,115% 0,100% 100%,0 100%); }
+    }
+    #starting.show .ball { animation:launch-spin .55s cubic-bezier(.16,1,.3,1) both; }
+    @keyframes launch-spin { from { transform:scale(.35) rotate(-360deg); } 70% { transform:scale(1.18) rotate(-8deg); } }
+    #starting.show .launch::before { width:88vw; animation-duration:.48s; }
+  }
 </style>
 </head>
 <body>
 <div class="sky" id="skyA"></div><div class="sky" id="skyB"></div>
 <div class="bg" id="bgA"></div><div class="bg" id="bgB"></div>
-<div class="shade"></div>
+<div class="shade"></div><svg class="race-airship" viewBox="0 0 180 74" aria-hidden="true"><use href="#race-dirigible"/></svg>
 <svg class="spiral-mark" viewBox="0 0 2 2"><use href="#spiral"/></svg>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
+    <symbol id="race-dirigible" viewBox="0 0 180 74">
+      <g stroke="#27192b" stroke-width="2" stroke-linejoin="round">
+        <path fill="#ba536d" d="m137 24 24-19 7 2-5 19 13 11-29 2 12 13-23-7z"/>
+        <path fill="#debe86" d="M5 29Q20 6 74 5q53-1 87 23-24 22-78 23Q28 52 5 29Z"/>
+        <path fill="#aa6472" d="M6 30q67 18 153-2-26 22-77 22Q27 50 6 30Z"/>
+        <path fill="none" stroke-width="1.4" d="M31 14q-7 16 2 29m27-36q-8 21 2 42M92 6q-4 23 2 43m28-38q2 18-1 34M10 26q64-18 144 1M51 47l14 15m35-14L87 62"/>
+        <path fill="#563743" d="m60 59 39-2-6 11-27 1z"/><path fill="#93d7cd" d="m65 60 24-1-2 4-19 1z"/>
+      </g></symbol>
     <symbol id="spiral" viewBox="-1 -1 2 2"><path id="spiral-path" fill="none" stroke="currentColor" stroke-width=".06" stroke-linecap="round"/></symbol>
     <symbol id="horseshoe" viewBox="-1 -1 2 2"><path d="M-.55-.82V-.05A.55.55 0 0 0 .55-.05V-.82" fill="none" stroke="#f2b844" stroke-width=".3" stroke-linecap="round"/><path d="M-.55-.82V-.05A.55.55 0 0 0 .55-.05V-.82" fill="none" stroke="#ffe19a" stroke-width=".08" stroke-linecap="round" transform="translate(-.05 -.03)"/><g fill="#6b4a10"><circle cx="-.55" cy="-.5" r=".05"/><circle cx="-.5" cy="-.15" r=".05"/><circle cx=".55" cy="-.5" r=".05"/><circle cx=".5" cy="-.15" r=".05"/></g></symbol>
     <!-- PlayStation buttons -->
@@ -473,7 +594,7 @@
 </div>
 <footer id="prompts"></footer>
 <div id="toast"></div>
-<div id="idle"><div id="idle-art"></div><img id="idle-ball" src="/steelball.png" alt=""><div id="idle-riders" aria-hidden="true">&#x1F3C7;&#x1F3C7;</div><div id="idle-clock"></div></div>
+<div id="idle"><div id="idle-art"></div><svg class="race-airship" viewBox="0 0 180 74" aria-hidden="true"><use href="#race-dirigible"/></svg><img id="idle-ball" src="/steelball.png" alt=""><div id="idle-riders" aria-hidden="true">&#x1F3C7;&#x1F3C7;</div><div id="idle-clock"></div></div>
 <svg id="golden-spin" viewBox="0 0 2 2" aria-hidden="true"><use href="#spiral"/></svg>
 <div class="overlay" id="dialog"><div class="card" id="dlg-card">
   <img id="dlg-art" alt="">
@@ -893,6 +1014,7 @@ function placeIdleClock() {
   const a = $("#idle-art"), c = $("#idle-clock");
   a.classList.remove("on");
   const slides = idleSlides(), s = slides[idleN++ % slides.length];
+  $("#idle").classList.toggle("race-slide", IDLE_ART.includes(s.url));
   setTimeout(() => { a.style.backgroundImage = `url("${s.url}")`; a.classList.add("on"); idleGame = s.game || null; tick();
     if (s.label) c.append(Object.assign(document.createElement("small"), { textContent: s.label })); }, 1200);
   const b = $("#idle-ball"); b.classList.remove("roll");
@@ -1348,7 +1470,16 @@ function firstFocus() {
 }
 function showShelf(r) {
   const section = rows[r]?.[0].closest("section");
-  for (const shelf of document.querySelectorAll("#rows section")) shelf.classList.toggle("active", shelf === section);
+  const previous = $("#rows section.active");
+  if (previous !== section) {
+    const shelves = [...document.querySelectorAll("#rows section")];
+    $("#rows").style.setProperty("--travel", shelves.indexOf(section) >= shelves.indexOf(previous) ? 1 : -1);
+    for (const shelf of shelves) {
+      shelf.inert = shelf !== section;
+      shelf.classList.toggle("departing", shelf === previous);
+      shelf.classList.toggle("active", shelf === section);
+    }
+  }
   Array.from($("#shelves").children).forEach((button, index) => button.setAttribute("aria-pressed", String(index === r)));
 }
 function focus(r, c) {
@@ -1361,13 +1492,13 @@ function focus(r, c) {
   // tint the focus by what's focused, after iOS's tinted icons: a game's cover colour, an app's brand colour, else gold
   if (e.tint === undefined && e.classList.contains("loaded")) e.tint = artColor(e.querySelector(".art"));
   document.body.style.setProperty("--focus", e.tint ? `rgb(${e.tint})` : "");
+  showShelf(r);
+  slide(e);
   const glowAt = () => { const r = e.getBoundingClientRect(), b = document.body.style;  // twice: the rows glide into place
     b.setProperty("--gx", `${r.left + r.width / 2}px`); b.setProperty("--gy", `${r.top + r.height / 2}px`); };
   glowAt(); clearTimeout(focus.glow); focus.glow = setTimeout(glowAt, 620);
-  showShelf(r);
   document.body.classList.add("chosen");
   showDetails(e);
-  slide(e);
   updatePrompts();
 }
 
@@ -1503,8 +1634,16 @@ function closeModal(overlay) { overlay.classList.remove("show"); document.body.c
 
 // A dialog of choices ({label, sub, fn, cls, check, icon}); ○ closes it.
 // vertical: a list (menu, audio outputs); start: which one is focused first; art + lines: a game's details.
-function choose(title, text, choices, { vertical = false, start = 0, art = "", lines = [], gauges = "", sound = "open" } = {}) {
+function choose(title, text, choices, { vertical = false, start = 0, art = "", lines = [], gauges = "", sound = "open", gamePanel = false } = {}) {
   const d = $("#dialog"), card = $("#dlg-card"), pic = $("#dlg-art");
+  if (gamePanel) {
+    const tile = $("#rows .item.focus")?.getBoundingClientRect();
+    if (tile) {
+      card.style.setProperty("--panel-x", (tile.left + tile.width / 2 - innerWidth / 2) + "px");
+      card.style.setProperty("--panel-y", (tile.top + tile.height / 2 - innerHeight / 2) + "px");
+    }
+  }
+  card.classList.toggle("race-panel", gamePanel);
   card.classList.toggle("art", !!art);
   if (art) pic.src = art; else pic.removeAttribute("src");
   $("#dlg-title").textContent = title;
@@ -1630,7 +1769,7 @@ function gameDetails() {
     ...(own ? [{ label: "Original name and art", icon: "restart", fn: () => setChoice("rename", g, "").then(() => setChoice("art", g, "")) }] : []),
     { label: "Display and sound", icon: "tv", sub: "Resolution, refresh rate and sound output for this game", fn: () => avMenu(g) },
     { label: "Hide", icon: "eye", fn: () => setChoice("hide", g) },
-  ], { art: t.classList.contains("loaded") ? t.querySelector(".art").src : "", lines, vertical: true });  // a list fits, a row ran off the card
+  ], { gamePanel: true, art: t.classList.contains("loaded") ? t.querySelector(".art").src : "", lines, vertical: true });  // a list fits, a row ran off the card
 }
 // ---------- □ → Display mode: a game's own resolution and refresh rate. Trying one shows it right away and goes back by
 // itself after 15 s unless kept (the server undoes it too), so a mode the TV can't show never leaves it blank.
@@ -1956,6 +2095,7 @@ async function mediaGallery(onPick) {  // onPick(shot): choosing a screenshot (a
   };
   const show = () => {
     $("#gal-img").src = "/media/" + encodeURIComponent(shots[i].name);
+    $("#gal-cap").classList.remove("stamp");
     $("#gal-cap").textContent = `Screenshot ${i + 1} of ${shots.length}, taken ${when(shots[i].time)}`
       + (i === 0 && shots.length > 1 ? ". Press right for older ones" : "");
   };
@@ -1965,14 +2105,22 @@ async function mediaGallery(onPick) {  // onPick(shot): choosing a screenshot (a
     clearTimeout(chromeTimer);
     chromeTimer = setTimeout(() => g.classList.add("quiet"), 3500);
   };
-  const inspect = () => { reveal(); $("#gal-cap").textContent = "San Diego ? First stage"; };
+  const inspect = () => {
+    reveal();
+    const caption = $("#gal-cap");
+    if (caption.classList.contains("stamp")) return show();
+    caption.textContent = "SAN DIEGO \u00b7 RACE ENTRY STAMP";
+    caption.classList.add("stamp");
+    Sound.select();
+  };
+  $("#gal-ball").hidden = !!onPick;
   $("#gal-ball").onclick = inspect;
   g.onpointermove = reveal;
   show(); reveal();
   openModal(g, [], () => { clearTimeout(chromeTimer); closeModal(g); });
   modal.prompts = onPick ? [["cross", "Use as art"], ["circle", "Cancel"]] : [["circle", "Back"]];
   if (!onPick) modal.activate = inspect;
-  if (onPick) modal.activate = () => { Sound.select(); closeModal(g); onPick(shots[i]); };
+  if (onPick) modal.activate = () => { Sound.select(); clearTimeout(chromeTimer); closeModal(g); onPick(shots[i]); };
   modal.move = dir => {
     reveal();
     const n = i + ({ left: -1, right: 1 }[dir] || 0);
@@ -2130,7 +2278,10 @@ const EGGS = [
   [/^johnny|^joestar/, "Johnny Joestar. The jockey who got back on the horse."],
   [/^tusk/, "Tusk Act 1… Act 2… Act 3… ACT 4!", true],
   [/^gyro|^zeppeli|^nyo/, "Nyo-ho! Gyro Zeppeli, steel balls ready."],
-  [/^(spin|rotation|golden)/, "Trust the spin. Follow the golden rectangle.", true],
+  [/^(spin|rotation|golden(?! rectangle))/, "Trust the spin. Follow the golden rectangle.", true],
+  [/^scan(?:$| )/, "Scan: Gyro sends a steel ball ahead to see what's hidden.", true],
+  [/^(ball breaker|golden rectangle)/, "Ball Breaker: the horse's stride completes the Spin.", true],
+  [/^sugar mountain/, "Sugar Mountain's spring: spend what you take before sunset."],
   [/^slow ?dancer/, "Slow Dancer: Johnny's spotted horse."],
   [/^valkyrie/, "Valkyrie: Gyro's horse, the one with the striped legs."],
   [/^(diego|dio|scary)/, "Diego Brando on Silver Bullet. Scary Monsters!"],
